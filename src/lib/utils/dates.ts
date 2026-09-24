@@ -1,0 +1,63 @@
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+/** Converte um valor de célula do Excel (número serial, string ou Date) para ISO (yyyy-MM-dd). */
+export function excelCellToISODate(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+
+  if (value instanceof Date) {
+    return toISODateOnly(value);
+  }
+
+  if (typeof value === "number") {
+    // Excel serial date: dias desde 1899-12-30.
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    const ms = value * 86_400_000;
+    return toISODateOnly(new Date(epoch.getTime() + ms));
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    // dd/MM/yyyy ou dd-MM-yyyy
+    const brMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+    if (brMatch) {
+      const [, d, m, y] = brMatch;
+      const year = y.length === 2 ? Number(`20${y}`) : Number(y);
+      const date = new Date(Date.UTC(year, Number(m) - 1, Number(d)));
+      return toISODateOnly(date);
+    }
+
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) return toISODateOnly(parsed);
+  }
+
+  return null;
+}
+
+function toISODateOnly(date: Date): string {
+  return format(date, "yyyy-MM-dd");
+}
+
+export function formatDateBR(isoDate: string | null | undefined): string {
+  if (!isoDate) return "—";
+  try {
+    return format(parseISO(isoDate), "dd/MM/yyyy", { locale: ptBR });
+  } catch {
+    return "—";
+  }
+}
+
+export function formatDateTimeBR(isoDateTime: string | null | undefined): string {
+  if (!isoDateTime) return "—";
+  try {
+    return format(parseISO(isoDateTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+  } catch {
+    return "—";
+  }
+}
+
+export function hojeISO(): string {
+  return toISODateOnly(new Date());
+}

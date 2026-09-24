@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logado() {
+      return request.auth != null;
+    }
+
+    function meuPerfil() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function minhaRole() {
+      return meuPerfil().role;
+    }
+
+    function papelGestor() {
+      // gerencia, coordenador e analista enxergam a operação inteira (cada um dentro
+      // do seu próprio escopo de telas — a UI já filtra o que cada um pode ver).
+      return logado() && minhaRole() in ['gerencia', 'coordenador', 'analista'];
+    }
+
+    // --- users: cada um lê o próprio perfil; escrita só via Admin SDK/console. ---
+    match /users/{uid} {
+      allow read: if logado() && (request.auth.uid == uid || papelGestor());
+      allow write: if false;
+    }
+
+    // --- registros (+ snapshots): importados/atualizados só pelo motor de auditoria
+    // (API route com Admin SDK). Leitura para quem acompanha a operação completa. ---
+    match /registros/{numero} {
+      allow read: if papelGestor();
+      allow write: if false;
+
+      match /snapshots/{importacaoId} {
+        allow read: if papelGestor();
+        allow write: if false;
+      }
+    }
+
+    // --- importacoes: histórico de uploads, só leitura para gestores. ---
+    match /importacoes/{importacaoId} {
+      allow read: if papelGestor();
+      allow write: if false;
+    }
+
+    // --- notificacoes: alertas de falha de auditoria. ---
+    match /notificacoes/{notifId} {
+      allow read: if papelGestor();
+      allow write: if false;
+    }
+
+    // --- tarefas: gestores veem tudo; assistente só enxerga/atualiza a própria praça. ---
+    match /tarefas/{tarefaId} {
+      allow read: if papelGestor() ||
+        (logado() && minhaRole() == 'assistente' && resource.data.praca == meuPerfil().praca);
+
+      allow create, delete: if false; // só o motor de auditoria cria tarefas
+
+      allow update: if logado() && minhaRole() == 'assistente' &&
+        resource.data.praca == meuPerfil().praca &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao', 'observacaoNoMomentoResolucao']
+        );
+    }
+  }
+}
