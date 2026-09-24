@@ -1,9 +1,7 @@
-// Zera a base para testes: apaga TODOS os documentos das coleções "tarefas"
-// e "snapshots" (subcoleção registros/{numero}/snapshots/{importacaoId},
-// varrida via collectionGroup). NÃO toca em "users". "registros" (estado
-// atual das pastas) e "importacoes" (histórico) também não são tocados —
-// use a funcionalidade "Excluir Importação" na tela de Auditoria para
-// remover uma importação específica de forma controlada.
+// Zera a base para testes: apaga TODOS os documentos de "tarefas",
+// "importacoes", "registros" e a subcoleção "snapshots"
+// (registros/{numero}/snapshots/{importacaoId}, varrida via collectionGroup).
+// NÃO toca em "users" — a única coleção que sobrevive a este reset.
 //
 // Uso: npm run wipe:data
 
@@ -44,9 +42,13 @@ async function apagarTodosOsDocs(query, rotulo) {
 }
 
 (async () => {
-  console.log(`Zerando dados do projeto "${projectId}" (tarefas + snapshots)...`);
-  await apagarTodosOsDocs(db.collection("tarefas"), "tarefas");
+  console.log(`Zerando TODOS os dados do projeto "${projectId}" (exceto 'users')...`);
+  // Snapshots primeiro (subcoleção de registros — apagar o pai não apaga os filhos sozinho).
   await apagarTodosOsDocs(db.collectionGroup("snapshots"), "snapshots (todas as pastas)");
-  console.log("\nConcluído. Coleções 'users', 'registros' e 'importacoes' não foram alteradas.");
+  await apagarTodosOsDocs(db.collection("registros"), "registros");
+  await apagarTodosOsDocs(db.collection("importacoes"), "importacoes");
+  await apagarTodosOsDocs(db.collection("tarefas"), "tarefas");
+  await apagarTodosOsDocs(db.collection("notificacoes"), "notificacoes");
+  console.log("\nConcluído. Só a coleção 'users' foi preservada.");
   process.exit(0);
 })();
