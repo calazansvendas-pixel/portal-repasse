@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import type { Quadro, QuadroEscalonamento, Tarefa } from "@/lib/types";
+import type { EtapaHistorico, Quadro, QuadroEscalonamento, Tarefa } from "@/lib/types";
 
 /**
  * Tarefas ativas dos quadros informados, mais recentes primeiro. `quadros`
@@ -35,7 +35,13 @@ export function useTarefasPorQuadros(quadros: Quadro[]) {
       q,
       (snap) => {
         const todas = snap.docs.map(
-          (d) => ({ id: d.id, escalonadoPara: [] as QuadroEscalonamento[], ...d.data() }) as Tarefa
+          (d) =>
+            ({
+              id: d.id,
+              escalonadoPara: [] as QuadroEscalonamento[],
+              historicoEtapas: [] as EtapaHistorico[],
+              ...d.data(),
+            }) as Tarefa
         );
         setTarefas(todas.filter((t) => t.status !== "validated_done"));
         setLoading(false);

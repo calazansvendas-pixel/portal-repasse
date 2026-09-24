@@ -10,7 +10,24 @@ import {
 } from "./taskRouter";
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
-import type { NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
+import type { EtapaHistorico, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
+
+/**
+ * Emenda um novo passo no trajeto da pasta: se a etapa é a mesma do último
+ * passo registrado, só refresca observação/status (a data do salto original
+ * é preservada); se a etapa mudou, acumula um passo novo no fim do array.
+ */
+function acumularHistorico(atual: EtapaHistorico[] | undefined, novo: EtapaHistorico | undefined): EtapaHistorico[] {
+  const lista = atual ? [...atual] : [];
+  if (!novo) return lista;
+  const ultimo = lista[lista.length - 1];
+  if (ultimo && ultimo.etapa === novo.etapa) {
+    lista[lista.length - 1] = { ...ultimo, observacao: novo.observacao, status: novo.status };
+  } else {
+    lista.push(novo);
+  }
+  return lista;
+}
 
 export interface ResumoImportacao {
   importacaoId: string;
@@ -37,6 +54,9 @@ interface DadosParaReconciliar {
   numerosRelacionados?: string[];
   clienteNome?: string | null;
   dataEntrada?: string | null;
+  // Passo do trajeto a emendar em historicoEtapas nesta importação (origem
+  // "linha" apenas — agregados não têm uma única pasta/etapa a rastrear).
+  novoPassoHistorico?: EtapaHistorico;
   cidade: string;
   quadro: Quadro;
   imobiliaria: string;
@@ -134,13 +154,18 @@ export async function executarAuditoriaDiaria(params: {
       const sucesso = dados.avancoDetectado && !dados.condicaoAtiva;
 
       if (sucesso) {
-        update(tarefaRef, { status: "validated_done", atualizadoEm: agora });
+        update(tarefaRef, {
+          status: "validated_done",
+          atualizadoEm: agora,
+          historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
+        });
         resumo.tarefasValidadas++;
       } else {
         // "Fake done": marcada como resolvida, mas o gatilho continua valendo.
         update(tarefaRef, {
           status: "audit_failed",
           atualizadoEm: agora,
+          historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
           falhaAuditoriaMotivo: dados.avancoDetectado
             ? "Avançou, mas a mesma pendência foi identificada novamente."
             : "Continua na mesma situação da última importação.",
@@ -188,6 +213,7 @@ export async function executarAuditoriaDiaria(params: {
           numerosRelacionados: dados.numerosRelacionados ?? null,
           clienteNome: dados.clienteNome ?? null,
           dataEntrada: dados.dataEntrada ?? null,
+          historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
           atualizadoEm: agora,
           escalonadoPara: calcularEscalonamento({
             quadro: dados.quadro,
@@ -231,6 +257,7 @@ export async function executarAuditoriaDiaria(params: {
           quadro: dados.quadro,
           falhouAuditoriaAgora: false,
         }),
+        historicoEtapas: acumularHistorico(undefined, dados.novoPassoHistorico),
       };
       set(ref, tarefa, false);
       resumo.tarefasCriadas++;
@@ -271,11 +298,19 @@ export async function executarAuditoriaDiaria(params: {
       set(registroRef, registroPayload);
     }
 
+    const novoPassoHistorico: EtapaHistorico = {
+      etapa: linha.etapa,
+      data: importacaoId,
+      observacao: linha.observacao,
+      status: slaStatus,
+    };
+
     const camposComuns = {
       origem: "linha" as const,
       numero: linha.numero,
       clienteNome: linha.clienteNome,
       dataEntrada: linha.dataEntrada,
+      novoPassoHistorico,
       cidade: linha.cidade,
       imobiliaria: linha.responsavel,
       etapa: linha.etapa,

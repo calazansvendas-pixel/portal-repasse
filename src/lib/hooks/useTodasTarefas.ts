@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import type { QuadroEscalonamento, Tarefa } from "@/lib/types";
+import type { EtapaHistorico, QuadroEscalonamento, Tarefa } from "@/lib/types";
 
 /** Todas as tarefas recentes (qualquer status), usadas para ranking de parceiros e mapa de treinamento. */
 export function useTodasTarefas(max = 1000) {
@@ -18,7 +18,13 @@ export function useTodasTarefas(max = 1000) {
       (snap) => {
         setTarefas(
           snap.docs.map(
-            (d) => ({ id: d.id, escalonadoPara: [] as QuadroEscalonamento[], ...d.data() }) as Tarefa
+            (d) =>
+              ({
+                id: d.id,
+                escalonadoPara: [] as QuadroEscalonamento[],
+                historicoEtapas: [] as EtapaHistorico[],
+                ...d.data(),
+              }) as Tarefa
           )
         );
         setLoading(false);

@@ -1,13 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, Check, Layers, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, Layers, Undo2 } from "lucide-react";
 import type { Tarefa } from "@/lib/types";
 import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
-import { diasDesde, formatDateBR } from "@/lib/utils/dates";
+import { formatDateBR } from "@/lib/utils/dates";
+import { fatiarObservacao } from "@/lib/utils/texto";
 import { marcarTarefaResolvida, desmarcarTarefaResolvida } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { cn } from "@/lib/utils/cn";
+
+interface PassoTrajeto {
+  titulo: string;
+  data: string | null;
+}
 
 export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; somenteLeitura?: boolean }) {
   const { firebaseUser } = useAuth();
@@ -16,7 +22,15 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
   const aguardandoValidacao = tarefa.status === "pending_validation";
   const falhaAuditoria = tarefa.status === "audit_failed";
   const isAgregado = tarefa.origem === "agregado";
-  const dias = diasDesde(tarefa.dataEntrada);
+  const itensObservacao = fatiarObservacao(tarefa.observacaoOriginal);
+
+  const passos: PassoTrajeto[] = [
+    ...(tarefa.dataEntrada ? [{ titulo: "Entrada", data: tarefa.dataEntrada }] : []),
+    ...(tarefa.historicoEtapas ?? []).map((h) => ({ titulo: `Etapa ${h.etapa}`, data: h.data })),
+  ];
+  if (passos.length === 0 && tarefa.etapa) {
+    passos.push({ titulo: `Etapa ${tarefa.etapa}`, data: null });
+  }
 
   async function toggle() {
     if (!firebaseUser || processando) return;
@@ -64,15 +78,20 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
         {tarefa.descricao}
       </p>
 
-      {/* Corpo 2: o problema, na íntegra, para apoiar a ligação */}
-      {tarefa.observacaoOriginal && (
+      {/* Corpo 2: o problema, em checklist, para apoiar a ligação */}
+      {itensObservacao.length > 0 && (
         <div className="rounded-md border border-border bg-surface-secondary/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
             O que foi relatado
           </p>
-          <p className="text-xs leading-relaxed text-ink-secondary dark:text-white/70">
-            {tarefa.observacaoOriginal}
-          </p>
+          <ul className="space-y-1">
+            {itensObservacao.map((item, i) => (
+              <li key={i} className="flex gap-1.5 text-xs leading-relaxed text-ink-secondary dark:text-white/70">
+                <span className="mt-0.5 shrink-0 text-ink-muted">▢</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -85,22 +104,43 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
         </span>
       </div>
 
-      {/* Rodapé: linha do tempo simples */}
-      <div className="flex items-center justify-between gap-2 border-t border-border pt-3 text-xs text-ink-muted dark:border-white/10">
+      {/* Rodapé: trajeto da pasta (stepper vertical) ou pastas relacionadas em agregados */}
+      <div className="border-t border-border pt-3 dark:border-white/10">
         {isAgregado ? (
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
             <Layers size={12} />
             {tarefa.numerosRelacionados?.length ?? 0} pastas relacionadas
           </span>
         ) : (
-          <span className="inline-flex flex-wrap items-center gap-1">
-            <span>{formatDateBR(tarefa.dataEntrada)}</span>
-            <ArrowRight size={11} className="text-ink-muted" />
-            <span className="font-medium text-ink-secondary dark:text-white/70">
-              {tarefa.etapa || "—"}
-            </span>
-            {dias !== null && <span>({dias}d)</span>}
-          </span>
+          <ol>
+            {passos.map((passo, i) => {
+              const ultimo = i === passos.length - 1;
+              return (
+                <li key={i} className="flex gap-2">
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={cn(
+                        "mt-0.5 h-2 w-2 shrink-0 rounded-full",
+                        ultimo ? "bg-brand-primary" : "bg-border dark:bg-white/25"
+                      )}
+                    />
+                    {!ultimo && <span className="w-px flex-1 bg-border dark:bg-white/15" />}
+                  </div>
+                  <div className={cn("flex flex-1 items-center justify-between gap-2", !ultimo && "pb-2")}>
+                    <span
+                      className={cn(
+                        "text-xs",
+                        ultimo ? "font-semibold text-ink-primary dark:text-white" : "text-ink-secondary dark:text-white/60"
+                      )}
+                    >
+                      {passo.titulo}
+                    </span>
+                    <span className="text-[11px] text-ink-muted">{formatDateBR(passo.data)}</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
         )}
 
         {!somenteLeitura && (
@@ -109,7 +149,7 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
             onClick={toggle}
             disabled={processando}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
+              "mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
               aguardandoValidacao
                 ? "border-status-info/40 bg-status-info/10 text-status-info hover:bg-status-info/15"
                 : "border-status-success/40 bg-status-success/10 text-status-success hover:bg-status-success/15"

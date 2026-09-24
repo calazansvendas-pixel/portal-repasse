@@ -83,6 +83,14 @@ export type TarefaStatus =
   | "validated_done"
   | "audit_failed";
 
+/** Um "salto" de etapa no trajeto da pasta — um item do Stepper/Timeline do card. */
+export interface EtapaHistorico {
+  etapa: string;
+  data: string; // ISO — importação em que essa etapa foi observada pela 1ª vez
+  observacao: string; // observação da planilha no momento desse salto
+  status: SlaStatus;
+}
+
 export interface Tarefa {
   id: string;
   // Identidade estável da regra que gerou esta tarefa — usada pelo motor de
@@ -125,6 +133,10 @@ export interface Tarefa {
   // Quadros extras onde este mesmo card também deve aparecer simultaneamente
   // (recalculado a cada importação — ver auditEngine.ts).
   escalonadoPara: QuadroEscalonamento[];
+  // Trajeto acumulado da pasta ao longo dos Daily Deltas (origem "linha" apenas).
+  // Um novo item é emendado quando a etapa muda; se a etapa se repete, o
+  // último item é só refrescado (observação/status), sem duplicar entradas.
+  historicoEtapas: EtapaHistorico[];
 }
 
 export interface Notificacao {
