@@ -4,9 +4,10 @@ export interface ResultadoExclusaoImportacao {
   importacaoId: string;
   snapshotsRemovidos: number;
   tarefasRemovidas: number;
+  registrosRemovidos: number;
 }
 
-/** Chama a rota admin que exclui uma importação (snapshots + tarefas nascidas dela). */
+/** Chama a rota admin que exclui TOTALMENTE uma importação: resumo, snapshots, tarefas e as pastas (registros) que ela tocou. */
 export async function excluirImportacao(
   importacaoId: string,
   idToken: string

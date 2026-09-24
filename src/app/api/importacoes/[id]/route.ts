@@ -7,12 +7,20 @@ export const runtime = "nodejs";
 const LOTE = 450; // margem de segurança abaixo do limite de 500 do Firestore por batch
 
 /**
- * Exclui uma importação (histórico) e tudo o que "nasceu" dela:
- *  - o(s) documento(s) de snapshot com esse importacaoId (registros/*\/snapshots/{id});
- *  - as tarefas cuja importacaoIdCriacao == id (não mexe em tarefas mais antigas
- *    que só foram atualizadas nesse dia — só as criadas por ele);
- *  - o próprio doc de resumo em "importacoes".
- * Não reverte o estado atual das pastas em "registros".
+ * Exclusão TOTAL (hard delete) de uma importação — não deixa nenhum vestígio
+ * daquele arquivo no app:
+ *  1. o doc de resumo em "importacoes";
+ *  2. o(s) snapshot(s) daquele dia (registros/*\/snapshots/{id});
+ *  3. TODAS as tarefas cuja importacaoIdCriacao == id;
+ *  4. TODOS os documentos de "registros" tocados por essa importação (toda
+ *     pasta que teve um snapshot com esse importacaoId é apagada por completo
+ *     — inclusive pastas que já existiam antes e só foram atualizadas nesse
+ *     dia). Não há tentativa de reconstruir o estado anterior da pasta: o
+ *     objetivo é o dashboard voltar a refletir exatamente o estado sem essa
+ *     planilha, mesmo que isso remova a pasta inteira da esteira.
+ *
+ * Snapshots de OUTROS dias para a mesma pasta não são tocados (só o vínculo
+ * com este importacaoId é eliminado).
  *
  * Restrito a role === "gerencia", verificado aqui no servidor (além das
  * regras do Firestore, que também travam delete direto pelo client SDK).
@@ -49,9 +57,19 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       .where("importacaoIdCriacao", "==", importacaoId)
       .get();
 
+    // Cada snapshot mora em registros/{numero}/snapshots/{importacaoId} — o
+    // pai do pai é o próprio doc da pasta. Deduplica por caminho por segurança.
+    const registrosRefsPorPath = new Map<string, FirebaseFirestore.DocumentReference>();
+    snapshotsSnap.docs.forEach((d) => {
+      const registroRef = d.ref.parent.parent;
+      if (registroRef) registrosRefsPorPath.set(registroRef.path, registroRef);
+    });
+    const registrosRefs = [...registrosRefsPorPath.values()];
+
     const refs = [
       ...snapshotsSnap.docs.map((d) => d.ref),
       ...tarefasSnap.docs.map((d) => d.ref),
+      ...registrosRefs,
       adminDb.collection("importacoes").doc(importacaoId),
     ];
 
@@ -65,6 +83,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       importacaoId,
       snapshotsRemovidos: snapshotsSnap.size,
       tarefasRemovidas: tarefasSnap.size,
+      registrosRemovidos: registrosRefs.length,
     });
   } catch (error) {
     console.error("[importacoes/DELETE] erro:", error);

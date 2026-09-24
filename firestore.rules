@@ -36,7 +36,8 @@ service cloud.firestore {
     // (API route com Admin SDK). Leitura para quem acompanha a operação completa. ---
     match /registros/{numero} {
       allow read: if papelGestor();
-      allow write: if false;
+      allow create, update: if false;
+      allow delete: if souGerencia(); // exclusão de importação — ver /api/importacoes/[id]
 
       match /snapshots/{importacaoId} {
         allow read: if papelGestor();
