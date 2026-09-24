@@ -91,6 +91,11 @@ export interface Tarefa {
   chaveRegra: string;
   origem: OrigemTarefa;
   nivel: NivelTarefa;
+  // Importação (yyyy-MM-dd) que CRIOU esta tarefa — não é atualizado em
+  // reconciliações seguintes. Usado pela exclusão em cascata de uma
+  // importação específica (só apaga tarefas nascidas dela, não as que só
+  // foram atualizadas nesse dia).
+  importacaoIdCriacao?: string;
   numero: string | null; // referência ao Registro (origem "linha"); null em agregados
   numerosRelacionados?: string[]; // pastas envolvidas (origem "agregado")
   cidade: string;

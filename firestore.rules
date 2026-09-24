@@ -21,6 +21,11 @@ service cloud.firestore {
       return logado() && minhaRole() in ['gerencia', 'coordenador', 'analista'];
     }
 
+    function souGerencia() {
+      // Exclusão de importação (snapshot + tarefas + resumo) é ação exclusiva da Gerência.
+      return logado() && minhaRole() == 'gerencia';
+    }
+
     // --- users: cada um lê o próprio perfil; escrita só via Admin SDK/console. ---
     match /users/{uid} {
       allow read: if logado() && (request.auth.uid == uid || papelGestor());
@@ -35,14 +40,16 @@ service cloud.firestore {
 
       match /snapshots/{importacaoId} {
         allow read: if papelGestor();
-        allow write: if false;
+        allow create, update: if false; // só o motor de auditoria (Admin SDK) grava snapshots
+        allow delete: if souGerencia(); // exclusão de importação — ver /api/importacoes/[id]
       }
     }
 
-    // --- importacoes: histórico de uploads, só leitura para gestores. ---
+    // --- importacoes: histórico de uploads. Leitura para gestores; exclusão só Gerência. ---
     match /importacoes/{importacaoId} {
       allow read: if papelGestor();
-      allow write: if false;
+      allow create, update: if false;
+      allow delete: if souGerencia();
     }
 
     // --- notificacoes: alertas de falha de auditoria. ---
@@ -65,7 +72,8 @@ service cloud.firestore {
     match /tarefas/{tarefaId} {
       allow read: if papelGestor() || (logado() && souDonoDoQuadro(resource.data.praca));
 
-      allow create, delete: if false; // só o motor de auditoria cria tarefas
+      allow create: if false; // só o motor de auditoria cria tarefas
+      allow delete: if souGerencia(); // exclusão de importação — ver /api/importacoes/[id]
 
       allow update: if logado() && souDonoDoQuadro(resource.data.praca) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(

@@ -202,6 +202,7 @@ export async function executarAuditoriaDiaria(params: {
         chaveRegra: dados.chaveRegra,
         origem: dados.origem,
         nivel: dados.nivel,
+        importacaoIdCriacao: importacaoId,
         numero: dados.numero,
         numerosRelacionados: dados.numerosRelacionados,
         cidade: dados.cidade,
