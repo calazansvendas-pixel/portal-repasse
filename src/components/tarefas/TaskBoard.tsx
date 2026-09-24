@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import type { Assistente, QuadroEscalonamento, Tarefa } from "@/lib/types";
-import { ASSISTENTE_LABEL, QUADRO_ESCALONAMENTO_LABEL } from "@/lib/types";
+import type { Assistente, Quadro, QuadroEscalonamento, Tarefa } from "@/lib/types";
+import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 import { TaskCard } from "./TaskCard";
 
 interface Coluna {
-  chave: string;
+  chave: Quadro;
   titulo: string;
   tarefas: Tarefa[];
   escalonamento: boolean;
@@ -17,28 +17,31 @@ export function TaskBoard({
   pracas,
   tarefas,
   loading,
-  somenteLeitura = false,
+  meusQuadros = [],
   quadrosEscalonamento = [],
 }: {
   pracas: Assistente[];
   tarefas: Tarefa[];
   loading: boolean;
-  somenteLeitura?: boolean;
-  /** Colunas extras de escalonamento (Coordenador/Analista) — sempre somente-leitura. */
+  /** Quadros em que o usuário atual pode marcar/desmarcar o checkbox. */
+  meusQuadros?: Quadro[];
+  /** Colunas extras de Coordenador/Analista: tarefas nativas + escalonadas. */
   quadrosEscalonamento?: QuadroEscalonamento[];
 }) {
   const colunas = useMemo<Coluna[]>(() => {
     const regionais = pracas.map((praca) => ({
-      chave: praca,
+      chave: praca as Quadro,
       titulo: ASSISTENTE_LABEL[praca],
       tarefas: ordenarPorSla(tarefas.filter((t) => t.praca === praca)),
       escalonamento: false,
     }));
 
     const escalonadas = quadrosEscalonamento.map((quadro) => ({
-      chave: quadro,
-      titulo: QUADRO_ESCALONAMENTO_LABEL[quadro],
-      tarefas: ordenarPorSla(tarefas.filter((t) => t.escalonadoPara?.includes(quadro))),
+      chave: quadro as Quadro,
+      titulo: QUADRO_LABEL[quadro],
+      tarefas: ordenarPorSla(
+        tarefas.filter((t) => t.praca === quadro || t.escalonadoPara?.includes(quadro))
+      ),
       escalonamento: true,
     }));
 
@@ -57,42 +60,45 @@ export function TaskBoard({
           : "max-w-xl"
       }
     >
-      {colunas.map(({ chave, titulo, tarefas: tarefasDaColuna, escalonamento }) => (
-        <div key={chave} className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2
-              className={cn(
-                "text-sm font-bold uppercase tracking-wide",
-                escalonamento ? "text-status-danger" : "text-ink-secondary dark:text-white/60"
-              )}
-            >
-              {titulo}
-            </h2>
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-xs font-semibold",
-                escalonamento
-                  ? "bg-status-danger/10 text-status-danger"
-                  : "bg-surface-green text-brand-primaryDark dark:bg-white/10 dark:text-white/70"
-              )}
-            >
-              {tarefasDaColuna.length}
-            </span>
-          </div>
+      {colunas.map(({ chave, titulo, tarefas: tarefasDaColuna, escalonamento }) => {
+        const interativo = meusQuadros.includes(chave);
+        return (
+          <div key={chave} className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2
+                className={cn(
+                  "text-sm font-bold uppercase tracking-wide",
+                  escalonamento ? "text-status-danger" : "text-ink-secondary dark:text-white/60"
+                )}
+              >
+                {titulo}
+              </h2>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs font-semibold",
+                  escalonamento
+                    ? "bg-status-danger/10 text-status-danger"
+                    : "bg-surface-green text-brand-primaryDark dark:bg-white/10 dark:text-white/70"
+                )}
+              >
+                {tarefasDaColuna.length}
+              </span>
+            </div>
 
-          {tarefasDaColuna.length === 0 ? (
-            <div className="surface-card p-4 text-center text-xs text-ink-muted">
-              Nenhuma pendência no momento.
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {tarefasDaColuna.map((t) => (
-                <TaskCard key={t.id} tarefa={t} somenteLeitura={escalonamento || somenteLeitura} />
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
+            {tarefasDaColuna.length === 0 ? (
+              <div className="surface-card p-4 text-center text-xs text-ink-muted">
+                Nenhuma pendência no momento.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {tarefasDaColuna.map((t) => (
+                  <TaskCard key={t.id} tarefa={t} somenteLeitura={!interativo} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

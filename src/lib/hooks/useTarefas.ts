@@ -3,17 +3,23 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import type { Assistente, QuadroEscalonamento, Tarefa } from "@/lib/types";
+import type { Quadro, QuadroEscalonamento, Tarefa } from "@/lib/types";
 
-/** Tarefas ativas (visíveis em algum quadro) das praças informadas, mais recentes primeiro. */
-export function useTarefasPorPracas(pracas: Assistente[]) {
+/**
+ * Tarefas ativas dos quadros informados, mais recentes primeiro. `quadros`
+ * deve ser a união das praças regionais visíveis + os quadros nativos de
+ * Coordenador/Analista (ver roles.quadrosParaBuscar) — o campo Firestore
+ * continua se chamando "praca" por compatibilidade com o índice já publicado,
+ * mas aceita qualquer Quadro (regional, coordenador ou analista).
+ */
+export function useTarefasPorQuadros(quadros: Quadro[]) {
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const pracasKey = pracas.slice().sort().join(",");
+  const quadrosKey = quadros.slice().sort().join(",");
 
   useEffect(() => {
-    if (pracas.length === 0) {
+    if (quadros.length === 0) {
       setTarefas([]);
       setLoading(false);
       return;
@@ -22,7 +28,7 @@ export function useTarefasPorPracas(pracas: Assistente[]) {
     setErro(null);
     const q = query(
       collection(db, "tarefas"),
-      where("praca", "in", pracas),
+      where("praca", "in", quadros),
       orderBy("criadoEm", "desc")
     );
     const unsubscribe = onSnapshot(
@@ -35,14 +41,14 @@ export function useTarefasPorPracas(pracas: Assistente[]) {
         setLoading(false);
       },
       (err) => {
-        console.error("[useTarefasPorPracas] falha ao ler tarefas:", err);
+        console.error("[useTarefasPorQuadros] falha ao ler tarefas:", err);
         setErro(err.message);
         setLoading(false);
       }
     );
     return () => unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pracasKey]);
+  }, [quadrosKey]);
 
   return { tarefas, loading, erro };
 }

@@ -1,4 +1,4 @@
-import type { Assistente, QuadroEscalonamento, Role, UserProfile } from "@/lib/types";
+import type { Assistente, Quadro, QuadroEscalonamento, Role, UserProfile } from "@/lib/types";
 
 /**
  * Mapa fixo de praças -> lista de trechos de "Cidade do empreendimento" que
@@ -54,6 +54,35 @@ export function quadrosEscalonamentoVisiveis(profile: UserProfile): QuadroEscalo
   switch (profile.role) {
     case "gerencia":
       return ["coordenador", "analista"];
+    case "coordenador":
+      return ["coordenador"];
+    case "analista":
+      return ["analista"];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Todos os quadros que precisam ser buscados no Firestore para montar a tela
+ * de um perfil: as praças regionais visíveis + os quadros nativos de
+ * Coordenador/Analista (que agora recebem tarefas geradas diretamente para
+ * eles, não só escalonamentos de uma tarefa regional).
+ */
+export function quadrosParaBuscar(profile: UserProfile): Quadro[] {
+  return [...pracasVisiveis(profile), ...quadrosEscalonamentoVisiveis(profile)];
+}
+
+/**
+ * Em qual(is) quadro(s) o usuário pode efetivamente marcar/desmarcar o
+ * checkbox de uma tarefa. Só o dono de um quadro pode resolvê-lo:
+ * assistente no seu próprio, Coordenador no dele, Analista no dela.
+ * Gerência nunca interage — só observa (god mode é leitura, não ação).
+ */
+export function meuQuadroInterativo(profile: UserProfile): Quadro[] {
+  switch (profile.role) {
+    case "assistente":
+      return profile.praca ? [profile.praca] : [];
     case "coordenador":
       return ["coordenador"];
     case "analista":

@@ -51,15 +51,23 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // --- tarefas: gestores veem tudo; assistente só enxerga/atualiza a própria praça. ---
+    // --- tarefas: o campo "praca" guarda o Quadro (regional OU "coordenador"/"analista"
+    // nativo). Cada um só marca/desmarca o checkbox no PRÓPRIO quadro — assistente na sua
+    // praça, Coordenador em "coordenador", Analista em "analista". Gerência só observa. ---
+    function meuQuadro() {
+      return minhaRole() == 'assistente' ? meuPerfil().praca : minhaRole();
+    }
+
+    function souDonoDoQuadro(quadroDaTarefa) {
+      return minhaRole() in ['assistente', 'coordenador', 'analista'] && quadroDaTarefa == meuQuadro();
+    }
+
     match /tarefas/{tarefaId} {
-      allow read: if papelGestor() ||
-        (logado() && minhaRole() == 'assistente' && resource.data.praca == meuPerfil().praca);
+      allow read: if papelGestor() || (logado() && souDonoDoQuadro(resource.data.praca));
 
       allow create, delete: if false; // só o motor de auditoria cria tarefas
 
-      allow update: if logado() && minhaRole() == 'assistente' &&
-        resource.data.praca == meuPerfil().praca &&
+      allow update: if logado() && souDonoDoQuadro(resource.data.praca) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(
           ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao', 'observacaoNoMomentoResolucao']
         );

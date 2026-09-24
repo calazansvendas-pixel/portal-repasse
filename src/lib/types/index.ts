@@ -4,10 +4,23 @@ export type Role = "gerencia" | "coordenador" | "analista" | "assistente";
 
 export type Assistente = "laiza" | "eliane" | "catarina";
 
-/** Quadro de escalonamento: além do quadro da assistente responsável pela cidade,
- * uma tarefa pode aparecer simultaneamente no quadro do Coordenador (SLA
- * urgente/estourado) e/ou no quadro da Analista (falha de auditoria). */
+/** Quadro de escalonamento: além do quadro principal da tarefa, ela pode
+ * aparecer simultaneamente no quadro do Coordenador (SLA urgente/estourado)
+ * e/ou no quadro da Analista (falha de auditoria). */
 export type QuadroEscalonamento = "coordenador" | "analista";
+
+/** Todo quadro de tarefas existente no sistema: as 3 praças regionais + os
+ * quadros nativos do Coordenador e da Analista (que agora também recebem
+ * tarefas geradas diretamente para eles, não só escalonamentos). */
+export type Quadro = Assistente | QuadroEscalonamento;
+
+/** Nível hierárquico que originou a tarefa (ver taskRouter.ts). */
+export type NivelTarefa = "operacional" | "analitico" | "tatico";
+
+/** Uma tarefa nasce de uma linha específica da planilha (uma pasta) ou de uma
+ * agregação entre várias linhas (ex: gargalo de etapa, filtro de qualificação
+ * ruim por imobiliária). */
+export type OrigemTarefa = "linha" | "agregado";
 
 export interface UserProfile {
   uid: string;
@@ -72,14 +85,25 @@ export type TarefaStatus =
 
 export interface Tarefa {
   id: string;
-  numero: string; // referência ao Registro
+  // Identidade estável da regra que gerou esta tarefa — usada pelo motor de
+  // auditoria para reconciliar a mesma tarefa entre importações consecutivas.
+  // Ex: "A000033432::operacional", "AGREGADO::gargalo::SERRA::0.80 - ...".
+  chaveRegra: string;
+  origem: OrigemTarefa;
+  nivel: NivelTarefa;
+  numero: string | null; // referência ao Registro (origem "linha"); null em agregados
+  numerosRelacionados?: string[]; // pastas envolvidas (origem "agregado")
   cidade: string;
-  praca: Assistente; // quadro ao qual a tarefa pertence
+  // Quadro PRINCIPAL onde a tarefa vive (assistente regional, ou diretamente
+  // "coordenador"/"analista" para tarefas táticas/analíticas nativas). O nome
+  // do campo ficou "praca" por compatibilidade com o índice do Firestore já
+  // publicado — mas o tipo agora é o Quadro completo, não só Assistente.
+  praca: Quadro;
   imobiliaria: string;
   etapa: string;
   prazoEtapa: string | null;
   slaStatus: SlaStatus;
-  tipoPendencia: string; // categoria extraída da observação, ex "RG vencido"
+  tipoPendencia: string; // categoria da tarefa, ex "Risco bancário"
   descricao: string; // texto de ação pronto para o card
   observacaoOriginal: string;
   status: TarefaStatus;
@@ -120,7 +144,10 @@ export const ASSISTENTE_LABEL: Record<Assistente, string> = {
   catarina: "Catarina (Fátima e Camburi)",
 };
 
-export const QUADRO_ESCALONAMENTO_LABEL: Record<QuadroEscalonamento, string> = {
-  coordenador: "Paulo (Coordenador) — SLA crítico",
-  analista: "Andressa (Analista) — Falhas de auditoria",
+export const QUADRO_LABEL: Record<Quadro, string> = {
+  laiza: "Laiza (Serra)",
+  eliane: "Eliane (Vila Velha)",
+  catarina: "Catarina (Fátima e Camburi)",
+  coordenador: "Paulo (Coordenador)",
+  analista: "Andressa (Analista)",
 };

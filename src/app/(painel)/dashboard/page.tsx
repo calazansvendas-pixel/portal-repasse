@@ -1,20 +1,32 @@
 "use client";
 
 import { useMemo } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardList, FolderKanban, ShieldAlert, TimerReset } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  Droplets,
+  FolderKanban,
+  ShieldAlert,
+  TimerReset,
+  TrendingUp,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import {
   pracasVisiveis,
   quadrosEscalonamentoVisiveis,
+  quadrosParaBuscar,
+  meuQuadroInterativo,
   podeVerPainelGerencial,
   podeVerPainelAnalitico,
   podeVerRelatoriosGerais,
 } from "@/lib/auth/roles";
 import { useRegistros } from "@/lib/hooks/useRegistros";
 import { useTodasTarefas } from "@/lib/hooks/useTodasTarefas";
-import { useTarefasPorPracas } from "@/lib/hooks/useTarefas";
+import { useTarefasPorQuadros } from "@/lib/hooks/useTarefas";
 import { useEvolucaoEtapas } from "@/lib/hooks/useEvolucaoEtapas";
 import { calcularRankingParceiros, calcularMapaTreinamento } from "@/lib/services/analiseParceiros";
+import { calcularMetricasEstrategicas } from "@/lib/services/analiseEstrategica";
 import { Topbar } from "@/components/layout/Topbar";
 import { StatTile } from "@/components/dashboard/StatTile";
 import { EvolucaoDiariaChart } from "@/components/dashboard/EvolucaoDiariaChart";
@@ -27,13 +39,16 @@ export default function DashboardPage() {
   const { profile } = useAuth();
   const pracas = profile ? pracasVisiveis(profile) : [];
   const quadrosEscalonamento = profile ? quadrosEscalonamentoVisiveis(profile) : [];
+  const quadrosBusca = profile ? quadrosParaBuscar(profile) : [];
+  const meusQuadros = profile ? meuQuadroInterativo(profile) : [];
   const { registros } = useRegistros();
   const { tarefas: todasTarefas } = useTodasTarefas();
-  const { tarefas: tarefasDoQuadro, loading: loadingQuadro, erro: erroQuadro } = useTarefasPorPracas(pracas);
+  const { tarefas: tarefasDoQuadro, loading: loadingQuadro, erro: erroQuadro } = useTarefasPorQuadros(quadrosBusca);
   const { dados: evolucao, loading: loadingEvolucao } = useEvolucaoEtapas();
 
   const ranking = useMemo(() => calcularRankingParceiros(todasTarefas), [todasTarefas]);
   const mapaTreinamento = useMemo(() => calcularMapaTreinamento(todasTarefas), [todasTarefas]);
+  const metricasEstrategicas = useMemo(() => calcularMetricasEstrategicas(registros), [registros]);
 
   if (!profile) return null;
 
@@ -82,18 +97,34 @@ export default function DashboardPage() {
             <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-secondary dark:text-white/60">
               Seu quadro de tarefas
             </h2>
-            <TaskBoard pracas={pracas} tarefas={tarefasDoQuadro} loading={loadingQuadro} />
+            <TaskBoard pracas={pracas} tarefas={tarefasDoQuadro} loading={loadingQuadro} meusQuadros={meusQuadros} />
           </div>
         </>
       ) : (
         <>
           {verGerencial && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatTile label="Pastas na esteira" value={registros.length} icon={FolderKanban} />
-              <StatTile label="Tarefas ativas" value={pendentesAtivas} icon={ClipboardList} tone="warning" />
-              <StatTile label="SLA estourado" value={estourados} icon={AlertTriangle} tone="danger" />
-              <StatTile label="Falhas de auditoria" value={falhasAuditoria} icon={ShieldAlert} tone="danger" />
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatTile label="Pastas na esteira" value={registros.length} icon={FolderKanban} />
+                <StatTile label="Tarefas ativas" value={pendentesAtivas} icon={ClipboardList} tone="warning" />
+                <StatTile label="SLA estourado" value={estourados} icon={AlertTriangle} tone="danger" />
+                <StatTile label="Falhas de auditoria" value={falhasAuditoria} icon={ShieldAlert} tone="danger" />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <StatTile
+                  label="Taxa de vazamento de funil"
+                  value={`${metricasEstrategicas.taxaVazamentoFunilPct}%`}
+                  icon={Droplets}
+                  tone={metricasEstrategicas.taxaVazamentoFunilPct > 15 ? "danger" : "warning"}
+                />
+                <StatTile
+                  label="Eficiência de inclusão"
+                  value={`${metricasEstrategicas.eficienciaInclusaoPct}%`}
+                  icon={TrendingUp}
+                  tone={metricasEstrategicas.eficienciaInclusaoPct >= 70 ? "success" : "warning"}
+                />
+              </div>
+            </>
           )}
 
           {verAnalitico && (
@@ -126,7 +157,7 @@ export default function DashboardPage() {
               pracas={pracas}
               tarefas={tarefasDoQuadro}
               loading={loadingQuadro}
-              somenteLeitura
+              meusQuadros={meusQuadros}
               quadrosEscalonamento={quadrosEscalonamento}
             />
           </div>

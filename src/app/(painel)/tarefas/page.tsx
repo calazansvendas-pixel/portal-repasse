@@ -2,8 +2,8 @@
 
 import { AlertTriangle } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { pracasVisiveis, quadrosEscalonamentoVisiveis } from "@/lib/auth/roles";
-import { useTarefasPorPracas } from "@/lib/hooks/useTarefas";
+import { pracasVisiveis, quadrosEscalonamentoVisiveis, quadrosParaBuscar, meuQuadroInterativo } from "@/lib/auth/roles";
+import { useTarefasPorQuadros } from "@/lib/hooks/useTarefas";
 import { Topbar } from "@/components/layout/Topbar";
 import { TaskBoard } from "@/components/tarefas/TaskBoard";
 
@@ -11,10 +11,10 @@ export default function TarefasPage() {
   const { profile } = useAuth();
   const pracas = profile ? pracasVisiveis(profile) : [];
   const quadrosEscalonamento = profile ? quadrosEscalonamentoVisiveis(profile) : [];
-  const { tarefas, loading, erro } = useTarefasPorPracas(pracas);
+  const quadrosBusca = profile ? quadrosParaBuscar(profile) : [];
+  const meusQuadros = profile ? meuQuadroInterativo(profile) : [];
+  const { tarefas, loading, erro } = useTarefasPorQuadros(quadrosBusca);
   if (!profile) return null;
-
-  const somenteLeitura = profile.role !== "assistente";
 
   return (
     <div>
@@ -30,16 +30,16 @@ export default function TarefasPage() {
         </div>
       )}
 
-      {pracas.length === 0 ? (
+      {quadrosBusca.length === 0 ? (
         <p className="text-sm text-ink-muted">
-          Seu usuário não está associado a nenhuma praça. Fale com a coordenação.
+          Seu usuário não está associado a nenhum quadro. Fale com a coordenação.
         </p>
       ) : (
         <TaskBoard
           pracas={pracas}
           tarefas={tarefas}
           loading={loading}
-          somenteLeitura={somenteLeitura}
+          meusQuadros={meusQuadros}
           quadrosEscalonamento={quadrosEscalonamento}
         />
       )}

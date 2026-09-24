@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Check, Clock3, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, Clock3, Layers, Undo2 } from "lucide-react";
 import type { Tarefa } from "@/lib/types";
 import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
 import { formatDateBR } from "@/lib/utils/dates";
@@ -59,16 +59,25 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary dark:border-white/15 dark:text-white/60">
           {tarefa.tipoPendencia}
         </span>
-        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary dark:border-white/15 dark:text-white/60">
-          Etapa {tarefa.etapa}
-        </span>
+        {tarefa.etapa && (
+          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary dark:border-white/15 dark:text-white/60">
+            Etapa {tarefa.etapa}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center justify-between text-xs text-ink-muted">
-        <span className="inline-flex items-center gap-1">
-          <Clock3 size={12} />
-          Prazo: {formatDateBR(tarefa.prazoEtapa)}
-        </span>
+        {tarefa.origem === "agregado" ? (
+          <span className="inline-flex items-center gap-1">
+            <Layers size={12} />
+            {tarefa.numerosRelacionados?.length ?? 0} pastas relacionadas
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1">
+            <Clock3 size={12} />
+            Prazo: {formatDateBR(tarefa.prazoEtapa)}
+          </span>
+        )}
 
         {!somenteLeitura && (
           <button
