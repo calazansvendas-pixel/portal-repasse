@@ -10,6 +10,8 @@ export interface LinhaPlanilha {
   etapa: string;
   prazoEtapa: string | null;
   observacao: string;
+  clienteNome: string;
+  dataEntrada: string | null;
 }
 
 export interface ResultadoParse {
@@ -30,6 +32,8 @@ const MATCHERS: { chave: ColunaChave; teste: (h: string) => boolean }[] = [
   { chave: "prazoEtapa", teste: (h) => h.includes("prazo") && h.includes("etapa") },
   { chave: "etapa", teste: (h) => h.includes("etapa") && h.includes("processo") },
   { chave: "observacao", teste: (h) => h.includes("observ") },
+  { chave: "clienteNome", teste: (h) => h.includes("proponente") },
+  { chave: "dataEntrada", teste: (h) => h.includes("data") && (h.includes("inclus") || h.includes("venda")) },
 ];
 
 const NOME_COLUNA: Record<ColunaChave, string> = {
@@ -40,6 +44,8 @@ const NOME_COLUNA: Record<ColunaChave, string> = {
   etapa: "Etapa do processo",
   prazoEtapa: "Prazo da etapa",
   observacao: "Observação",
+  clienteNome: "1º Proponente",
+  dataEntrada: "Data Inclusão / Data da venda",
 };
 
 /** Escolhe a aba a processar: prioriza nomes no padrão "0.01 dd-MM", senão usa a primeira aba. */
@@ -96,6 +102,8 @@ export function parseWorkbookBuffer(buffer: ArrayBuffer | Buffer): ResultadoPars
       etapa: celulaParaTexto(linha[indicePorColuna.etapa]),
       prazoEtapa: excelCellToISODate(linha[indicePorColuna.prazoEtapa]),
       observacao: celulaParaTexto(linha[indicePorColuna.observacao]),
+      clienteNome: celulaParaTexto(linha[indicePorColuna.clienteNome]),
+      dataEntrada: excelCellToISODate(linha[indicePorColuna.dataEntrada]),
     });
   }
 

@@ -98,6 +98,8 @@ export interface Tarefa {
   importacaoIdCriacao?: string;
   numero: string | null; // referência ao Registro (origem "linha"); null em agregados
   numerosRelacionados?: string[] | null; // pastas envolvidas (origem "agregado"); null em tarefas de linha
+  clienteNome?: string | null; // "1º Proponente" — vazio em tarefas agregadas
+  dataEntrada?: string | null; // ISO — "Data Inclusão"/"Data da venda", base da linha do tempo do card
   cidade: string;
   // Quadro PRINCIPAL onde a tarefa vive (assistente regional, ou diretamente
   // "coordenador"/"analista" para tarefas táticas/analíticas nativas). O nome

@@ -61,3 +61,16 @@ export function formatDateTimeBR(isoDateTime: string | null | undefined): string
 export function hojeISO(): string {
   return toISODateOnly(new Date());
 }
+
+/** Dias corridos entre uma data ISO e hoje (>= 0). Retorna null se a data for inválida. */
+export function diasDesde(isoDate: string | null | undefined): number | null {
+  if (!isoDate) return null;
+  try {
+    const inicio = parseISO(isoDate);
+    if (Number.isNaN(inicio.getTime())) return null;
+    const ms = Date.now() - inicio.getTime();
+    return Math.max(0, Math.floor(ms / 86_400_000));
+  } catch {
+    return null;
+  }
+}

@@ -35,6 +35,8 @@ interface DadosParaReconciliar {
   nivel: NivelTarefa;
   numero: string | null;
   numerosRelacionados?: string[];
+  clienteNome?: string | null;
+  dataEntrada?: string | null;
   cidade: string;
   quadro: Quadro;
   imobiliaria: string;
@@ -185,6 +187,8 @@ export async function executarAuditoriaDiaria(params: {
           descricao: dados.descricao,
           observacaoOriginal: dados.observacaoOriginal,
           numerosRelacionados: dados.numerosRelacionados ?? null,
+          clienteNome: dados.clienteNome ?? null,
+          dataEntrada: dados.dataEntrada ?? null,
           atualizadoEm: agora,
           escalonadoPara: calcularEscalonamento({
             quadro: dados.quadro,
@@ -205,6 +209,8 @@ export async function executarAuditoriaDiaria(params: {
         importacaoIdCriacao: importacaoId,
         numero: dados.numero,
         numerosRelacionados: dados.numerosRelacionados ?? null,
+        clienteNome: dados.clienteNome ?? null,
+        dataEntrada: dados.dataEntrada ?? null,
         cidade: dados.cidade,
         praca: dados.quadro,
         imobiliaria: dados.imobiliaria,
@@ -271,6 +277,8 @@ export async function executarAuditoriaDiaria(params: {
     const camposComuns = {
       origem: "linha" as const,
       numero: linha.numero,
+      clienteNome: linha.clienteNome,
+      dataEntrada: linha.dataEntrada,
       cidade: linha.cidade,
       imobiliaria: linha.responsavel,
       etapa: linha.etapa,

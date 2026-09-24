@@ -1,6 +1,7 @@
-import { normalize } from "@/lib/auth/roles";
+import { normalize, resolvePracaPorCidade } from "@/lib/auth/roles";
 import type { LinhaPlanilha } from "./parseSheet";
 import type { NivelTarefa, Quadro, QuadroEscalonamento, SlaStatus } from "@/lib/types";
+import { ASSISTENTE_LABEL } from "@/lib/types";
 import { SLA_LABEL } from "@/lib/utils/sla";
 
 /**
@@ -19,6 +20,14 @@ export interface EspecTarefaLinha {
   quadro: Quadro;
   tipoPendencia: string;
   descricao: string;
+}
+
+function nomeCliente(linha: LinhaPlanilha): string {
+  return linha.clienteNome.trim() || "cliente não identificado";
+}
+
+function nomeImobiliaria(linha: LinhaPlanilha): string {
+  return linha.responsavel.trim() || "imobiliária não informada";
 }
 
 export interface EspecTarefaAgregada {
@@ -41,20 +50,6 @@ function contemAlgumTermo(observacaoNormalizada: string, termos: string[]): stri
   return null;
 }
 
-/** Recorta um trecho da observação ORIGINAL ao redor do termo encontrado (para citar no card). */
-function extrairRecorte(observacaoOriginal: string, termoNormalizado: string, janela = 50): string {
-  const normalizado = normalize(observacaoOriginal);
-  const idx = normalizado.indexOf(termoNormalizado);
-  if (idx === -1) {
-    const corte = observacaoOriginal.trim().slice(0, janela);
-    return corte + (observacaoOriginal.trim().length > janela ? "…" : "");
-  }
-  const inicio = Math.max(0, idx - janela / 2);
-  const fim = Math.min(observacaoOriginal.length, idx + termoNormalizado.length + janela / 2);
-  const recorte = observacaoOriginal.slice(inicio, fim).trim();
-  return (inicio > 0 ? "…" : "") + recorte + (fim < observacaoOriginal.length ? "…" : "");
-}
-
 // ---------------------------------------------------------------------------
 // Nível Operacional (Assistentes) — um card por pasta, roteado por cidade.
 // ---------------------------------------------------------------------------
@@ -71,15 +66,15 @@ const TERMOS_DOCUMENTACAO: { termo: string; label: string }[] = [
 /**
  * Dicionário legado (mantido como fallback): cobre pendências que não se
  * encaixam nos 3 gatilhos operacionais explícitos, para não deixar nenhuma
- * observação sem tarefa gerada.
+ * observação sem tarefa gerada. Tom de consultoria/ajuda, não de cobrança.
  */
 const REGRAS_PENDENCIA_LEGADO: { padroes: string[]; tipoPendencia: string; acao: string }[] = [
-  { padroes: ["comprovante de renda", "comprovante renda"], tipoPendencia: "Comprovante de renda", acao: "Cobrar comprovante de renda atualizado" },
-  { padroes: ["comprovante de residencia", "comprovante residencia", "comprovante de endereco"], tipoPendencia: "Comprovante de residência", acao: "Cobrar comprovante de residência atualizado" },
-  { padroes: ["assinatura", "contrato nao assinado", "aguardando assinatura"], tipoPendencia: "Assinatura de contrato", acao: "Cobrar assinatura do contrato" },
-  { padroes: ["vencido", "venceu", "vencida"], tipoPendencia: "Documento vencido", acao: "Cobrar atualização de documento vencido" },
-  { padroes: ["banco", "financiamento"], tipoPendencia: "Pendência bancária/financiamento", acao: "Verificar andamento junto ao banco" },
-  { padroes: ["pendente", "pendencia", "falta", "aguardando"], tipoPendencia: "Documentação pendente", acao: "Levantar e cobrar documentação pendente" },
+  { padroes: ["comprovante de renda", "comprovante renda"], tipoPendencia: "Comprovante de renda", acao: "auxiliar na obtenção do comprovante de renda atualizado" },
+  { padroes: ["comprovante de residencia", "comprovante residencia", "comprovante de endereco"], tipoPendencia: "Comprovante de residência", acao: "auxiliar na obtenção do comprovante de residência atualizado" },
+  { padroes: ["assinatura", "contrato nao assinado", "aguardando assinatura"], tipoPendencia: "Assinatura de contrato", acao: "apoiar a conclusão da assinatura do contrato" },
+  { padroes: ["vencido", "venceu", "vencida"], tipoPendencia: "Documento vencido", acao: "auxiliar na atualização do documento vencido" },
+  { padroes: ["banco", "financiamento"], tipoPendencia: "Pendência bancária/financiamento", acao: "acompanhar junto ao banco o andamento do financiamento" },
+  { padroes: ["pendente", "pendencia", "falta", "aguardando"], tipoPendencia: "Documentação pendente", acao: "levantar e apoiar a organização da documentação pendente" },
 ];
 
 const SLA_ACAO_LABEL: Record<SlaStatus, string> = {
@@ -97,6 +92,8 @@ export function gerarEspecOperacional(
 ): EspecTarefaLinha | null {
   const obsNorm = normalize(linha.observacao);
   const etapaNorm = linha.etapa.trim();
+  const cliente = nomeCliente(linha);
+  const imobiliaria = nomeImobiliaria(linha);
 
   // 1) Inércia inicial: nem começou a ser tratada e o prazo já estourou.
   if (etapaNorm.startsWith("0.01") && slaStatus === "estourado") {
@@ -105,7 +102,7 @@ export function gerarEspecOperacional(
       nivel: "operacional",
       quadro: praca,
       tipoPendencia: "Inércia inicial",
-      descricao: `Preenchimento simultâneo em tela com o corretor AGORA. (pasta ${linha.numero})`,
+      descricao: `Ligar para a ${imobiliaria} e auxiliar o corretor no preenchimento da pasta do cliente ${cliente}.`,
     };
   }
 
@@ -116,20 +113,19 @@ export function gerarEspecOperacional(
       nivel: "operacional",
       quadro: praca,
       tipoPendencia: "Qualificação / restrição",
-      descricao: `Notificar imobiliária: Prazo 48h para envio de quitação. (pasta ${linha.numero})`,
+      descricao: `Orientar a ${imobiliaria} sobre restrições do cliente ${cliente} e ajudar a buscar soluções.`,
     };
   }
 
   // 3) Documentação de rotina (IRPF, FGTS, RG, certidão, estado civil).
   for (const { termo, label } of TERMOS_DOCUMENTACAO) {
     if (contemAlgumTermo(obsNorm, [termo])) {
-      const recorte = extrairRecorte(linha.observacao, termo);
       return {
         chaveRegra: `${linha.numero}::documentacao`,
         nivel: "operacional",
         quadro: praca,
         tipoPendencia: label,
-        descricao: `Cobrar corretor: ${recorte}. (pasta ${linha.numero})`,
+        descricao: `Prestar consultoria à ${imobiliaria} sobre a documentação do cliente ${cliente}.`,
       };
     }
   }
@@ -137,13 +133,12 @@ export function gerarEspecOperacional(
   // 4) Fallback legado, para não perder cobertura de pendências fora dos 3 gatilhos acima.
   for (const regra of REGRAS_PENDENCIA_LEGADO) {
     if (regra.padroes.some((p) => obsNorm.includes(p))) {
-      const imobiliaria = linha.responsavel || "imobiliária não informada";
       return {
         chaveRegra: `${linha.numero}::operacional`,
         nivel: "operacional",
         quadro: praca,
         tipoPendencia: regra.tipoPendencia,
-        descricao: `Ligar para ${imobiliaria} - ${regra.acao} (pasta ${linha.numero}). SLA: ${SLA_ACAO_LABEL[slaStatus]}`,
+        descricao: `Ligar para a ${imobiliaria} e ${regra.acao} do cliente ${cliente}. SLA: ${SLA_ACAO_LABEL[slaStatus]}`,
       };
     }
   }
@@ -161,13 +156,13 @@ export function gerarEspecRiscoBancario(linha: LinhaPlanilha): EspecTarefaLinha 
   const obsNorm = normalize(linha.observacao);
   if (!contemAlgumTermo(obsNorm, TERMOS_RISCO_BANCARIO)) return null;
 
-  const cliente = linha.cpfCnpj ? `CPF/CNPJ ${linha.cpfCnpj}` : "cliente não identificado";
+  const cliente = nomeCliente(linha);
   return {
     chaveRegra: `${linha.numero}::risco_bancario`,
     nivel: "analitico",
     quadro: "analista",
     tipoPendencia: "Risco bancário",
-    descricao: `Intervenção Manual: Acionar Caixa para destravar a pasta do ${cliente} (pasta ${linha.numero}).`,
+    descricao: `Intervenção Manual: Acionar Caixa para destravar a pasta do cliente ${cliente}.`,
   };
 }
 
@@ -181,13 +176,13 @@ export function gerarEspecErroProcesso(linha: LinhaPlanilha): EspecTarefaLinha |
   const obsNorm = normalize(linha.observacao);
   if (!PADROES_ERRO_PROCESSO.some((re) => re.test(obsNorm))) return null;
 
-  const imobiliaria = linha.responsavel || "imobiliária não informada";
+  const imobiliaria = nomeImobiliaria(linha);
   return {
     chaveRegra: `${linha.numero}::erro_processo`,
     nivel: "tatico",
     quadro: "coordenador",
     tipoPendencia: "Erro de processo básico",
-    descricao: `Agendar reciclagem do PRO VEND 01 com a Imobiliária ${imobiliaria}. (pasta ${linha.numero})`,
+    descricao: `Agendar visita de relacionamento com a ${imobiliaria} para um treinamento amigável sobre qualidade no envio de pastas.`,
   };
 }
 
@@ -211,6 +206,10 @@ export function detectarGargalos(linhas: LinhaPlanilha[]): EspecTarefaAgregada[]
   for (const grupo of grupos.values()) {
     if (grupo.length < LIMITE_GARGALO) continue;
     const { cidade, etapa } = grupo[0];
+    const assistenteResponsavel = resolvePracaPorCidade(cidade);
+    const nomeAssistente = assistenteResponsavel
+      ? ASSISTENTE_LABEL[assistenteResponsavel]
+      : "assistente responsável pela praça";
     especs.push({
       chaveRegra: `AGREGADO::gargalo::${normalize(cidade)}::${etapa.trim()}`,
       nivel: "analitico",
@@ -219,7 +218,7 @@ export function detectarGargalos(linhas: LinhaPlanilha[]): EspecTarefaAgregada[]
       etapa,
       imobiliaria: "",
       tipoPendencia: "Gargalo de etapa",
-      descricao: `Gargalo detectado: ${grupo.length} pastas travadas na etapa ${etapa} em ${cidade}. Orientar a assistente responsável.`,
+      descricao: `Gargalo de ${grupo.length} pastas na etapa ${etapa} em ${cidade}. Alinhar plano de ação tático com a assistente ${nomeAssistente}.`,
       numerosRelacionados: grupo.map((l) => l.numero),
     });
   }
