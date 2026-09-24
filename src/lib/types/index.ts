@@ -97,7 +97,7 @@ export interface Tarefa {
   // foram atualizadas nesse dia).
   importacaoIdCriacao?: string;
   numero: string | null; // referência ao Registro (origem "linha"); null em agregados
-  numerosRelacionados?: string[]; // pastas envolvidas (origem "agregado")
+  numerosRelacionados?: string[] | null; // pastas envolvidas (origem "agregado"); null em tarefas de linha
   cidade: string;
   // Quadro PRINCIPAL onde a tarefa vive (assistente regional, ou diretamente
   // "coordenador"/"analista" para tarefas táticas/analíticas nativas). O nome
