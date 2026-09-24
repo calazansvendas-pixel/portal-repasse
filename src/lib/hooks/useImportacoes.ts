@@ -8,6 +8,7 @@ import type { Importacao } from "@/lib/types";
 export function useImportacoes(max = 30) {
   const [importacoes, setImportacoes] = useState<Importacao[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, "importacoes"), orderBy("id", "desc"), limit(max));
@@ -17,10 +18,14 @@ export function useImportacoes(max = 30) {
         setImportacoes(snap.docs.map((d) => d.data() as Importacao));
         setLoading(false);
       },
-      () => setLoading(false)
+      (err) => {
+        console.error("[useImportacoes] falha ao ler importações:", err);
+        setErro(err.message);
+        setLoading(false);
+      }
     );
     return () => unsubscribe();
   }, [max]);
 
-  return { importacoes, loading };
+  return { importacoes, loading, erro };
 }

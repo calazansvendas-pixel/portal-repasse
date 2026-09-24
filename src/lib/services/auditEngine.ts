@@ -1,6 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { LinhaPlanilha } from "./parseSheet";
-import { detectarPendencia, montarDescricaoTarefa } from "./taskRouter";
+import { calcularEscalonamento, detectarPendencia, montarDescricaoTarefa } from "./taskRouter";
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import type { Registro, Tarefa } from "@/lib/types";
@@ -153,6 +153,7 @@ export async function executarAuditoriaDiaria(params: {
             ? "Etapa avançou, mas a mesma pendência foi identificada novamente."
             : "A pasta permanece na mesma etapa da última importação.",
           falhaAuditoriaEm: agora,
+          escalonadoPara: calcularEscalonamento({ slaStatus, falhouAuditoriaAgora: true }),
         });
         const notifRef = db.collection("notificacoes").doc();
         set(
@@ -193,6 +194,12 @@ export async function executarAuditoriaDiaria(params: {
             slaStatus,
           }),
           atualizadoEm: agora,
+          // Mantém o alerta da Analista enquanto a falha de auditoria não for
+          // resolvida de novo; SLA crítico é recalculado a cada importação.
+          escalonadoPara: calcularEscalonamento({
+            slaStatus,
+            falhouAuditoriaAgora: tarefaAtiva.data.status === "audit_failed",
+          }),
         });
       }
       continue;
@@ -262,6 +269,7 @@ function montarNovaTarefa(params: {
     observacaoNoMomentoResolucao: null,
     falhaAuditoriaMotivo: null,
     falhaAuditoriaEm: null,
+    escalonadoPara: calcularEscalonamento({ slaStatus, falhouAuditoriaAgora: false }),
   };
   return tarefa;
 }

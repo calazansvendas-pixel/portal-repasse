@@ -1,5 +1,5 @@
 import { normalize } from "@/lib/auth/roles";
-import type { SlaStatus } from "@/lib/types";
+import type { QuadroEscalonamento, SlaStatus } from "@/lib/types";
 import { SLA_LABEL } from "@/lib/utils/sla";
 
 export interface PendenciaDetectada {
@@ -55,4 +55,22 @@ export function montarDescricaoTarefa(params: {
   const { responsavel, acao, numero, slaStatus } = params;
   const imobiliaria = responsavel || "imobiliária não informada";
   return `Ligar para ${imobiliaria} - ${acao} (pasta ${numero}). SLA: ${SLA_ACAO_LABEL[slaStatus]}`;
+}
+
+/**
+ * Escalonamento simultâneo: além do quadro regional (assistente), a mesma
+ * tarefa também aparece no quadro do Coordenador quando o SLA está crítico,
+ * e no quadro da Analista quando a pasta acabou de falhar na auditoria diária
+ * ("fake done"). O flag de falha de auditoria fica visível até a tarefa ser
+ * resolvida de novo (a próxima importação recalcula tudo).
+ */
+export function calcularEscalonamento(params: {
+  slaStatus: SlaStatus;
+  falhouAuditoriaAgora: boolean;
+}): QuadroEscalonamento[] {
+  const { slaStatus, falhouAuditoriaAgora } = params;
+  const escalonamento: QuadroEscalonamento[] = [];
+  if (slaStatus === "urgente" || slaStatus === "estourado") escalonamento.push("coordenador");
+  if (falhouAuditoriaAgora) escalonamento.push("analista");
+  return escalonamento;
 }

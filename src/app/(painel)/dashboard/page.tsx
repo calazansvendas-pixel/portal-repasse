@@ -3,7 +3,13 @@
 import { useMemo } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardList, FolderKanban, ShieldAlert, TimerReset } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { pracasVisiveis, podeVerPainelGerencial, podeVerPainelAnalitico, podeVerRelatoriosGerais } from "@/lib/auth/roles";
+import {
+  pracasVisiveis,
+  quadrosEscalonamentoVisiveis,
+  podeVerPainelGerencial,
+  podeVerPainelAnalitico,
+  podeVerRelatoriosGerais,
+} from "@/lib/auth/roles";
 import { useRegistros } from "@/lib/hooks/useRegistros";
 import { useTodasTarefas } from "@/lib/hooks/useTodasTarefas";
 import { useTarefasPorPracas } from "@/lib/hooks/useTarefas";
@@ -20,9 +26,10 @@ import { TaskBoard } from "@/components/tarefas/TaskBoard";
 export default function DashboardPage() {
   const { profile } = useAuth();
   const pracas = profile ? pracasVisiveis(profile) : [];
+  const quadrosEscalonamento = profile ? quadrosEscalonamentoVisiveis(profile) : [];
   const { registros } = useRegistros();
   const { tarefas: todasTarefas } = useTodasTarefas();
-  const { tarefas: tarefasDoQuadro, loading: loadingQuadro } = useTarefasPorPracas(pracas);
+  const { tarefas: tarefasDoQuadro, loading: loadingQuadro, erro: erroQuadro } = useTarefasPorPracas(pracas);
   const { dados: evolucao, loading: loadingEvolucao } = useEvolucaoEtapas();
 
   const ranking = useMemo(() => calcularRankingParceiros(todasTarefas), [todasTarefas]);
@@ -42,6 +49,16 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <Topbar titulo={`Olá, ${profile.nome.split(" ")[0]}`} />
+
+      {erroQuadro && (
+        <div className="flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Não foi possível carregar as tarefas.</p>
+            <p className="mt-1 text-xs">{erroQuadro}</p>
+          </div>
+        </div>
+      )}
 
       {profile.role === "assistente" ? (
         <>
@@ -101,14 +118,18 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {profile.role === "analista" && (
-            <div>
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-secondary dark:text-white/60">
-                Tarefas das assistentes
-              </h2>
-              <TaskBoard pracas={pracas} tarefas={tarefasDoQuadro} loading={loadingQuadro} somenteLeitura />
-            </div>
-          )}
+          <div>
+            <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-secondary dark:text-white/60">
+              {profile.role === "gerencia" ? "Todos os quadros de tarefas" : "Tarefas da operação"}
+            </h2>
+            <TaskBoard
+              pracas={pracas}
+              tarefas={tarefasDoQuadro}
+              loading={loadingQuadro}
+              somenteLeitura
+              quadrosEscalonamento={quadrosEscalonamento}
+            />
+          </div>
         </>
       )}
     </div>

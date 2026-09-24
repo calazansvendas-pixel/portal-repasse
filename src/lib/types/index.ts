@@ -4,6 +4,11 @@ export type Role = "gerencia" | "coordenador" | "analista" | "assistente";
 
 export type Assistente = "laiza" | "eliane" | "catarina";
 
+/** Quadro de escalonamento: além do quadro da assistente responsável pela cidade,
+ * uma tarefa pode aparecer simultaneamente no quadro do Coordenador (SLA
+ * urgente/estourado) e/ou no quadro da Analista (falha de auditoria). */
+export type QuadroEscalonamento = "coordenador" | "analista";
+
 export interface UserProfile {
   uid: string;
   nome: string;
@@ -86,6 +91,9 @@ export interface Tarefa {
   observacaoNoMomentoResolucao?: string | null;
   falhaAuditoriaMotivo?: string | null;
   falhaAuditoriaEm?: string | null;
+  // Quadros extras onde este mesmo card também deve aparecer simultaneamente
+  // (recalculado a cada importação — ver auditEngine.ts).
+  escalonadoPara: QuadroEscalonamento[];
 }
 
 export interface Notificacao {
@@ -110,4 +118,9 @@ export const ASSISTENTE_LABEL: Record<Assistente, string> = {
   laiza: "Laiza (Serra)",
   eliane: "Eliane (Vila Velha)",
   catarina: "Catarina (Fátima e Camburi)",
+};
+
+export const QUADRO_ESCALONAMENTO_LABEL: Record<QuadroEscalonamento, string> = {
+  coordenador: "Paulo (Coordenador) — SLA crítico",
+  analista: "Andressa (Analista) — Falhas de auditoria",
 };

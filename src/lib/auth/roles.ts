@@ -1,4 +1,4 @@
-import type { Assistente, Role, UserProfile } from "@/lib/types";
+import type { Assistente, QuadroEscalonamento, Role, UserProfile } from "@/lib/types";
 
 /**
  * Mapa fixo de praças -> lista de trechos de "Cidade do empreendimento" que
@@ -40,6 +40,24 @@ export function pracasVisiveis(profile: UserProfile): Assistente[] {
       return todas;
     case "assistente":
       return profile.praca ? [profile.praca] : [];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Colunas extras de escalonamento (Coordenador/Analista) visíveis no quadro de
+ * tarefas de cada perfil. Gerência enxerga as duas; cada um dos outros dois
+ * enxerga só a própria; assistentes e demais não têm coluna de escalonamento.
+ */
+export function quadrosEscalonamentoVisiveis(profile: UserProfile): QuadroEscalonamento[] {
+  switch (profile.role) {
+    case "gerencia":
+      return ["coordenador", "analista"];
+    case "coordenador":
+      return ["coordenador"];
+    case "analista":
+      return ["analista"];
     default:
       return [];
   }
