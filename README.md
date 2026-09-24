@@ -33,7 +33,15 @@ Abra http://localhost:3000 — você será redirecionado para `/login`.
 
 ## 3. Publicar as regras e índices do Firestore
 
-Requer a [Firebase CLI](https://firebase.google.com/docs/cli) (`npm i -g firebase-tools`):
+**Sem precisar instalar a Firebase CLI** (usa as mesmas credenciais do Admin SDK
+de `.env.local`, via API REST):
+
+```bash
+npm run deploy:rules
+npm run deploy:indexes
+```
+
+Se preferir a [Firebase CLI](https://firebase.google.com/docs/cli) (`npm i -g firebase-tools`):
 
 ```bash
 firebase login
@@ -41,9 +49,18 @@ firebase use --add        # selecione o projeto criado no passo 1
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-As regras (`firestore.rules`) implementam o RBAC descrito abaixo; os índices
-compostos (`firestore.indexes.json`) são necessários para as consultas dos
-quadros de tarefas e do gráfico "Evolução Diária".
+As regras (`firestore.rules`) implementam o RBAC descrito abaixo; sem publicá-las,
+o Firestore fica com as regras padrão do projeto e a tela de login trava em
+"Conta sem perfil configurado" mesmo com o documento existindo em `users/{uid}`.
+Os índices compostos (`firestore.indexes.json`) são necessários para as consultas
+dos quadros de tarefas e do gráfico "Evolução Diária".
+
+> `npm run deploy:indexes` pode falhar com `PERMISSION_DENIED` dependendo das
+> permissões do service account (a API de índices é mais restrita que a de
+> regras). Se isso acontecer, não é bloqueante: a primeira vez que a consulta
+> rodar, o Firestore mostra um erro no console do navegador com um link que
+> cria o índice certo em um clique — ou use a Firebase CLI (`firebase deploy
+> --only firestore:indexes`).
 
 ## 4. Criar os 6 usuários iniciais
 
