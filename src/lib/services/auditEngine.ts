@@ -147,7 +147,6 @@ export async function executarAuditoriaDiaria(params: {
           falhaAuditoriaEm: agora,
           escalonadoPara: calcularEscalonamento({
             quadro: dados.quadro,
-            slaStatus: dados.slaStatus,
             falhouAuditoriaAgora: true,
           }),
         });
@@ -192,7 +191,6 @@ export async function executarAuditoriaDiaria(params: {
           atualizadoEm: agora,
           escalonadoPara: calcularEscalonamento({
             quadro: dados.quadro,
-            slaStatus: dados.slaStatus,
             falhouAuditoriaAgora: tarefaAtiva.data.status === "audit_failed",
           }),
         });
@@ -231,7 +229,6 @@ export async function executarAuditoriaDiaria(params: {
         falhaAuditoriaEm: null,
         escalonadoPara: calcularEscalonamento({
           quadro: dados.quadro,
-          slaStatus: dados.slaStatus,
           falhouAuditoriaAgora: false,
         }),
       };

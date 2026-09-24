@@ -261,16 +261,19 @@ export function contemQualificacaoRuim(observacao: string): boolean {
 // Escalonamento simultâneo (SLA crítico -> Coordenador; falha de auditoria -> Analista)
 // ---------------------------------------------------------------------------
 
+/**
+ * Escalonamento simultâneo é restrito à Analista, em falha de auditoria.
+ * O Coordenador NUNCA recebe tarefas por SLA estourado/urgente — o quadro
+ * dele só recebe as tarefas nativas dos seus gatilhos táticos ("Erro de
+ * processo básico" e "Filtro de qualificação ruim"), geradas diretamente
+ * com quadro "coordenador" em taskRouter.ts.
+ */
 export function calcularEscalonamento(params: {
   quadro: Quadro;
-  slaStatus: SlaStatus;
   falhouAuditoriaAgora: boolean;
 }): QuadroEscalonamento[] {
-  const { quadro, slaStatus, falhouAuditoriaAgora } = params;
+  const { quadro, falhouAuditoriaAgora } = params;
   const escalonamento: QuadroEscalonamento[] = [];
-  if ((slaStatus === "urgente" || slaStatus === "estourado") && quadro !== "coordenador") {
-    escalonamento.push("coordenador");
-  }
   if (falhouAuditoriaAgora && quadro !== "analista") {
     escalonamento.push("analista");
   }
