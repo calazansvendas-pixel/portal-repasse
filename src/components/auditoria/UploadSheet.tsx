@@ -68,7 +68,6 @@ export function UploadSheet() {
             type="date"
             className="input-field h-12 w-40"
             value={dataPlanilha}
-            max={hojeISO()}
             disabled={enviando}
             onChange={(e) => setDataPlanilha(e.target.value)}
           />

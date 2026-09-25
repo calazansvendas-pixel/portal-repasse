@@ -8,6 +8,13 @@ import type { Role } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+/** yyyy-MM-dd que existe no calendário (recusa, por exemplo, 2026-02-31). */
+function dataDeCalendarioValida(valor: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const d = new Date(`${valor}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === valor;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const adminAuth = getAdminAuth();
@@ -53,7 +60,8 @@ export async function POST(req: NextRequest) {
     }
 
     const dataParam = req.nextUrl.searchParams.get("data");
-    if (dataParam && (!/^d{4}-d{2}-d{2}$/.test(dataParam) || Number.isNaN(Date.parse(dataParam)))) {
+    // Qualquer data de calendário válida (passada ou futura): a planilha do dia 24 costuma ser importada no dia 25.
+    if (dataParam && !dataDeCalendarioValida(dataParam)) {
       return NextResponse.json({ erro: "Data da planilha inválida." }, { status: 400 });
     }
     const importacaoId = dataParam || hojeISO();
