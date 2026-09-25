@@ -3,6 +3,7 @@ import type { LinhaPlanilha } from "./parseSheet";
 import {
   calcularEscalonamento,
   detectarFiltroRuim,
+  dentroDoCooldownInclusao,
   detectarGargalos,
   ehEtapaInclusao,
   gerarEspecErroProcesso,
@@ -111,6 +112,18 @@ export async function executarAuditoriaDiaria(params: {
   tarefasAtivasSnap.forEach((doc) => {
     const data = doc.data() as Tarefa;
     tarefasPorChave.set(data.chaveRegra, { id: doc.id, data });
+  });
+
+  // Janela de respiro da 0.01: última conclusão recente por chaveRegra de "Inércia inicial".
+  // Consulta só por resolvidoEm (índice automático de campo único) e filtra o resto em memória.
+  const corteCooldown = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const concluidasRecentesSnap = await db.collection("tarefas").where("resolvidoEm", ">=", corteCooldown).get();
+  const ultimaConclusaoInercia = new Map<string, string>();
+  concluidasRecentesSnap.forEach((doc) => {
+    const t = doc.data() as Tarefa;
+    if (!t.chaveRegra.endsWith("::inercia_inicial") || !t.resolvidoEm) return;
+    const atual = ultimaConclusaoInercia.get(t.chaveRegra);
+    if (!atual || t.resolvidoEm > atual) ultimaConclusaoInercia.set(t.chaveRegra, t.resolvidoEm);
   });
 
   const resumo: ResumoImportacao = {
@@ -231,7 +244,10 @@ export async function executarAuditoriaDiaria(params: {
       return;
     }
 
-    if (!tarefaAtiva && dados.condicaoAtiva) {
+    const ultimaConclusao = ultimaConclusaoInercia.get(dados.chaveRegra);
+    const emCooldown = ultimaConclusao ? dentroDoCooldownInclusao(importacaoId, ultimaConclusao) : false;
+
+    if (!tarefaAtiva && dados.condicaoAtiva && !emCooldown) {
       const ref = db.collection("tarefas").doc();
       const tarefa: Omit<Tarefa, "id"> = {
         chaveRegra: dados.chaveRegra,

@@ -27,6 +27,18 @@ export function ehEtapaInclusao(etapa: string | null | undefined): boolean {
   return (etapa ?? "").trim().startsWith("0.01");
 }
 
+/** Um novo card de "Inércia inicial" só nasce no 3º dia após a última conclusão da pasta. */
+export const DIAS_COOLDOWN_INCLUSAO = 3;
+
+/** true se ainda estamos na janela de respiro: importação (yyyy-MM-dd) < conclusão + 3 dias (fuso de Brasília). */
+export function dentroDoCooldownInclusao(importacaoId: string, resolvidoEmISO: string): boolean {
+  const dataConclusao = new Date(resolvidoEmISO).toLocaleDateString("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  });
+  const dias = (Date.parse(importacaoId) - Date.parse(dataConclusao)) / 86_400_000;
+  return dias < DIAS_COOLDOWN_INCLUSAO;
+}
+
 function nomeCliente(linha: LinhaPlanilha): string {
   return linha.clienteNome.trim() || "cliente não identificado";
 }

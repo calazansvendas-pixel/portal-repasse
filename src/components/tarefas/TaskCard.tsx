@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Check, Layers, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, Layers } from "lucide-react";
 import type { Tarefa } from "@/lib/types";
 import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
 import { formatDateBR } from "@/lib/utils/dates";
@@ -44,6 +44,25 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
     } finally {
       setProcessando(false);
     }
+  }
+
+  if (aguardandoValidacao) {
+    const nome = tarefa.clienteNome || tarefa.imobiliaria || tarefa.tipoPendencia;
+    return (
+      <div className="surface-card flex items-center justify-between gap-3 px-4 py-3">
+        <p className="truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={somenteLeitura || processando}
+          title={somenteLeitura ? "Resolvida" : "Resolvida hoje — clique para desfazer"}
+          aria-label="Tarefa resolvida"
+          className="shrink-0 rounded-full bg-status-success/15 p-1.5 text-status-success enabled:hover:bg-status-success/25 disabled:cursor-default"
+        >
+          <Check size={20} strokeWidth={3} />
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -148,24 +167,10 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
             type="button"
             onClick={toggle}
             disabled={processando}
-            className={cn(
-              "mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
-              aguardandoValidacao
-                ? "border-status-info/40 bg-status-info/10 text-status-info hover:bg-status-info/15"
-                : "border-status-success/40 bg-status-success/10 text-status-success hover:bg-status-success/15"
-            )}
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-status-success/40 bg-status-success/10 px-2.5 py-1.5 text-xs font-semibold text-status-success transition-colors hover:bg-status-success/15 disabled:opacity-50"
           >
-            {aguardandoValidacao ? (
-              <>
-                <Undo2 size={14} />
-                Aguardando validação
-              </>
-            ) : (
-              <>
-                <Check size={14} />
-                Marcar como resolvida
-              </>
-            )}
+            <Check size={14} />
+            Marcar como resolvida
           </button>
         )}
       </div>
