@@ -154,20 +154,32 @@ export function TaskCard({
         : tarefa.clienteNome || tarefa.imobiliaria || tarefa.tipoPendencia;
     return (
       <>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setModal("detalhes")}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setModal("detalhes")}
-          className="surface-card flex min-h-[56px] cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-shadow hover:shadow-md active:shadow-md"
-        >
-          <p className="min-w-0 truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
-          <div className="flex shrink-0 items-center gap-1">
-            {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
-            <span className="rounded-full bg-status-success/15 p-1.5 text-status-success">
-              <Check size={20} strokeWidth={3} />
-            </span>
+        <div className="surface-card space-y-3 break-words p-4">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setModal("detalhes")}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setModal("detalhes")}
+            className="flex min-h-[44px] cursor-pointer items-center justify-between gap-3 transition-opacity hover:opacity-80"
+          >
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
+            <div className="flex shrink-0 items-center gap-2">
+              {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
+              <span className="rounded-full bg-status-success/15 p-1.5 text-status-success">
+                <Check size={20} strokeWidth={3} />
+              </span>
+            </div>
           </div>
+
+          {/* Histórico imutável mesmo quando concluído */}
+          {notasCard.length > 0 && (
+            <div className="rounded-md border border-border bg-surface-secondary/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                O que foi feito
+              </p>
+              <HistoricoNotas notas={notasCard} />
+            </div>
+          )}
         </div>
         {modal === "detalhes" && (
           <DetalhesTarefaModal
