@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils/cn";
 import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
 import { NovaTarefaModal } from "./NovaTarefaModal";
-import { ListaClientesEnvolvidos, ObservacaoChecklist, TrajetoPasta } from "./partesCard";
+import { ListaClientesEnvolvidos, ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha } from "./partesCard";
 
 const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
 
@@ -37,6 +37,13 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
   const temSubtarefas = isAgregado && clientes.length > 0;
   const totalPastas = clientes.length || tarefa.numerosRelacionados?.length || 0;
   const concluidos = clientes.filter((c) => c.concluido).length;
+  // Tarefa agregada: a última planilha em que qualquer uma das pastas apareceu.
+  const ultimaPlanilhaAgregado =
+    clientes
+      .map((c) => dataUltimaPlanilha(c.historicoEtapas))
+      .filter((d): d is string => !!d)
+      .sort()
+      .pop() ?? null;
 
   const ehGerencia = profile?.role === "gerencia";
   const criadorDaAvulsa = isManual && !!firebaseUser && tarefa.criadaPor === firebaseUser.uid;
@@ -237,6 +244,7 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
           <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
             <Layers size={12} />
             {totalPastas} pastas relacionadas
+            {ultimaPlanilhaAgregado && <> · Última planilha importada: {formatDateBR(ultimaPlanilhaAgregado)}</>}
           </span>
         ) : isManual ? (
           <span className="text-xs text-ink-muted">Criada em {formatDateBR(tarefa.criadoEm)}</span>

@@ -25,21 +25,27 @@ import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
 import type { ClienteEnvolvido, EtapaHistorico, Importacao, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
 
+// Teto de segurança: o documento do Firestore tem limite de 1 MB e cada tarefa copia o trajeto da pasta.
+const MAX_ENTRADAS_HISTORICO = 400;
+// Nas sub-tarefas de um gargalo (muitas pastas no mesmo documento) só as últimas entradas são copiadas.
+const MAX_ENTRADAS_HISTORICO_CLIENTE = 20;
+
 /**
- * Emenda um novo passo no trajeto da pasta: se a etapa é a mesma do último
- * passo registrado, só refresca observação/status (a data do salto original
- * é preservada); se a etapa mudou, acumula um passo novo no fim do array.
+ * Log diário: TODA importação estampa uma entrada no trajeto da pasta (etapa atual +
+ * data da planilha), mesmo que a etapa não tenha mudado. Reenviar a planilha da mesma
+ * data substitui a entrada daquele dia (sem duplicar) e a lista fica em ordem cronológica.
  */
 function acumularHistorico(atual: EtapaHistorico[] | undefined, novo: EtapaHistorico | undefined): EtapaHistorico[] {
   const lista = atual ? [...atual] : [];
   if (!novo) return lista;
-  const ultimo = lista[lista.length - 1];
-  if (ultimo && ultimo.etapa === novo.etapa) {
-    lista[lista.length - 1] = { ...ultimo, observacao: novo.observacao, status: novo.status };
+  const mesmoDia = lista.findIndex((h) => h.data === novo.data);
+  if (mesmoDia >= 0) {
+    lista[mesmoDia] = novo;
   } else {
     lista.push(novo);
+    lista.sort((x, y) => (x.data < y.data ? -1 : x.data > y.data ? 1 : 0));
   }
-  return lista;
+  return lista.slice(-MAX_ENTRADAS_HISTORICO);
 }
 
 /**
@@ -68,7 +74,9 @@ function montarClientesEnvolvidos(
       observacao: l.observacao,
       etapa: l.etapa,
       dataEntrada: l.dataEntrada,
-      historicoEtapas: historicoPorNumero.get(l.numero) ?? acumularHistorico(ant?.historicoEtapas, passo),
+      historicoEtapas: (historicoPorNumero.get(l.numero) ?? acumularHistorico(ant?.historicoEtapas, passo)).slice(
+        -MAX_ENTRADAS_HISTORICO_CLIENTE
+      ),
       concluido: ant?.concluido ?? false,
     };
   });

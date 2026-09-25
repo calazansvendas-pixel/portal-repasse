@@ -28,7 +28,15 @@ interface DadosTrajeto {
   historicoEtapas?: EtapaHistorico[];
 }
 
-/** Stepper vertical: Entrada -> cada etapa alcançada, com a data de cada salto. */
+/** Data da última planilha em que a pasta apareceu (última entrada do log diário). */
+export function dataUltimaPlanilha(historico: EtapaHistorico[] | undefined): string | null {
+  return historico?.length ? historico[historico.length - 1].data : null;
+}
+
+/**
+ * Stepper vertical: Entrada -> uma linha por planilha importada (log diário: a pasta parada
+ * na mesma etapa aparece uma vez por dia), fechando com a data da última planilha.
+ */
 export function TrajetoPasta({ dados }: { dados: DadosTrajeto }) {
   const passos: { titulo: string; data: string | null }[] = [
     ...(dados.dataEntrada ? [{ titulo: "Entrada", data: dados.dataEntrada }] : []),
@@ -37,8 +45,10 @@ export function TrajetoPasta({ dados }: { dados: DadosTrajeto }) {
   if (passos.length === 0 && dados.etapa) {
     passos.push({ titulo: `Etapa ${dados.etapa}`, data: null });
   }
+  const ultimaPlanilha = dataUltimaPlanilha(dados.historicoEtapas);
 
   return (
+    <>
     <ol>
       {passos.map((passo, i) => {
         const ultimo = i === passos.length - 1;
@@ -68,6 +78,12 @@ export function TrajetoPasta({ dados }: { dados: DadosTrajeto }) {
         );
       })}
     </ol>
+    {ultimaPlanilha && (
+      <p className="mt-2 border-t border-border pt-2 text-[11px] text-ink-muted dark:border-white/10">
+        Última planilha importada: {formatDateBR(ultimaPlanilha)}
+      </p>
+    )}
+    </>
   );
 }
 

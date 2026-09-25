@@ -112,7 +112,7 @@ export interface ClienteEnvolvido {
 /** Um "salto" de etapa no trajeto da pasta — um item do Stepper/Timeline do card. */
 export interface EtapaHistorico {
   etapa: string;
-  data: string; // ISO — importação em que essa etapa foi observada pela 1ª vez
+  data: string; // yyyy-MM-dd da planilha a que esta entrada se refere (uma por importação)
   observacao: string; // observação da planilha no momento desse salto
   status: SlaStatus;
 }
