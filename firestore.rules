@@ -76,10 +76,24 @@ service cloud.firestore {
       allow create: if false; // só o motor de auditoria cria tarefas
       allow delete: if souGerencia(); // exclusão de importação — ver /api/importacoes/[id]
 
-      allow update: if logado() && souDonoDoQuadro(resource.data.praca) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-          ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao', 'observacaoNoMomentoResolucao']
-        );
+      // Dono do quadro: conclui/desfaz a própria tarefa (com nota de conclusão).
+      // Gerência/Coordenador/Analista: auditoria humana — só podem DEVOLVER uma
+      // tarefa de assistente para "pendente" (nunca concluir nem editar outros campos).
+      allow update: if logado() && (
+        (souDonoDoQuadro(resource.data.praca) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao',
+             'observacaoNoMomentoResolucao', 'notaResolucao']
+          )) ||
+        (papelGestor() &&
+          resource.data.praca in ['laiza', 'eliane', 'catarina'] &&
+          resource.data.status in ['pending_validation', 'validated_done'] &&
+          request.resource.data.status == 'pendente' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao',
+             'observacaoNoMomentoResolucao', 'notaResolucao']
+          ))
+      );
     }
   }
 }

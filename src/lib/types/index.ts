@@ -49,6 +49,10 @@ export interface Registro {
   atualizadoEm: string; // ISO date da última importação que tocou esta pasta
   etapaAnterior?: string | null;
   observacaoAnterior?: string | null;
+  // Fim de esteira (etapas 9.xx): pasta arquivada em "Vendas Concluídas" —
+  // não gera mais tarefas nem entra nos quadros ativos.
+  arquivada?: boolean;
+  arquivadaEm?: string | null;
 }
 
 /** Snapshot bruto de uma pasta em uma importação específica (histórico/auditoria). */
@@ -75,6 +79,7 @@ export interface Importacao {
   tarefasCriadas: number;
   tarefasValidadas: number;
   falhasAuditoria: number;
+  pastasArquivadas?: number;
 }
 
 export type TarefaStatus =
@@ -126,6 +131,7 @@ export interface Tarefa {
   atualizadoEm: string;
   resolvidoPor?: string | null;
   resolvidoEm?: string | null;
+  notaResolucao?: string | null; // "O que foi feito?" — anotação de quem concluiu
   etapaNoMomentoResolucao?: string | null;
   observacaoNoMomentoResolucao?: string | null;
   falhaAuditoriaMotivo?: string | null;

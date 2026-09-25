@@ -101,6 +101,7 @@ export function UploadSheet() {
             <li>Tarefas criadas: {resumo.tarefasCriadas}</li>
             <li>Tarefas validadas: {resumo.tarefasValidadas}</li>
             <li>Falhas de auditoria: {resumo.falhasAuditoria}</li>
+            <li>Vendas concluídas (9.xx): {resumo.pastasArquivadas}</li>
           </ul>
           {resumo.semPraca.length > 0 && (
             <p className="mt-2 text-xs text-status-warning">

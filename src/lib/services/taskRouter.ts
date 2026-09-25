@@ -39,6 +39,12 @@ export function dentroDoCooldownInclusao(importacaoId: string, resolvidoEmISO: s
   return dias < DIAS_COOLDOWN_INCLUSAO;
 }
 
+/** Fim de esteira: etapas 9.xx ou indicativo de venda imputada — a pasta é arquivada. */
+export function ehFimDeEsteira(etapa: string | null | undefined): boolean {
+  const e = (etapa ?? "").trim();
+  return /^9./.test(e) || normalize(e).includes("imputad");
+}
+
 function nomeCliente(linha: LinhaPlanilha): string {
   return linha.clienteNome.trim() || "cliente não identificado";
 }

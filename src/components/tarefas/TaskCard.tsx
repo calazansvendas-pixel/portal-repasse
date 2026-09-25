@@ -4,64 +4,66 @@ import { useState } from "react";
 import { AlertTriangle, Check, Layers } from "lucide-react";
 import type { Tarefa } from "@/lib/types";
 import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
-import { formatDateBR } from "@/lib/utils/dates";
-import { fatiarObservacao } from "@/lib/utils/texto";
-import { marcarTarefaResolvida, desmarcarTarefaResolvida } from "@/lib/services/tarefasService";
+import { marcarTarefaResolvida, reverterTarefa } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { meuQuadroInterativo } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
+import { DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
+import { ObservacaoChecklist, TrajetoPasta } from "./partesCard";
 
-interface PassoTrajeto {
-  titulo: string;
-  data: string | null;
-}
+const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
 
 export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; somenteLeitura?: boolean }) {
-  const { firebaseUser } = useAuth();
-  const [processando, setProcessando] = useState(false);
+  const { firebaseUser, profile } = useAuth();
+  const [modal, setModal] = useState<"nota" | "detalhes" | null>(null);
 
   const aguardandoValidacao = tarefa.status === "pending_validation";
   const falhaAuditoria = tarefa.status === "audit_failed";
   const isAgregado = tarefa.origem === "agregado";
-  const itensObservacao = fatiarObservacao(tarefa.observacaoOriginal);
 
-  const passos: PassoTrajeto[] = [
-    ...(tarefa.dataEntrada ? [{ titulo: "Entrada", data: tarefa.dataEntrada }] : []),
-    ...(tarefa.historicoEtapas ?? []).map((h) => ({ titulo: `Etapa ${h.etapa}`, data: h.data })),
-  ];
-  if (passos.length === 0 && tarefa.etapa) {
-    passos.push({ titulo: `Etapa ${tarefa.etapa}`, data: null });
+  // Reverter: o dono do quadro (clique por engano) ou a gestão auditando cards das assistentes.
+  const podeReverter =
+    !!profile &&
+    (meuQuadroInterativo(profile).includes(tarefa.praca) ||
+      (["gerencia", "coordenador", "analista"].includes(profile.role) &&
+        PRACAS_ASSISTENTES.includes(tarefa.praca)));
+
+  async function confirmarConclusao(nota: string) {
+    if (!firebaseUser) return;
+    await marcarTarefaResolvida(tarefa, firebaseUser.uid, nota);
+    setModal(null);
   }
 
-  async function toggle() {
-    if (!firebaseUser || processando) return;
-    setProcessando(true);
-    try {
-      if (aguardandoValidacao) {
-        await desmarcarTarefaResolvida(tarefa.id);
-      } else {
-        await marcarTarefaResolvida(tarefa, firebaseUser.uid);
-      }
-    } finally {
-      setProcessando(false);
-    }
+  async function reverter() {
+    await reverterTarefa(tarefa.id);
+    setModal(null);
   }
 
   if (aguardandoValidacao) {
     const nome = tarefa.clienteNome || tarefa.imobiliaria || tarefa.tipoPendencia;
     return (
-      <div className="surface-card flex items-center justify-between gap-3 px-4 py-3">
-        <p className="truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
-        <button
-          type="button"
-          onClick={toggle}
-          disabled={somenteLeitura || processando}
-          title={somenteLeitura ? "Resolvida" : "Resolvida hoje — clique para desfazer"}
-          aria-label="Tarefa resolvida"
-          className="shrink-0 rounded-full bg-status-success/15 p-1.5 text-status-success enabled:hover:bg-status-success/25 disabled:cursor-default"
+      <>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setModal("detalhes")}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setModal("detalhes")}
+          className="surface-card flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-shadow hover:shadow-md"
         >
-          <Check size={20} strokeWidth={3} />
-        </button>
-      </div>
+          <p className="truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
+          <span className="shrink-0 rounded-full bg-status-success/15 p-1.5 text-status-success">
+            <Check size={20} strokeWidth={3} />
+          </span>
+        </div>
+        {modal === "detalhes" && (
+          <DetalhesTarefaModal
+            tarefa={tarefa}
+            podeReverter={podeReverter}
+            onReverter={reverter}
+            onFechar={() => setModal(null)}
+          />
+        )}
+      </>
     );
   }
 
@@ -98,19 +100,12 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
       </p>
 
       {/* Corpo 2: o problema, em checklist, para apoiar a ligação */}
-      {itensObservacao.length > 0 && (
+      {tarefa.observacaoOriginal && (
         <div className="rounded-md border border-border bg-surface-secondary/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
             O que foi relatado
           </p>
-          <ul className="space-y-1">
-            {itensObservacao.map((item, i) => (
-              <li key={i} className="flex gap-1.5 text-xs leading-relaxed text-ink-secondary dark:text-white/70">
-                <span className="mt-0.5 shrink-0 text-ink-muted">▢</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
+          <ObservacaoChecklist texto={tarefa.observacaoOriginal} />
         </div>
       )}
 
@@ -131,49 +126,24 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
             {tarefa.numerosRelacionados?.length ?? 0} pastas relacionadas
           </span>
         ) : (
-          <ol>
-            {passos.map((passo, i) => {
-              const ultimo = i === passos.length - 1;
-              return (
-                <li key={i} className="flex gap-2">
-                  <div className="flex flex-col items-center">
-                    <span
-                      className={cn(
-                        "mt-0.5 h-2 w-2 shrink-0 rounded-full",
-                        ultimo ? "bg-brand-primary" : "bg-border dark:bg-white/25"
-                      )}
-                    />
-                    {!ultimo && <span className="w-px flex-1 bg-border dark:bg-white/15" />}
-                  </div>
-                  <div className={cn("flex flex-1 items-center justify-between gap-2", !ultimo && "pb-2")}>
-                    <span
-                      className={cn(
-                        "text-xs",
-                        ultimo ? "font-semibold text-ink-primary dark:text-white" : "text-ink-secondary dark:text-white/60"
-                      )}
-                    >
-                      {passo.titulo}
-                    </span>
-                    <span className="text-[11px] text-ink-muted">{formatDateBR(passo.data)}</span>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+          <TrajetoPasta tarefa={tarefa} />
         )}
 
         {!somenteLeitura && (
           <button
             type="button"
-            onClick={toggle}
-            disabled={processando}
-            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-status-success/40 bg-status-success/10 px-2.5 py-1.5 text-xs font-semibold text-status-success transition-colors hover:bg-status-success/15 disabled:opacity-50"
+            onClick={() => setModal("nota")}
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-status-success/40 bg-status-success/10 px-2.5 py-1.5 text-xs font-semibold text-status-success transition-colors hover:bg-status-success/15"
           >
             <Check size={14} />
             Marcar como resolvida
           </button>
         )}
       </div>
+
+      {modal === "nota" && (
+        <NotaConclusaoModal onConfirmar={confirmarConclusao} onCancelar={() => setModal(null)} />
+      )}
     </div>
   );
 }

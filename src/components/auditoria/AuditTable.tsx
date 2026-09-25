@@ -10,21 +10,28 @@ import { cn } from "@/lib/utils/cn";
 export function AuditTable() {
   const { registros, loading } = useRegistros();
   const [busca, setBusca] = useState("");
+  const [verConcluidas, setVerConcluidas] = useState(false);
+
+  const totalConcluidas = useMemo(() => registros.filter((r) => r.arquivada).length, [registros]);
 
   const filtrados = useMemo(() => {
+    const base = registros.filter((r) => Boolean(r.arquivada) === verConcluidas);
     const termo = normalize(busca);
-    if (!termo) return registros;
-    return registros.filter((r) =>
+    if (!termo) return base;
+    return base.filter((r) =>
       [r.numero, r.cpfCnpj, r.cidade, r.responsavel, r.etapa].some((v) => normalize(v ?? "").includes(termo))
     );
-  }, [registros, busca]);
+  }, [registros, busca, verConcluidas]);
 
   return (
     <div className="surface-card p-5">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="text-base font-bold text-ink-primary dark:text-white">
-          Tabela de Auditoria ({filtrados.length})
+          {verConcluidas ? "Vendas Concluídas" : "Tabela de Auditoria"} ({filtrados.length})
         </h2>
+        <button type="button" className="btn-secondary h-10" onClick={() => setVerConcluidas((v) => !v)}>
+          {verConcluidas ? "Ver pastas em andamento" : `Vendas Concluídas (${totalConcluidas})`}
+        </button>
         <input
           className="input-field h-10 max-w-xs"
           placeholder="Buscar por número, CPF, cidade, imobiliária…"

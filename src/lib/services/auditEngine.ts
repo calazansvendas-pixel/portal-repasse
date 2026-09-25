@@ -6,6 +6,7 @@ import {
   dentroDoCooldownInclusao,
   detectarGargalos,
   ehEtapaInclusao,
+  ehFimDeEsteira,
   gerarEspecErroProcesso,
   gerarEspecOperacional,
   gerarEspecRiscoBancario,
@@ -40,6 +41,7 @@ export interface ResumoImportacao {
   tarefasCriadas: number;
   tarefasValidadas: number;
   falhasAuditoria: number;
+  pastasArquivadas: number; // pastas em fim de esteira (9.xx) arquivadas nesta importação
   semPraca: string[]; // números de pasta cuja cidade não bateu com nenhuma praça
 }
 
@@ -68,6 +70,8 @@ interface DadosParaReconciliar {
   tipoPendencia: string;
   descricao: string;
   observacaoOriginal: string;
+  // Pasta em fim de esteira (9.xx): tarefas abertas são encerradas com sucesso.
+  fimDeEsteira?: boolean;
   // A regra ainda dispara nesta importação (linha ainda tem o gatilho, ou o
   // agregado ainda atinge o limiar)?
   condicaoAtiva: boolean;
@@ -135,6 +139,7 @@ export async function executarAuditoriaDiaria(params: {
     tarefasCriadas: 0,
     tarefasValidadas: 0,
     falhasAuditoria: 0,
+    pastasArquivadas: 0,
     semPraca: [],
   };
 
@@ -171,7 +176,8 @@ export async function executarAuditoriaDiaria(params: {
       const confiancaEtapaInclusao =
         dados.nivel === "operacional" &&
         ehEtapaInclusao(tarefaAtiva.data.etapaNoMomentoResolucao ?? tarefaAtiva.data.etapa);
-      const sucesso = confiancaEtapaInclusao || (dados.avancoDetectado && !dados.condicaoAtiva);
+      const sucesso =
+        confiancaEtapaInclusao || dados.fimDeEsteira === true || (dados.avancoDetectado && !dados.condicaoAtiva);
 
       if (sucesso) {
         update(tarefaRef, {
@@ -299,6 +305,9 @@ export async function executarAuditoriaDiaria(params: {
     const snapshotRef = registroRef.collection("snapshots").doc(importacaoId);
     set(snapshotRef, { ...linha, importacaoId, importadoEm: agora }, false);
 
+    const fimDeEsteira = ehFimDeEsteira(linha.etapa);
+    if (fimDeEsteira) resumo.pastasArquivadas++;
+
     const registroPayload = {
       numero: linha.numero,
       cpfCnpj: linha.cpfCnpj,
@@ -311,6 +320,8 @@ export async function executarAuditoriaDiaria(params: {
       atualizadoEm: agora,
       etapaAnterior: antigo?.etapa ?? null,
       observacaoAnterior: antigo?.observacao ?? null,
+      arquivada: fimDeEsteira,
+      arquivadaEm: fimDeEsteira ? (antigo?.arquivadaEm ?? agora) : null,
     };
 
     if (!antigo) {
@@ -342,6 +353,24 @@ export async function executarAuditoriaDiaria(params: {
       observacaoOriginal: linha.observacao,
       avancoDetectado: etapaAvancou,
     };
+
+    // Fim de esteira: encerra qualquer tarefa aberta da pasta e não gera novas.
+    if (fimDeEsteira) {
+      for (const [chave, t] of tarefasPorChave) {
+        if (t.data.numero !== linha.numero) continue;
+        reconciliarTarefa({
+          ...camposComuns,
+          chaveRegra: chave,
+          nivel: t.data.nivel,
+          quadro: t.data.praca,
+          tipoPendencia: t.data.tipoPendencia,
+          descricao: t.data.descricao,
+          condicaoAtiva: false,
+          fimDeEsteira: true,
+        });
+      }
+      continue;
+    }
 
     // Nível Operacional (Laiza/Eliane/Catarina) — só existe se a cidade mapear para uma praça.
     if (praca) {
@@ -383,14 +412,16 @@ export async function executarAuditoriaDiaria(params: {
   }
 
   // --- Passo 2: reconcilia os AGREGADOS (cruzam várias linhas da mesma importação) ---
+  // Pastas arquivadas (9.xx) não entram em gargalos nem em filtros de qualificação.
+  const linhasEmEsteira = linhas.filter((l) => !ehFimDeEsteira(l.etapa));
   reconciliarAgregados({
-    especsAtuais: detectarGargalos(linhas),
+    especsAtuais: detectarGargalos(linhasEmEsteira),
     prefixoChave: "AGREGADO::gargalo::",
     tarefasPorChave,
     reconciliarTarefa,
   });
   reconciliarAgregados({
-    especsAtuais: detectarFiltroRuim(linhas),
+    especsAtuais: detectarFiltroRuim(linhasEmEsteira),
     prefixoChave: "AGREGADO::filtro_ruim::",
     tarefasPorChave,
     reconciliarTarefa,
@@ -411,6 +442,7 @@ export async function executarAuditoriaDiaria(params: {
     tarefasCriadas: resumo.tarefasCriadas,
     tarefasValidadas: resumo.tarefasValidadas,
     falhasAuditoria: resumo.falhasAuditoria,
+    pastasArquivadas: resumo.pastasArquivadas,
   });
 
   for (const b of batches) {
