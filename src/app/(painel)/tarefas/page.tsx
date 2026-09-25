@@ -1,11 +1,13 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { pracasVisiveis, quadrosEscalonamentoVisiveis, quadrosParaBuscar, meuQuadroInterativo } from "@/lib/auth/roles";
 import { useTarefasPorQuadros } from "@/lib/hooks/useTarefas";
 import { Topbar } from "@/components/layout/Topbar";
 import { TaskBoard } from "@/components/tarefas/TaskBoard";
+import { FILTROS_INICIAIS, FiltrosTarefas, aplicarFiltros } from "@/components/tarefas/FiltrosTarefas";
 
 export default function TarefasPage() {
   const { profile } = useAuth();
@@ -14,7 +16,17 @@ export default function TarefasPage() {
   const quadrosBusca = profile ? quadrosParaBuscar(profile) : [];
   const meusQuadros = profile ? meuQuadroInterativo(profile) : [];
   const { tarefas, loading, erro } = useTarefasPorQuadros(quadrosBusca);
+  const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
+  const visao = useMemo(
+    () => aplicarFiltros({ pracas, quadrosEscalonamento, tarefas }, filtros),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tarefas, filtros, profile]
+  );
   if (!profile) return null;
+
+  // Assistentes têm visão em túnel (só a própria coluna): sem barra de filtros.
+  const mostrarFiltros = profile.role !== "assistente";
+  const semColunas = visao.pracas.length === 0 && visao.quadrosEscalonamento.length === 0;
 
   return (
     <div>
@@ -35,13 +47,27 @@ export default function TarefasPage() {
           Seu usuário não está associado a nenhum quadro. Fale com a coordenação.
         </p>
       ) : (
-        <TaskBoard
-          pracas={pracas}
-          tarefas={tarefas}
-          loading={loading}
-          meusQuadros={meusQuadros}
-          quadrosEscalonamento={quadrosEscalonamento}
-        />
+        <>
+          {mostrarFiltros && (
+            <FiltrosTarefas
+              pracas={pracas}
+              quadrosEscalonamento={quadrosEscalonamento}
+              valor={filtros}
+              onChange={setFiltros}
+            />
+          )}
+          {semColunas ? (
+            <p className="text-sm text-ink-muted">Nenhum quadro corresponde aos filtros selecionados.</p>
+          ) : (
+            <TaskBoard
+              pracas={visao.pracas}
+              tarefas={visao.tarefas}
+              loading={loading}
+              meusQuadros={meusQuadros}
+              quadrosEscalonamento={visao.quadrosEscalonamento}
+            />
+          )}
+        </>
       )}
     </div>
   );

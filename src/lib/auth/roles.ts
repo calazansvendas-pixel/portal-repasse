@@ -11,6 +11,14 @@ export const CITY_ASSIGNMENTS: Record<Assistente, string[]> = {
   catarina: ["fatima", "camburi"],
 };
 
+/** Cidades oferecidas no filtro de /tarefas (chave = trecho normalizado, como em CITY_ASSIGNMENTS). */
+export const CIDADES_FILTRO: { chave: string; label: string; praca: Assistente }[] = [
+  { chave: "serra", label: "Serra", praca: "laiza" },
+  { chave: "vila velha", label: "Vila Velha", praca: "eliane" },
+  { chave: "fatima", label: "Fátima", praca: "catarina" },
+  { chave: "camburi", label: "Camburi", praca: "catarina" },
+];
+
 export function normalize(value: string): string {
   return value
     .normalize("NFD")
@@ -46,16 +54,15 @@ export function pracasVisiveis(profile: UserProfile): Assistente[] {
 }
 
 /**
- * Colunas extras de escalonamento (Coordenador/Analista) visíveis no quadro de
- * tarefas de cada perfil. Gerência enxerga as duas; cada um dos outros dois
- * enxerga só a própria; assistentes e demais não têm coluna de escalonamento.
+ * Colunas de Coordenador/Analista visíveis no quadro de tarefas de cada perfil.
+ * Gerência e Coordenador enxergam as duas; a Analista enxerga só a própria
+ * (nunca o quadro do Coordenador); assistentes não têm essas colunas.
  */
 export function quadrosEscalonamentoVisiveis(profile: UserProfile): QuadroEscalonamento[] {
   switch (profile.role) {
     case "gerencia":
-      return ["coordenador", "analista"];
     case "coordenador":
-      return ["coordenador"];
+      return ["coordenador", "analista"];
     case "analista":
       return ["analista"];
     default:
