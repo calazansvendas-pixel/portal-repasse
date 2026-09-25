@@ -4,6 +4,9 @@ import { doc, runTransaction, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import type { ClienteEnvolvido, Quadro, Tarefa } from "@/lib/types";
 
+/** Nota automática do God Mode: não foi escrita pelo colaborador, então não sobrevive a uma reversão. */
+const NOTA_GERENCIA = "Marcada como feita pela Gerência.";
+
 /**
  * Assistente marca a tarefa como resolvida, registrando a nota de conclusão
  * ("O que foi feito?"). Isso NÃO fecha a tarefa definitivamente: ela vai para
@@ -50,20 +53,25 @@ export async function alternarClienteEnvolvido(tarefaId: string, numero: string,
         notaResolucao: nota.trim() || null,
       });
     } else if (!todosConcluidos && tarefa.status === "pending_validation") {
-      Object.assign(mudanca, camposDeTarefaAtiva());
+      Object.assign(mudanca, camposDeTarefaAtiva(tarefa));
     }
     tx.update(ref, mudanca);
   });
 }
 
-function camposDeTarefaAtiva() {
+/**
+ * Volta a tarefa para "pendente" mexendo só no estado da conclusão. A nota de resolução
+ * ("O que foi feito") é PRESERVADA: quem escreveu precisa reler o que tentou para entender
+ * por que a tarefa voltou. Só a nota automática do God Mode é descartada.
+ */
+function camposDeTarefaAtiva(tarefa: Pick<Tarefa, "notaResolucao">) {
   return {
     status: "pendente",
     resolvidoPor: null,
     resolvidoEm: null,
     etapaNoMomentoResolucao: null,
     observacaoNoMomentoResolucao: null,
-    notaResolucao: null,
+    ...(tarefa.notaResolucao === NOTA_GERENCIA ? { notaResolucao: null } : {}),
   };
 }
 
@@ -80,7 +88,7 @@ function comClientes(tarefa: Tarefa, concluido: boolean): { clientesEnvolvidos?:
  * agregadas, desmarca todos os clientes.
  */
 export async function reverterTarefa(tarefa: Tarefa) {
-  await updateDoc(doc(db, "tarefas", tarefa.id), { ...camposDeTarefaAtiva(), ...comClientes(tarefa, false) });
+  await updateDoc(doc(db, "tarefas", tarefa.id), { ...camposDeTarefaAtiva(tarefa), ...comClientes(tarefa, false) });
 }
 
 /** God Mode (Gerência): marca a tarefa como feita, com todos os clientes concluídos nas agregadas. */
@@ -91,7 +99,7 @@ export async function marcarFeitaPelaGerencia(tarefa: Tarefa, uid: string) {
     resolvidoEm: new Date().toISOString(),
     etapaNoMomentoResolucao: tarefa.etapa,
     observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
-    notaResolucao: "Marcada como feita pela Gerência.",
+    notaResolucao: NOTA_GERENCIA,
     ...comClientes(tarefa, true),
   });
 }

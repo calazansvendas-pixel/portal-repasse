@@ -262,6 +262,18 @@ export function TaskCard({
         </div>
       )}
 
+      {/* Reversão/falha de auditoria: a nota que a pessoa escreveu ao concluir continua visível */}
+      {tarefa.notaResolucao && (
+        <div className="rounded-md border border-border bg-surface-secondary/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+            O que foi feito (tentativa anterior)
+          </p>
+          <p className="max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line break-words text-[13px] leading-relaxed text-ink-secondary sm:text-xs dark:text-white/70">
+            {tarefa.notaResolucao}
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-1.5">
         {!isManual && (
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", SLA_BADGE_CLASSES[tarefa.slaStatus])}>
