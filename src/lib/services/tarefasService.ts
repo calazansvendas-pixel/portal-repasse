@@ -147,14 +147,28 @@ export async function marcarFeitaPelaGerencia(tarefa: Tarefa, uid: string, autor
 }
 
 async function chamarTarefa(metodo: "POST" | "PATCH" | "DELETE", url: string, idToken: string, corpo?: object) {
-  const res = await fetch(url, {
-    method: metodo,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-    body: corpo ? JSON.stringify(corpo) : undefined,
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.erro ?? "Falha ao alterar a tarefa.");
-  return json as { id: string };
+  // Timeout: uma requisição pendurada não pode deixar o modal travado em "enviando" para sempre.
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), 60000);
+  try {
+    const res = await fetch(url, {
+      method: metodo,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+      signal: controle.signal,
+    });
+    // Resposta que não é JSON (ex.: página de erro do servidor) não pode virar um "Unexpected token".
+    const json = (await res.json().catch(() => null)) as { id?: string; erro?: string } | null;
+    if (!res.ok) throw new Error(json?.erro ?? `Falha ao alterar a tarefa (HTTP ${res.status}).`);
+    return (json ?? {}) as { id: string };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("O servidor demorou demais para responder. Tente novamente.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Cria uma tarefa avulsa (hierarquia de destinatários validada no servidor). dataLimite vazia = padrão. */

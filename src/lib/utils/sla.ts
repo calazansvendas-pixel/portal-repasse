@@ -9,7 +9,7 @@ import type { SlaStatus } from "@/lib/types";
  */
 export function calcularSlaStatus(prazoEtapaISO: string | null, hoje = new Date()): SlaStatus {
   if (!prazoEtapaISO) return "no_prazo";
-  const prazo = new Date(prazoEtapaISO);
+  const prazo = paraDataLocal(prazoEtapaISO);
   if (Number.isNaN(prazo.getTime())) return "no_prazo";
 
   const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
@@ -20,6 +20,26 @@ export function calcularSlaStatus(prazoEtapaISO: string | null, hoje = new Date(
   if (diffDias <= 1) return "urgente";
   if (diffDias <= 3) return "atencao";
   return "no_prazo";
+}
+
+/**
+ * Converte "yyyy-MM-dd" em Date no fuso local. `new Date("2026-09-30")` seria meia-noite UTC, ou seja,
+ * dia 29 às 21h no Brasil — o que deslocava o prazo em um dia.
+ */
+function paraDataLocal(iso: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso);
+}
+
+/**
+ * Status exibido na tag do card. Quando há "Realizar até" (dataLimite), ele manda: a tag reflete a
+ * data atual contra essa data. Sem dataLimite, vale o SLA gravado na importação da planilha.
+ */
+export function slaExibido(
+  tarefa: { dataLimite?: string | null; slaStatus: SlaStatus },
+  hoje = new Date()
+): SlaStatus {
+  return tarefa.dataLimite ? calcularSlaStatus(tarefa.dataLimite, hoje) : tarefa.slaStatus;
 }
 
 export const SLA_LABEL: Record<SlaStatus, string> = {

@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase/client";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Layers, Pencil, Trash2, Undo2 } from "lucide-react";
 import type { ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
-import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
+import { SLA_BADGE_CLASSES, SLA_LABEL, calcularSlaStatus, slaExibido } from "@/lib/utils/sla";
 import {
   alternarClienteEnvolvido,
   excluirTarefa,
@@ -16,7 +16,7 @@ import {
 } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { meuQuadroInterativo } from "@/lib/auth/roles";
-import { formatDateBR, hojeISO } from "@/lib/utils/dates";
+import { formatDateBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
@@ -76,7 +76,7 @@ export function TaskCard({
   const tituloAgregado = `${tarefa.tipoPendencia.startsWith("Gargalo") ? "Gargalo detectado" : tarefa.tipoPendencia}: ${totalPastas} pastas`;
   // Tarefa agregada: as notas ficam em cada cliente (só entradas do God Mode moram na tarefa mãe).
   const notasCard = notasDe(tarefa, !isAgregado);
-  const dataLimiteVencida = !!tarefa.dataLimite && tarefa.dataLimite < hojeISO();
+  const dataLimiteVencida = !!tarefa.dataLimite && calcularSlaStatus(tarefa.dataLimite) === "estourado";
 
   const itensMenu: ItemMenu[] = [];
   if (podeEditarExcluir) itensMenu.push({ rotulo: "Editar", icone: Pencil, onClick: () => setModal("editar") });
@@ -301,8 +301,8 @@ export function TaskCard({
 
       <div className="flex flex-wrap items-center gap-1.5">
         {!isManual && (
-          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", SLA_BADGE_CLASSES[tarefa.slaStatus])}>
-            {SLA_LABEL[tarefa.slaStatus]}
+          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", SLA_BADGE_CLASSES[slaExibido(tarefa)])}>
+            {SLA_LABEL[slaExibido(tarefa)]}
           </span>
         )}
         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary dark:border-white/15 dark:text-white/60">

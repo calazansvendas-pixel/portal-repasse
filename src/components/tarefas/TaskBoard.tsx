@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { Assistente, Quadro, QuadroEscalonamento, Role, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
+import { slaExibido } from "@/lib/utils/sla";
 import { TaskCard } from "./TaskCard";
 
 interface Coluna {
@@ -130,7 +131,7 @@ function ColunaTarefas({ coluna, interativo, faixa = false }: { coluna: Coluna; 
 
 function ordenarPorSla(lista: Tarefa[]): Tarefa[] {
   // Tarefas avulsas (delegadas por alguém) vêm primeiro; o resto por urgência de SLA.
-  const peso = (t: Tarefa) => (t.origem === "manual" ? -1 : ordemSla(t.slaStatus));
+  const peso = (t: Tarefa) => (t.origem === "manual" ? -1 : ordemSla(slaExibido(t)));
   return [...lista].sort((a, b) => peso(a) - peso(b));
 }
 

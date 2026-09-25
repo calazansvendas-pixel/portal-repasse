@@ -34,7 +34,10 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
       else await criarTarefaManual(descricao, destino, dataLimite, token);
       onFechar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Falha ao criar a tarefa.");
+      console.error("[NovaTarefaModal] falha ao salvar:", e);
+      setErro(e instanceof Error ? e.message : "Falha ao salvar a tarefa.");
+    } finally {
+      // Sempre sai do estado de loading, com sucesso ou erro (o modal fecha por onFechar no sucesso).
       setEnviando(false);
     }
   }
