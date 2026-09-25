@@ -20,7 +20,7 @@ import {
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
-import type { ClienteEnvolvido, EtapaHistorico, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
+import type { ClienteEnvolvido, EtapaHistorico, Importacao, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
 
 /**
  * Emenda um novo passo no trajeto da pasta: se a etapa é a mesma do último
@@ -46,7 +46,8 @@ function acumularHistorico(atual: EtapaHistorico[] | undefined, novo: EtapaHisto
 function montarClientesEnvolvidos(
   linhas: LinhaPlanilha[],
   anteriores: ClienteEnvolvido[] | undefined,
-  importacaoId: string
+  importacaoId: string,
+  historicoPorNumero: Map<string, EtapaHistorico[]>
 ): ClienteEnvolvido[] {
   const porNumero = new Map((anteriores ?? []).map((c) => [c.numero, c]));
   return linhas.map((l) => {
@@ -64,7 +65,7 @@ function montarClientesEnvolvidos(
       observacao: l.observacao,
       etapa: l.etapa,
       dataEntrada: l.dataEntrada,
-      historicoEtapas: acumularHistorico(ant?.historicoEtapas, passo),
+      historicoEtapas: historicoPorNumero.get(l.numero) ?? acumularHistorico(ant?.historicoEtapas, passo),
       concluido: ant?.concluido ?? false,
     };
   });
@@ -96,9 +97,9 @@ interface DadosParaReconciliar {
   numerosRelacionados?: string[];
   clienteNome?: string | null;
   dataEntrada?: string | null;
-  // Passo do trajeto a emendar em historicoEtapas nesta importação (origem
-  // "linha" apenas — agregados não têm uma única pasta/etapa a rastrear).
-  novoPassoHistorico?: EtapaHistorico;
+  // Trajeto completo da pasta já acumulado na base (origem "linha" apenas —
+  // agregados não têm uma única pasta/etapa a rastrear).
+  historicoPasta?: EtapaHistorico[];
   // Tarefas agregadas: as pastas do grupo, cada uma com o próprio check.
   clientesEnvolvidos?: ClienteEnvolvido[];
   cicloFollowUp?: number; // etapa 0.04: ciclo (1 a 4) da régua
@@ -151,6 +152,11 @@ export async function executarAuditoriaDiaria(params: {
   registrosSnaps.forEach((snap) => {
     if (snap.exists) registrosAntigos.set(snap.id, snap.data() as Registro);
   });
+
+  // Vários uploads no mesmo dia SOMAM no resumo da importação (não sobrescrevem o anterior).
+  const importacaoRef = db.collection("importacoes").doc(importacaoId);
+  const [importacaoDoDiaSnap] = await db.getAll(importacaoRef);
+  const doDia = importacaoDoDiaSnap.exists ? (importacaoDoDiaSnap.data() as Partial<Importacao>) : null;
 
   const tarefasAtivasSnap = await db.collection("tarefas").where("status", "in", ATIVAS).get();
   const tarefasPorChave = new Map<string, { id: string; data: Tarefa }>();
@@ -233,7 +239,7 @@ export async function executarAuditoriaDiaria(params: {
         update(tarefaRef, {
           status: "validated_done",
           atualizadoEm: agora,
-          historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
+          historicoEtapas: dados.historicoPasta ?? tarefaAtiva.data.historicoEtapas ?? [],
         });
         resumo.tarefasValidadas++;
         if (ehFollowUp && dados.numero) {
@@ -249,7 +255,7 @@ export async function executarAuditoriaDiaria(params: {
         update(tarefaRef, {
           status: "audit_failed",
           atualizadoEm: agora,
-          historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
+          historicoEtapas: dados.historicoPasta ?? tarefaAtiva.data.historicoEtapas ?? [],
           // Falha em tarefa agregada: as sub-tarefas voltam a ficar sem check para refazer.
           ...(tarefaAtiva.data.clientesEnvolvidos?.length
             ? { clientesEnvolvidos: (dados.clientesEnvolvidos ?? tarefaAtiva.data.clientesEnvolvidos).map((c) => ({ ...c, concluido: false })) }
@@ -303,7 +309,7 @@ export async function executarAuditoriaDiaria(params: {
           ...(dados.clientesEnvolvidos ? { clientesEnvolvidos: dados.clientesEnvolvidos } : {}),
           clienteNome: dados.clienteNome ?? null,
           dataEntrada: dados.dataEntrada ?? null,
-          historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
+          historicoEtapas: dados.historicoPasta ?? tarefaAtiva.data.historicoEtapas ?? [],
           atualizadoEm: agora,
           escalonadoPara: calcularEscalonamento({
             quadro: dados.quadro,
@@ -350,7 +356,7 @@ export async function executarAuditoriaDiaria(params: {
           quadro: dados.quadro,
           falhouAuditoriaAgora: false,
         }),
-        historicoEtapas: acumularHistorico(undefined, dados.novoPassoHistorico),
+        historicoEtapas: dados.historicoPasta ?? [],
         clientesEnvolvidos: dados.clientesEnvolvidos ?? [],
         cicloFollowUp: dados.cicloFollowUp ?? null,
         dataLimite: calcularDataLimiteAutomatica({
@@ -367,6 +373,7 @@ export async function executarAuditoriaDiaria(params: {
   }
 
   // --- Passo 1: reconcilia as regras de LINHA (uma por pasta importada) ---
+  const historicoPorNumero = new Map<string, EtapaHistorico[]>();
   for (const linha of linhas) {
     const antigo = registrosAntigos.get(linha.numero) ?? null;
     const slaStatus = calcularSlaStatus(linha.prazoEtapa);
@@ -381,8 +388,34 @@ export async function executarAuditoriaDiaria(params: {
     const fimDeEsteira = ehFimDeEsteira(linha.etapa);
     if (fimDeEsteira) resumo.pastasArquivadas++;
 
+    // Trajeto da pasta: parte do que já está na base e só EMENDA um salto quando a etapa muda
+    // (registros antigos, sem histórico, são semeados com a etapa que já tinham).
+    const passoAtual: EtapaHistorico = {
+      etapa: linha.etapa,
+      data: importacaoId,
+      observacao: linha.observacao,
+      status: slaStatus,
+    };
+    const historicoBase: EtapaHistorico[] =
+      antigo?.historicoEtapas ??
+      (antigo
+        ? [
+            {
+              etapa: antigo.etapa,
+              data: (antigo.criadoEm ?? importacaoId).slice(0, 10),
+              observacao: antigo.observacao,
+              status: antigo.slaStatus,
+            },
+          ]
+        : []);
+    const historicoPasta = acumularHistorico(historicoBase, passoAtual);
+    historicoPorNumero.set(linha.numero, historicoPasta);
+
     const registroPayload = {
       numero: linha.numero,
+      clienteNome: linha.clienteNome,
+      dataEntrada: linha.dataEntrada,
+      historicoEtapas: historicoPasta,
       cpfCnpj: linha.cpfCnpj,
       cidade: linha.cidade,
       responsavel: linha.responsavel,
@@ -405,19 +438,12 @@ export async function executarAuditoriaDiaria(params: {
       set(registroRef, registroPayload);
     }
 
-    const novoPassoHistorico: EtapaHistorico = {
-      etapa: linha.etapa,
-      data: importacaoId,
-      observacao: linha.observacao,
-      status: slaStatus,
-    };
-
     const camposComuns = {
       origem: "linha" as const,
       numero: linha.numero,
       clienteNome: linha.clienteNome,
       dataEntrada: linha.dataEntrada,
-      novoPassoHistorico,
+      historicoPasta,
       cidade: linha.cidade,
       imobiliaria: linha.responsavel,
       etapa: linha.etapa,
@@ -445,27 +471,33 @@ export async function executarAuditoriaDiaria(params: {
       continue;
     }
 
-    // 0.04 e 0.99 têm regra própria: tarefas operacionais de outras regras que ainda
-    // estejam abertas nessa pasta são encerradas (a pasta já avançou de etapa).
-    if (ehEtapaFollowUp(linha.etapa) || ehEtapaCredito(linha.etapa)) {
-      const chaveMantida = `${linha.numero}::follow_up_004`;
-      for (const [chave, t] of tarefasPorChave) {
-        if (t.data.numero !== linha.numero || t.data.nivel !== "operacional" || chave === chaveMantida) continue;
-        reconciliarTarefa({
-          ...camposComuns,
-          chaveRegra: chave,
-          nivel: "operacional",
-          quadro: t.data.praca,
-          tipoPendencia: t.data.tipoPendencia,
-          descricao: t.data.descricao,
-          condicaoAtiva: false,
-        });
-      }
+    // Nível Operacional (Laiza/Eliane/Catarina). Regras por etapa:
+    //  - 0.04: régua de follow-up (só nasce novo ciclo quando a data de próxima cobrança chega;
+    //    após a 4ª conclusão o ciclo se encerra);
+    //  - 0.99: nenhuma tarefa individual (gargalo do Coordenador);
+    //  - demais: gatilhos operacionais comuns.
+    // Cada pasta mantém no máximo UMA tarefa operacional aberta: se a regra vigente mudou (ou
+    // deixou de valer), a tarefa antiga não fica órfã nem duplicada — recebe baixa antes de a
+    // nova nascer (continuidade entre planilhas).
+    const emFollowUp = ehEtapaFollowUp(linha.etapa);
+    const specComum = praca && !emFollowUp && !ehEtapaCredito(linha.etapa) ? gerarEspecOperacional(linha, praca, slaStatus) : null;
+    const chaveOperacionalDesejada = praca && emFollowUp ? `${linha.numero}::follow_up_004` : (specComum?.chaveRegra ?? null);
+
+    for (const [chave, t] of tarefasPorChave) {
+      if (t.data.numero !== linha.numero || t.data.nivel !== "operacional" || chave === chaveOperacionalDesejada) continue;
+      reconciliarTarefa({
+        ...camposComuns,
+        chaveRegra: chave,
+        nivel: "operacional",
+        quadro: t.data.praca,
+        tipoPendencia: t.data.tipoPendencia,
+        descricao: t.data.descricao,
+        condicaoAtiva: false,
+        avancoDetectado: true, // o gatilho original deixou de valer: baixa (sem falsa Falha de Auditoria)
+      });
     }
 
-    // Etapa 0.04 — régua de follow-up: só nasce um novo ciclo quando a data de
-    // próxima cobrança chega; após a 4ª conclusão o ciclo se encerra.
-    if (praca && ehEtapaFollowUp(linha.etapa)) {
+    if (praca && emFollowUp) {
       const ciclosFeitos = antigo?.ciclosFollowUp004 ?? 0;
       const proxima = antigo?.dataProximaCobranca ?? null;
       const liberado = !proxima || importacaoId >= proxima;
@@ -483,17 +515,15 @@ export async function executarAuditoriaDiaria(params: {
         cicloFollowUp: ciclosFeitos + 1,
         condicaoAtiva: !encerrado && (emAndamento || liberado),
       });
-      // Sem tarefa operacional comum para esta pasta enquanto ela estiver na 0.04.
-    } else if (praca && !ehEtapaCredito(linha.etapa)) {
-      const spec = gerarEspecOperacional(linha, praca, slaStatus);
+    } else if (praca && specComum) {
       reconciliarTarefa({
         ...camposComuns,
-        chaveRegra: spec?.chaveRegra ?? `${linha.numero}::operacional`,
+        chaveRegra: specComum.chaveRegra,
         nivel: "operacional",
         quadro: praca,
-        tipoPendencia: spec?.tipoPendencia ?? "",
-        descricao: spec?.descricao ?? "",
-        condicaoAtiva: spec !== null,
+        tipoPendencia: specComum.tipoPendencia,
+        descricao: specComum.descricao,
+        condicaoAtiva: true,
       });
     }
 
@@ -525,7 +555,7 @@ export async function executarAuditoriaDiaria(params: {
   // --- Passo 2: reconcilia os AGREGADOS (cruzam várias linhas da mesma importação) ---
   // Pastas arquivadas (9.xx) não entram em gargalos nem em filtros de qualificação.
   const linhasEmEsteira = linhas.filter((l) => !ehFimDeEsteira(l.etapa));
-  const paramsAgregados = { tarefasPorChave, reconciliarTarefa, importacaoId };
+  const paramsAgregados = { tarefasPorChave, reconciliarTarefa, importacaoId, historicoPorNumero };
   reconciliarAgregados({
     especsAtuais: detectarGargalos(linhasEmEsteira),
     prefixoChave: "AGREGADO::gargalo::",
@@ -553,20 +583,19 @@ export async function executarAuditoriaDiaria(params: {
 
   batches.push(batch);
 
-  const importacaoRef = db.collection("importacoes").doc(importacaoId);
   const ultimoBatch = batches[batches.length - 1];
   ultimoBatch.set(importacaoRef, {
     id: importacaoId,
-    nomeArquivo,
+    nomeArquivo: doDia?.nomeArquivo && doDia.nomeArquivo !== nomeArquivo ? `${doDia.nomeArquivo}; ${nomeArquivo}` : nomeArquivo,
     importadoPor,
     importadoEm: agora,
-    totalRegistros: resumo.totalLinhas,
-    novos: resumo.novos,
-    atualizados: resumo.atualizados,
-    tarefasCriadas: resumo.tarefasCriadas,
-    tarefasValidadas: resumo.tarefasValidadas,
-    falhasAuditoria: resumo.falhasAuditoria,
-    pastasArquivadas: resumo.pastasArquivadas,
+    totalRegistros: (doDia?.totalRegistros ?? 0) + resumo.totalLinhas,
+    novos: (doDia?.novos ?? 0) + resumo.novos,
+    atualizados: (doDia?.atualizados ?? 0) + resumo.atualizados,
+    tarefasCriadas: (doDia?.tarefasCriadas ?? 0) + resumo.tarefasCriadas,
+    tarefasValidadas: (doDia?.tarefasValidadas ?? 0) + resumo.tarefasValidadas,
+    falhasAuditoria: (doDia?.falhasAuditoria ?? 0) + resumo.falhasAuditoria,
+    pastasArquivadas: (doDia?.pastasArquivadas ?? 0) + resumo.pastasArquivadas,
   });
 
   for (const b of batches) {
@@ -587,8 +616,9 @@ function reconciliarAgregados(params: {
   tarefasPorChave: Map<string, { id: string; data: Tarefa }>;
   reconciliarTarefa: (dados: DadosParaReconciliar) => void;
   importacaoId: string;
+  historicoPorNumero: Map<string, EtapaHistorico[]>;
 }) {
-  const { especsAtuais, prefixoChave, tarefasPorChave, reconciliarTarefa, importacaoId } = params;
+  const { especsAtuais, prefixoChave, tarefasPorChave, reconciliarTarefa, importacaoId, historicoPorNumero } = params;
   const chavesAtuais = new Set(especsAtuais.map((e) => e.chaveRegra));
 
   for (const spec of especsAtuais) {
@@ -601,7 +631,8 @@ function reconciliarAgregados(params: {
       clientesEnvolvidos: montarClientesEnvolvidos(
         spec.linhas,
         tarefasPorChave.get(spec.chaveRegra)?.data.clientesEnvolvidos,
-        importacaoId
+        importacaoId,
+        historicoPorNumero
       ),
       cidade: spec.cidade,
       quadro: spec.quadro,

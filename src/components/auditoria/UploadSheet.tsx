@@ -4,11 +4,15 @@ import { useRef, useState } from "react";
 import { UploadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import type { ResumoImportacao } from "@/lib/services/auditEngine";
+import { hojeISO } from "@/lib/utils/dates";
 
 export function UploadSheet() {
   const { firebaseUser } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
+  // Data a que a planilha se refere (padrão: hoje). Cada data é uma importação distinta,
+  // então planilhas de dias diferentes se somam mesmo se enviadas no mesmo dia.
+  const [dataPlanilha, setDataPlanilha] = useState(hojeISO());
   const [erro, setErro] = useState<string | null>(null);
   const [resumo, setResumo] = useState<ResumoImportacao | null>(null);
   const [colunasNaoEncontradas, setColunasNaoEncontradas] = useState<string[]>([]);
@@ -24,7 +28,7 @@ export function UploadSheet() {
       const formData = new FormData();
       formData.append("arquivo", file);
 
-      const res = await fetch("/api/importar-planilha", {
+      const res = await fetch(`/api/importar-planilha?data=${encodeURIComponent(dataPlanilha)}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -57,6 +61,18 @@ export function UploadSheet() {
             auditoria automática comparando com a importação anterior.
           </p>
         </div>
+        <div className="flex shrink-0 items-end gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Data da planilha</span>
+          <input
+            type="date"
+            className="input-field h-12 w-40"
+            value={dataPlanilha}
+            max={hojeISO()}
+            disabled={enviando}
+            onChange={(e) => setDataPlanilha(e.target.value)}
+          />
+        </label>
         <label className="btn-primary shrink-0 cursor-pointer">
           <UploadCloud size={16} />
           {enviando ? "Processando…" : "Selecionar arquivo"}
@@ -72,6 +88,7 @@ export function UploadSheet() {
             }}
           />
         </label>
+        </div>
       </div>
 
       {erro && (

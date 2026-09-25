@@ -55,6 +55,11 @@ export interface Registro {
   arquivadaEm?: string | null;
   // Régua de follow-up da etapa 0.04: conclusões já dadas e quando a próxima
   // cobrança fica liberada (null após a 4ª conclusão: ciclo encerrado).
+  // Trajeto acumulado da pasta (todas as importações) e dados do cliente: a base
+  // mantém o histórico mesmo quando as tarefas nascem e fecham.
+  historicoEtapas?: EtapaHistorico[];
+  clienteNome?: string | null;
+  dataEntrada?: string | null;
   ciclosFollowUp004?: number;
   dataProximaCobranca?: string | null;
 }

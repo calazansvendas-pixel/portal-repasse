@@ -52,7 +52,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const importacaoId = req.nextUrl.searchParams.get("data") || hojeISO();
+    const dataParam = req.nextUrl.searchParams.get("data");
+    if (dataParam && (!/^d{4}-d{2}-d{2}$/.test(dataParam) || Number.isNaN(Date.parse(dataParam)))) {
+      return NextResponse.json({ erro: "Data da planilha inválida." }, { status: 400 });
+    }
+    const importacaoId = dataParam || hojeISO();
 
     const resumo = await executarAuditoriaDiaria({
       db: adminDb,
