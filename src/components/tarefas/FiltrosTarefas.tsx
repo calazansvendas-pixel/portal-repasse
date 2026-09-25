@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 import { CIDADES_FILTRO, normalize } from "@/lib/auth/roles";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import type { Assistente, QuadroEscalonamento, Tarefa } from "@/lib/types";
@@ -9,9 +10,49 @@ import type { Assistente, QuadroEscalonamento, Tarefa } from "@/lib/types";
 export interface FiltrosState {
   cidade: string; // "" = todas; senão a chave de CIDADES_FILTRO
   pessoa: string; // "todos" | "coordenador" | "analista" | "assistentes" | id de assistente
+  status: FiltroStatus;
 }
 
-export const FILTROS_INICIAIS: FiltrosState = { cidade: "", pessoa: "todos" };
+/** "a_fazer" oculta o que já tem o check verde (pending_validation); "feitas" mostra só isso. */
+export type FiltroStatus = "todas" | "a_fazer" | "feitas";
+
+const OPCOES_STATUS: { valor: FiltroStatus; rotulo: string }[] = [
+  { valor: "todas", rotulo: "Todas" },
+  { valor: "a_fazer", rotulo: "A fazer" },
+  { valor: "feitas", rotulo: "Feitas" },
+];
+
+/** Grupo de botões Todas / A fazer / Feitas. Visível para todos os perfis. */
+export function FiltroStatusTarefas({
+  valor,
+  onChange,
+}: {
+  valor: FiltroStatus;
+  onChange: (novo: FiltroStatus) => void;
+}) {
+  return (
+    <div role="group" aria-label="Filtrar por situação" className="inline-flex rounded-md border border-border p-0.5 dark:border-white/15">
+      {OPCOES_STATUS.map((o) => (
+        <button
+          key={o.valor}
+          type="button"
+          aria-pressed={valor === o.valor}
+          onClick={() => onChange(o.valor)}
+          className={cn(
+            "h-9 min-w-[72px] rounded px-3 text-sm font-medium transition-colors",
+            valor === o.valor
+              ? "bg-brand-primary text-white"
+              : "text-ink-secondary hover:bg-surface-soft dark:text-white/70 dark:hover:bg-white/10"
+          )}
+        >
+          {o.rotulo}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export const FILTROS_INICIAIS: FiltrosState = { cidade: "", pessoa: "todos", status: "todas" };
 
 interface Visao {
   pracas: Assistente[];
@@ -20,7 +61,7 @@ interface Visao {
 }
 
 /** Aplica cidade + cargo/pessoa sobre o que o perfil já pode ver (o RBAC é decidido antes, em roles.ts). */
-export function aplicarFiltros(visao: Visao, { cidade, pessoa }: FiltrosState): Visao {
+export function aplicarFiltros(visao: Visao, { cidade, pessoa, status }: FiltrosState): Visao {
   const { pracas, quadrosEscalonamento, tarefas } = visao;
   const pracaDaCidade = cidade ? CIDADES_FILTRO.find((c) => c.chave === cidade)?.praca ?? null : null;
 
@@ -47,7 +88,13 @@ export function aplicarFiltros(visao: Visao, { cidade, pessoa }: FiltrosState): 
     pracasF = pracasF.filter((p) => p === pracaDaCidade);
   }
 
-  const tarefasF = cidade ? tarefas.filter((t) => t.origem === "manual" || normalize(t.cidade ?? "").includes(cidade)) : tarefas;
+  const porCidade = cidade ? tarefas.filter((t) => t.origem === "manual" || normalize(t.cidade ?? "").includes(cidade)) : tarefas;
+  const tarefasF =
+    status === "a_fazer"
+      ? porCidade.filter((t) => t.status !== "pending_validation")
+      : status === "feitas"
+        ? porCidade.filter((t) => t.status === "pending_validation")
+        : porCidade;
   return { pracas: pracasF, quadrosEscalonamento: escalF, tarefas: tarefasF };
 }
 
@@ -66,7 +113,7 @@ export function FiltrosTarefas({
   acao?: ReactNode;
 }) {
   const cidades = CIDADES_FILTRO.filter((c) => pracas.includes(c.praca));
-  const ativo = valor.cidade !== "" || valor.pessoa !== "todos";
+  const ativo = valor.cidade !== "" || valor.pessoa !== "todos" || valor.status !== "todas";
 
   return (
     <div className="surface-card mb-4 flex flex-wrap items-end gap-3 p-3 sm:mb-6 sm:gap-4 sm:p-4">
@@ -109,6 +156,11 @@ export function FiltrosTarefas({
             ))}
         </select>
       </label>
+
+      <div className="flex w-full flex-col gap-1.5 sm:w-auto">
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Situação</span>
+        <FiltroStatusTarefas valor={valor.status} onChange={(status) => onChange({ ...valor, status })} />
+      </div>
 
       {ativo && (
         <button

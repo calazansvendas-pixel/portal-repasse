@@ -171,6 +171,23 @@ export function TaskCard({
             </div>
           </div>
 
+          {/* Capa do gargalo concluído: nomes dos clientes com o check individual (detalhes: clique no card) */}
+          {temSubtarefas && (
+            <ul className="space-y-0.5">
+              {clientes.map((c) => (
+                <li key={c.numero} className="flex items-center gap-1.5 text-sm text-ink-secondary dark:text-white/70">
+                  <Check
+                    size={14}
+                    strokeWidth={3}
+                    className={c.concluido ? "shrink-0 text-status-success" : "shrink-0 text-transparent"}
+                    aria-label={c.concluido ? "Concluído" : undefined}
+                  />
+                  <span className="min-w-0 break-words">{c.clienteNome || `Pasta ${c.numero}`}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
           {/* Histórico imutável mesmo quando concluído */}
           {notasCard.length > 0 && (
             <div className="rounded-md border border-border bg-surface-secondary/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">
