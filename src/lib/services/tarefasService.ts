@@ -33,6 +33,26 @@ export async function criarTarefaManual(descricao: string, atribuidoPara: Quadro
   return json as { id: string };
 }
 
+async function chamarTarefaManual(metodo: "PATCH" | "DELETE", id: string, idToken: string, corpo?: object) {
+  const res = await fetch(`/api/tarefas/${encodeURIComponent(id)}`, {
+    method: metodo,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.erro ?? "Falha ao alterar a tarefa.");
+}
+
+/** Edita texto/destinatário de uma tarefa avulsa (só quem criou ou a Gerência — validado no servidor). */
+export async function editarTarefaManual(id: string, descricao: string, atribuidoPara: Quadro, idToken: string) {
+  await chamarTarefaManual("PATCH", id, idToken, { descricao, atribuidoPara });
+}
+
+/** Exclusão definitiva (hard delete) de uma tarefa avulsa. */
+export async function excluirTarefaManual(id: string, idToken: string) {
+  await chamarTarefaManual("DELETE", id, idToken);
+}
+
 /**
  * Devolve a tarefa para o quadro do responsável, pendente e expandida
  * (auditoria humana ou clique por engano). Vale para "pending_validation" e

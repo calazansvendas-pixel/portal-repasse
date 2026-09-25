@@ -4,19 +4,21 @@ import { useState } from "react";
 import { AlertTriangle, Check, Layers } from "lucide-react";
 import type { Tarefa } from "@/lib/types";
 import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
-import { marcarTarefaResolvida, reverterTarefa } from "@/lib/services/tarefasService";
+import { excluirTarefaManual, marcarTarefaResolvida, reverterTarefa } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { meuQuadroInterativo } from "@/lib/auth/roles";
 import { formatDateBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
-import { DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
+import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
+import { MenuTarefaAvulsa } from "./MenuTarefaAvulsa";
+import { NovaTarefaModal } from "./NovaTarefaModal";
 import { ObservacaoChecklist, TrajetoPasta } from "./partesCard";
 
 const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
 
 export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; somenteLeitura?: boolean }) {
   const { firebaseUser, profile } = useAuth();
-  const [modal, setModal] = useState<"nota" | "detalhes" | null>(null);
+  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | null>(null);
 
   const aguardandoValidacao = tarefa.status === "pending_validation";
   const falhaAuditoria = tarefa.status === "audit_failed";
@@ -29,6 +31,16 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
     (meuQuadroInterativo(profile).includes(tarefa.praca) ||
       (["gerencia", "coordenador", "analista"].includes(profile.role) &&
         PRACAS_ASSISTENTES.includes(tarefa.praca)));
+
+  // Editar/excluir tarefa avulsa: só quem criou ou a Gerência (o servidor confere de novo).
+  const podeGerenciarAvulsa =
+    isManual && !!profile && (profile.role === "gerencia" || tarefa.criadaPor === firebaseUser?.uid);
+
+  async function excluir() {
+    if (!firebaseUser) return;
+    await excluirTarefaManual(tarefa.id, await firebaseUser.getIdToken());
+    setModal(null);
+  }
 
   async function confirmarConclusao(nota: string) {
     if (!firebaseUser) return;
@@ -90,9 +102,14 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
 
       {/* Cabeçalho: cliente + imobiliária (tarefa avulsa: solicitação interna + quem delegou) */}
       {isManual && (
-        <div>
-          <p className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">Solicitação Interna</p>
-          <p className="text-xs text-ink-muted">Enviado por: {tarefa.criadaPorNome || "—"}</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">Solicitação Interna</p>
+            <p className="text-xs text-ink-muted">Enviado por: {tarefa.criadaPorNome || "—"}</p>
+          </div>
+          {podeGerenciarAvulsa && (
+            <MenuTarefaAvulsa onEditar={() => setModal("editar")} onExcluir={() => setModal("excluir")} />
+          )}
         </div>
       )}
       {!isAgregado && !isManual && (
@@ -155,6 +172,10 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
         )}
       </div>
 
+      {modal === "editar" && <NovaTarefaModal tarefa={tarefa} onFechar={() => setModal(null)} />}
+      {modal === "excluir" && (
+        <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />
+      )}
       {modal === "nota" && (
         <NotaConclusaoModal onConfirmar={confirmarConclusao} onCancelar={() => setModal(null)} />
       )}

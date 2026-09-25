@@ -3,16 +3,21 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { destinatariosPermitidos } from "@/lib/auth/roles";
-import { criarTarefaManual } from "@/lib/services/tarefasService";
+import { criarTarefaManual, editarTarefaManual } from "@/lib/services/tarefasService";
 import { QUADRO_LABEL } from "@/lib/types";
-import type { Quadro } from "@/lib/types";
+import type { Quadro, Tarefa } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
 
-export function NovaTarefaModal({ onFechar }: { onFechar: () => void }) {
+/** Criação (sem "tarefa") ou edição de uma tarefa avulsa existente. */
+export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; tarefa?: Tarefa }) {
   const { firebaseUser, profile } = useAuth();
-  const destinatarios: Quadro[] = profile ? destinatariosPermitidos(profile.role) : [];
-  const [descricao, setDescricao] = useState("");
-  const [destino, setDestino] = useState<Quadro | "">("");
+  const editando = !!tarefa;
+  const permitidos: Quadro[] = profile ? destinatariosPermitidos(profile.role) : [];
+  // Ao editar, o destinatário atual sempre aparece na lista, mesmo se o editor não puder mais escolhê-lo.
+  const destinatarios: Quadro[] =
+    tarefa && !permitidos.includes(tarefa.praca) ? [tarefa.praca, ...permitidos] : permitidos;
+  const [descricao, setDescricao] = useState(tarefa?.descricao ?? "");
+  const [destino, setDestino] = useState<Quadro | "">(tarefa?.praca ?? "");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -24,7 +29,8 @@ export function NovaTarefaModal({ onFechar }: { onFechar: () => void }) {
     setErro(null);
     try {
       const token = await firebaseUser.getIdToken();
-      await criarTarefaManual(descricao, destino, token);
+      if (tarefa) await editarTarefaManual(tarefa.id, descricao, destino, token);
+      else await criarTarefaManual(descricao, destino, token);
       onFechar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Falha ao criar a tarefa.");
@@ -33,7 +39,7 @@ export function NovaTarefaModal({ onFechar }: { onFechar: () => void }) {
   }
 
   return (
-    <Modal titulo="Nova Tarefa" onClose={onFechar}>
+    <Modal titulo={editando ? "Editar Tarefa" : "Nova Tarefa"} onClose={onFechar}>
       <div className="space-y-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Descrição da Tarefa</span>
@@ -72,7 +78,7 @@ export function NovaTarefaModal({ onFechar }: { onFechar: () => void }) {
           Cancelar
         </button>
         <button type="button" className="btn-primary h-10" onClick={criar} disabled={!podeEnviar}>
-          Criar Tarefa
+          {editando ? "Salvar Alterações" : "Criar Tarefa"}
         </button>
       </div>
     </Modal>

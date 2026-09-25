@@ -48,6 +48,50 @@ export function NotaConclusaoModal({
   );
 }
 
+export function ConfirmarExclusaoModal({
+  onConfirmar,
+  onCancelar,
+}: {
+  onConfirmar: () => Promise<void>;
+  onCancelar: () => void;
+}) {
+  const [excluindo, setExcluindo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function confirmar() {
+    setExcluindo(true);
+    setErro(null);
+    try {
+      await onConfirmar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao excluir a tarefa.");
+      setExcluindo(false);
+    }
+  }
+
+  return (
+    <Modal titulo="Excluir tarefa?" onClose={onCancelar}>
+      <p className="text-sm text-ink-secondary dark:text-white/70">
+        A tarefa será apagada definitivamente. Essa ação não pode ser desfeita.
+      </p>
+      {erro && <p className="mt-3 text-xs text-status-danger">{erro}</p>}
+      <div className="mt-6 flex justify-end gap-3">
+        <button type="button" className="btn-secondary h-10" onClick={onCancelar} disabled={excluindo}>
+          Cancelar
+        </button>
+        <button
+          type="button"
+          className="inline-flex h-10 items-center rounded-md bg-status-danger px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          onClick={confirmar}
+          disabled={excluindo}
+        >
+          Excluir
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 export function DetalhesTarefaModal({
   tarefa,
   podeReverter,
