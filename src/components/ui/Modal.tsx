@@ -9,10 +9,13 @@ const pilha: symbol[] = [];
 export function Modal({
   titulo,
   onClose,
+  semMoldura = false,
   children,
 }: {
   titulo: string;
   onClose: () => void;
+  // Conteúdo que já é um cartão (ex: TaskCard): sem moldura nem título próprios.
+  semMoldura?: boolean;
   children: ReactNode;
 }) {
   const id = useRef(Symbol("modal"));
@@ -44,10 +47,12 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
-        className="surface-card max-h-[85vh] w-full max-w-lg overflow-y-auto p-6"
+        className={
+          semMoldura ? "max-h-[85vh] w-full max-w-lg overflow-y-auto" : "surface-card max-h-[85vh] w-full max-w-lg overflow-y-auto p-6"
+        }
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-base font-bold text-ink-primary dark:text-white">{titulo}</h2>
+        {!semMoldura && <h2 className="mb-4 text-base font-bold text-ink-primary dark:text-white">{titulo}</h2>}
         {children}
       </div>
     </div>,

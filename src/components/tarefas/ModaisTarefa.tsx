@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Undo2 } from "lucide-react";
-import type { Tarefa } from "@/lib/types";
+import type { ClienteEnvolvido, Tarefa } from "@/lib/types";
 import { formatDateTimeBR } from "@/lib/utils/dates";
 import { Modal } from "@/components/ui/Modal";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
@@ -95,11 +95,13 @@ export function ConfirmarExclusaoModal({
 
 export function DetalhesTarefaModal({
   tarefa,
+  renderDetalheCliente,
   podeReverter,
   onReverter,
   onFechar,
 }: {
   tarefa: Tarefa;
+  renderDetalheCliente: (cliente: ClienteEnvolvido, fechar: () => void) => ReactNode;
   podeReverter: boolean;
   onReverter: () => Promise<void>;
   onFechar: () => void;
@@ -146,7 +148,7 @@ export function DetalhesTarefaModal({
           </Secao>
         ) : isGargalo ? (
           <Secao titulo="Clientes envolvidos">
-            <ListaClientesEnvolvidos clientes={clientes} podeMarcar={false} />
+            <ListaClientesEnvolvidos clientes={clientes} podeMarcar={false} renderDetalhe={renderDetalheCliente} />
           </Secao>
         ) : (
           <>

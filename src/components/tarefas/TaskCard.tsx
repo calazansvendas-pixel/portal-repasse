@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Layers, Pencil, Trash2, Undo2 } from "lucide-react";
-import type { Tarefa } from "@/lib/types";
+import type { ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
+import { Modal } from "@/components/ui/Modal";
 import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
 import {
   alternarClienteEnvolvido,
@@ -23,7 +26,20 @@ import { ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha } from "./partesC
 
 const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
 
-export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; somenteLeitura?: boolean }) {
+/**
+ * `gargalo` = este card representa UM cliente dentro de uma tarefa agregada (aberto a partir da lista
+ * da sanfona): é o mesmo card individual, mas as ações valem para o check daquele cliente e a tarefa
+ * mãe (`pai`) só muda de estado quando todos os clientes estão marcados.
+ */
+export function TaskCard({
+  tarefa,
+  somenteLeitura = false,
+  gargalo,
+}: {
+  tarefa: Tarefa;
+  somenteLeitura?: boolean;
+  gargalo?: { pai: Tarefa; numero: string };
+}) {
   const { firebaseUser, profile } = useAuth();
   const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | null>(null);
   // Número do cliente cujo check completa a tarefa agregada (pede a nota opcional antes de gravar).
@@ -34,8 +50,9 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
   const falhaAuditoria = tarefa.status === "audit_failed";
   const isAgregado = tarefa.origem === "agregado";
   const isManual = tarefa.origem === "manual";
-  const clientes = tarefa.clientesEnvolvidos ?? [];
-  const temSubtarefas = isAgregado && clientes.length > 0;
+  const clientes = (gargalo ? gargalo.pai : tarefa).clientesEnvolvidos ?? [];
+  const clienteDoGargalo = gargalo ? clientes.find((c) => c.numero === gargalo.numero) : undefined;
+  const temSubtarefas = isAgregado && !gargalo && clientes.length > 0;
   const totalPastas = clientes.length || tarefa.numerosRelacionados?.length || 0;
   const concluidos = clientes.filter((c) => c.concluido).length;
   // Tarefa agregada: a última planilha em que qualquer uma das pastas apareceu.
@@ -61,17 +78,26 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
 
   const itensMenu: ItemMenu[] = [];
   if (podeEditarExcluir) itensMenu.push({ rotulo: "Editar", icone: Pencil, onClick: () => setModal("editar") });
-  if (ehGerencia && !aguardandoValidacao) {
+  if (gargalo) {
+    // God Mode no cliente do gargalo: marca/desmarca só o check dele. Excluir fica de fora — um cliente
+    // só sai do gargalo pelo check; excluir o gargalo inteiro é no menu do card do gargalo.
+    if (ehGerencia && clienteDoGargalo) {
+      itensMenu.push({
+        rotulo: clienteDoGargalo.concluido ? "Voltar para ativa" : "Marcar como feita",
+        icone: clienteDoGargalo.concluido ? Undo2 : CheckCircle2,
+        onClick: () => alternarCliente(clienteDoGargalo.numero),
+      });
+    }
+  } else if (ehGerencia && !aguardandoValidacao) {
     itensMenu.push({
       rotulo: "Marcar como feita",
       icone: CheckCircle2,
       onClick: () => firebaseUser && marcarFeitaPelaGerencia(tarefa, firebaseUser.uid),
     });
-  }
-  if (ehGerencia && aguardandoValidacao) {
+  } else if (ehGerencia && aguardandoValidacao) {
     itensMenu.push({ rotulo: "Voltar para ativa", icone: Undo2, onClick: () => reverterTarefa(tarefa) });
   }
-  if (podeEditarExcluir) itensMenu.push({ rotulo: "Excluir", icone: Trash2, onClick: () => setModal("excluir"), perigo: true });
+  if (podeEditarExcluir && !gargalo) itensMenu.push({ rotulo: "Excluir", icone: Trash2, onClick: () => setModal("excluir"), perigo: true });
 
   async function confirmarConclusao(nota: string) {
     if (!firebaseUser) return;
@@ -131,12 +157,15 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
         {modal === "detalhes" && (
           <DetalhesTarefaModal
             tarefa={tarefa}
+            renderDetalheCliente={(c, fechar) => (
+              <CardClienteGargalo pai={tarefa} cliente={c} somenteLeitura onFechar={fechar} />
+            )}
             podeReverter={podeReverter}
             onReverter={reverter}
             onFechar={() => setModal(null)}
           />
         )}
-        {modal === "editar" && <NovaTarefaModal tarefa={tarefa} onFechar={() => setModal(null)} />}
+        {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
         {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
       </>
     );
@@ -213,7 +242,14 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
 
       {/* Sub-tarefas do gargalo: um check por cliente */}
       {temSubtarefas && expandido && (
-        <ListaClientesEnvolvidos clientes={clientes} podeMarcar={!somenteLeitura} onAlternar={alternarCliente} />
+        <ListaClientesEnvolvidos
+          clientes={clientes}
+          podeMarcar={!somenteLeitura}
+          onAlternar={alternarCliente}
+          renderDetalhe={(c, fechar) => (
+            <CardClienteGargalo pai={tarefa} cliente={c} somenteLeitura={somenteLeitura} onFechar={fechar} />
+          )}
+        />
       )}
 
       {/* Corpo 2: o problema, em checklist, para apoiar a ligação */}
@@ -256,7 +292,28 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
           <TrajetoPasta dados={tarefa} />
         )}
 
-        {!somenteLeitura && !temSubtarefas && (
+        {gargalo && clienteDoGargalo?.concluido && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-status-success">
+            <Check size={14} strokeWidth={3} />
+            Concluído neste gargalo
+          </p>
+        )}
+        {!somenteLeitura && gargalo && clienteDoGargalo && (
+          <button
+            type="button"
+            onClick={() => alternarCliente(clienteDoGargalo.numero)}
+            className={cn(
+              "mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+              clienteDoGargalo.concluido
+                ? "border-border text-ink-secondary hover:bg-surface-soft dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+                : "border-status-success/40 bg-status-success/10 text-status-success hover:bg-status-success/15"
+            )}
+          >
+            {clienteDoGargalo.concluido ? <Undo2 size={14} /> : <Check size={14} />}
+            {clienteDoGargalo.concluido ? "Desmarcar" : "Marcar como resolvida"}
+          </button>
+        )}
+        {!somenteLeitura && !gargalo && !temSubtarefas && (
           <button
             type="button"
             onClick={() => setModal("nota")}
@@ -268,12 +325,79 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
         )}
       </div>
 
-      {modal === "editar" && <NovaTarefaModal tarefa={tarefa} onFechar={() => setModal(null)} />}
+      {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
       {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
       {modal === "nota" && <NotaConclusaoModal onConfirmar={confirmarConclusao} onCancelar={() => setModal(null)} />}
       {clientePendente && (
         <NotaConclusaoModal onConfirmar={confirmarClientePendente} onCancelar={() => setClientePendente(null)} />
       )}
     </div>
+  );
+}
+
+/**
+ * Detalhe de UM cliente do gargalo: o mesmo TaskCard de uma tarefa individual, montado com os dados da
+ * pasta (cabeçalho, "O que foi relatado", etiquetas, data limite, linha do tempo diária e menu).
+ */
+function CardClienteGargalo({
+  pai,
+  cliente,
+  somenteLeitura,
+  onFechar,
+}: {
+  pai: Tarefa;
+  cliente: ClienteEnvolvido;
+  somenteLeitura: boolean;
+  onFechar: () => void;
+}) {
+  // A tarefa guarda só as últimas entradas de cada cliente (limite de tamanho do documento);
+  // o trajeto integral está no registro da pasta.
+  const [historicoCompleto, setHistoricoCompleto] = useState<EtapaHistorico[] | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+    getDoc(doc(db, "registros", cliente.numero))
+      .then((snap) => {
+        const completo = snap.data()?.historicoEtapas as EtapaHistorico[] | undefined;
+        if (ativo && completo) setHistoricoCompleto(completo);
+      })
+      .catch(() => {
+        // sem permissão/rede: segue com as entradas embutidas na tarefa
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [cliente.numero]);
+
+  const embutido = cliente.historicoEtapas ?? [];
+  const historico = historicoCompleto && historicoCompleto.length >= embutido.length ? historicoCompleto : embutido;
+
+  const comoTarefaIndividual: Tarefa = {
+    ...pai,
+    origem: "linha",
+    numero: cliente.numero,
+    numerosRelacionados: null,
+    clienteNome: cliente.clienteNome,
+    imobiliaria: cliente.imobiliaria,
+    dataEntrada: cliente.dataEntrada,
+    etapa: cliente.etapa,
+    observacaoOriginal: cliente.observacao,
+    historicoEtapas: historico,
+    slaStatus: historico[historico.length - 1]?.status ?? pai.slaStatus,
+    clientesEnvolvidos: undefined,
+    cicloFollowUp: null,
+    // O cartão do cliente fica sempre "aberto"; o estado dele aparece no rodapé (check do cliente).
+    status: pai.status === "audit_failed" ? "audit_failed" : "pendente",
+  };
+
+  return (
+    <Modal titulo={cliente.clienteNome || `Pasta ${cliente.numero}`} onClose={onFechar} semMoldura>
+      <TaskCard tarefa={comoTarefaIndividual} somenteLeitura={somenteLeitura} gargalo={{ pai, numero: cliente.numero }} />
+      <div className="mt-3 flex justify-end">
+        <button type="button" className="btn-secondary h-10" onClick={onFechar}>
+          Fechar
+        </button>
+      </div>
+    </Modal>
   );
 }

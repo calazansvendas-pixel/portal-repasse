@@ -1,26 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
-import type { ClienteEnvolvido, EtapaHistorico } from "@/lib/types";
-import { Modal } from "@/components/ui/Modal";
+import type { ClienteEnvolvido } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
-import { ObservacaoChecklist, TrajetoPasta } from "./partesCard";
 
 /**
  * NÍVEL 2 da sanfona de gargalo: lista simples (checkbox + nome de cada cliente).
- * Clicar no NOME abre o detalhe completo daquele cliente (nível 3, em modal).
+ * Clicar no NOME abre o detalhe daquele cliente (nível 3): o card individual completo,
+ * montado por quem chama em `renderDetalhe`.
  */
 export function ListaClientesEnvolvidos({
   clientes,
   podeMarcar,
   onAlternar,
+  renderDetalhe,
 }: {
   clientes: ClienteEnvolvido[];
   podeMarcar: boolean;
   onAlternar?: (numero: string) => void;
+  renderDetalhe: (cliente: ClienteEnvolvido, fechar: () => void) => ReactNode;
 }) {
   const [aberto, setAberto] = useState<string | null>(null);
   const clienteAberto = clientes.find((c) => c.numero === aberto) ?? null;
@@ -58,58 +57,7 @@ export function ListaClientesEnvolvidos({
         ))}
       </ul>
 
-      {clienteAberto && <DetalheClienteModal cliente={clienteAberto} onFechar={() => setAberto(null)} />}
+      {clienteAberto && renderDetalhe(clienteAberto, () => setAberto(null))}
     </>
-  );
-}
-
-/**
- * NÍVEL 3: detalhe completo de UM cliente do gargalo, no mesmo formato de um card
- * individual — imobiliária, "O que foi relatado" e a linha do tempo diária completa.
- */
-function DetalheClienteModal({ cliente, onFechar }: { cliente: ClienteEnvolvido; onFechar: () => void }) {
-  // A tarefa guarda só as últimas entradas de cada cliente (limite de tamanho do documento);
-  // o trajeto integral está no registro da pasta.
-  const [historico, setHistorico] = useState<EtapaHistorico[]>(cliente.historicoEtapas ?? []);
-
-  useEffect(() => {
-    let ativo = true;
-    getDoc(doc(db, "registros", cliente.numero))
-      .then((snap) => {
-        const completo = snap.data()?.historicoEtapas as EtapaHistorico[] | undefined;
-        if (ativo && completo && completo.length > historico.length) setHistorico(completo);
-      })
-      .catch(() => {
-        // sem permissão/rede: segue com as entradas embutidas na tarefa
-      });
-    return () => {
-      ativo = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cliente.numero]);
-
-  return (
-    <Modal titulo={cliente.clienteNome || `Pasta ${cliente.numero}`} onClose={onFechar}>
-      <div className="space-y-4">
-        <p className="-mt-2 text-xs text-ink-muted">{cliente.imobiliaria || "Imobiliária não informada"}</p>
-
-        {cliente.observacao && (
-          <div className="rounded-md border border-border bg-surface-secondary/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">O que foi relatado</p>
-            <ObservacaoChecklist texto={cliente.observacao} />
-          </div>
-        )}
-
-        <div className="border-t border-border pt-3 dark:border-white/10">
-          <TrajetoPasta dados={{ dataEntrada: cliente.dataEntrada, etapa: cliente.etapa, historicoEtapas: historico }} />
-        </div>
-      </div>
-
-      <div className="mt-6 flex justify-end">
-        <button type="button" className="btn-secondary h-10" onClick={onFechar}>
-          Fechar
-        </button>
-      </div>
-    </Modal>
   );
 }

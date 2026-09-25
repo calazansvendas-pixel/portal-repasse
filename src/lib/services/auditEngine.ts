@@ -56,10 +56,13 @@ function montarClientesEnvolvidos(
   linhas: LinhaPlanilha[],
   anteriores: ClienteEnvolvido[] | undefined,
   importacaoId: string,
-  historicoPorNumero: Map<string, EtapaHistorico[]>
+  historicoPorNumero: Map<string, EtapaHistorico[]>,
+  // Gargalo persistente: nenhum cliente sai da lista por causa da planilha (só pelo check humano).
+  persistente = false,
+  linhasPorNumero?: Map<string, LinhaPlanilha>
 ): ClienteEnvolvido[] {
   const porNumero = new Map((anteriores ?? []).map((c) => [c.numero, c]));
-  return linhas.map((l) => {
+  const atualizar = (l: LinhaPlanilha): ClienteEnvolvido => {
     const ant = porNumero.get(l.numero);
     const passo: EtapaHistorico = {
       etapa: l.etapa,
@@ -79,7 +82,19 @@ function montarClientesEnvolvidos(
       ),
       concluido: ant?.concluido ?? false,
     };
+  };
+
+  if (!persistente) return linhas.map(atualizar);
+
+  // Quem já estava na lista continua (com os dados frescos, se a pasta ainda veio na planilha;
+  // senão, como estava); pastas que passaram a fazer parte do grupo entram no fim.
+  const doGrupo = new Map(linhas.map((l) => [l.numero, l]));
+  const mantidos = (anteriores ?? []).map((ant) => {
+    const l = doGrupo.get(ant.numero) ?? linhasPorNumero?.get(ant.numero);
+    return l ? atualizar(l) : ant;
   });
+  const jaNaLista = new Set(mantidos.map((c) => c.numero));
+  return [...mantidos, ...linhas.filter((l) => !jaNaLista.has(l.numero)).map(atualizar)];
 }
 
 export interface ResumoImportacao {
@@ -594,7 +609,8 @@ export async function executarAuditoriaDiaria(params: {
   // --- Passo 2: reconcilia os AGREGADOS (cruzam várias linhas da mesma importação) ---
   // Pastas arquivadas (9.xx) não entram em gargalos nem em filtros de qualificação.
   const linhasEmEsteira = linhas.filter((l) => !ehFimDeEsteira(l.etapa));
-  const paramsAgregados = { tarefasPorChave, reconciliarTarefa, importacaoId, historicoPorNumero };
+  const linhasPorNumero = new Map(linhas.map((l) => [l.numero, l]));
+  const paramsAgregados = { tarefasPorChave, reconciliarTarefa, importacaoId, historicoPorNumero, linhasPorNumero };
   reconciliarAgregados({
     especsAtuais: detectarGargalos(linhasEmEsteira),
     prefixoChave: "AGREGADO::gargalo::",
@@ -656,23 +672,31 @@ function reconciliarAgregados(params: {
   reconciliarTarefa: (dados: DadosParaReconciliar) => void;
   importacaoId: string;
   historicoPorNumero: Map<string, EtapaHistorico[]>;
+  linhasPorNumero: Map<string, LinhaPlanilha>;
 }) {
-  const { especsAtuais, prefixoChave, tarefasPorChave, reconciliarTarefa, importacaoId, historicoPorNumero } = params;
+  const { especsAtuais, prefixoChave, tarefasPorChave, reconciliarTarefa, importacaoId, historicoPorNumero, linhasPorNumero } =
+    params;
   const chavesAtuais = new Set(especsAtuais.map((e) => e.chaveRegra));
+  // Gargalos (0.99 e o genérico) são persistentes: depois de criados, a planilha não remove clientes
+  // nem dissolve a tarefa se o número de pastas cair abaixo do gatilho — só o check humano tira o cliente.
+  const persistente = prefixoChave === "AGREGADO::gargalo::" || prefixoChave === "AGREGADO::gargalo_credito::";
 
   for (const spec of especsAtuais) {
+    const clientesEnvolvidos = montarClientesEnvolvidos(
+      spec.linhas,
+      tarefasPorChave.get(spec.chaveRegra)?.data.clientesEnvolvidos,
+      importacaoId,
+      historicoPorNumero,
+      persistente,
+      linhasPorNumero
+    );
     reconciliarTarefa({
       chaveRegra: spec.chaveRegra,
       origem: "agregado",
       nivel: spec.nivel,
       numero: null,
-      numerosRelacionados: spec.numerosRelacionados,
-      clientesEnvolvidos: montarClientesEnvolvidos(
-        spec.linhas,
-        tarefasPorChave.get(spec.chaveRegra)?.data.clientesEnvolvidos,
-        importacaoId,
-        historicoPorNumero
-      ),
+      numerosRelacionados: persistente ? clientesEnvolvidos.map((c) => c.numero) : spec.numerosRelacionados,
+      clientesEnvolvidos,
       cidade: spec.cidade,
       quadro: spec.quadro,
       imobiliaria: spec.imobiliaria,
@@ -689,6 +713,40 @@ function reconciliarAgregados(params: {
 
   for (const [chave, tarefa] of tarefasPorChave) {
     if (!chave.startsWith(prefixoChave) || chavesAtuais.has(chave)) continue;
+
+    if (persistente && tarefa.data.status !== "pending_validation") {
+      // O gatilho deixou de valer, mas o gargalo segue aberto com os mesmos clientes (só atualiza os
+      // dados das pastas que ainda vieram na planilha). Só o check de cada cliente o encerra.
+      const clientesEnvolvidos = montarClientesEnvolvidos(
+        [],
+        tarefa.data.clientesEnvolvidos,
+        importacaoId,
+        historicoPorNumero,
+        true,
+        linhasPorNumero
+      );
+      reconciliarTarefa({
+        chaveRegra: chave,
+        origem: "agregado",
+        nivel: tarefa.data.nivel,
+        numero: null,
+        numerosRelacionados: clientesEnvolvidos.map((c) => c.numero),
+        clientesEnvolvidos,
+        cidade: tarefa.data.cidade,
+        quadro: tarefa.data.praca,
+        imobiliaria: tarefa.data.imobiliaria,
+        etapa: tarefa.data.etapa,
+        prazoEtapa: null,
+        slaStatus: tarefa.data.slaStatus,
+        tipoPendencia: tarefa.data.tipoPendencia,
+        descricao: tarefa.data.descricao,
+        observacaoOriginal: "",
+        condicaoAtiva: true,
+        avancoDetectado: true,
+      });
+      continue;
+    }
+
     reconciliarTarefa({
       chaveRegra: chave,
       origem: "agregado",
