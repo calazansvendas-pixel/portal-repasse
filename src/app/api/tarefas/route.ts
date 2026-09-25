@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { Tarefa } from "@/lib/types";
-import { NIVEL_POR_QUADRO, autenticar, validarDescricaoEDestino } from "@/lib/server/tarefasManuais";
+import { NIVEL_POR_QUADRO, autenticar, lerDataLimite, validarDescricaoEDestino } from "@/lib/server/tarefasManuais";
+import { adicionarDiasUteis, hojeBrasilISO } from "@/lib/utils/prazos";
 
 export const runtime = "nodejs";
 
@@ -15,9 +16,11 @@ export async function POST(req: NextRequest) {
     const auth = await autenticar(req);
     if (auth instanceof NextResponse) return auth;
 
-    const body = (await req.json().catch(() => null)) as { descricao?: unknown; atribuidoPara?: unknown } | null;
+    const body = (await req.json().catch(() => null)) as { descricao?: unknown; atribuidoPara?: unknown; dataLimite?: unknown } | null;
     const valido = validarDescricaoEDestino(auth.role, body?.descricao, body?.atribuidoPara);
     if (valido instanceof NextResponse) return valido;
+    const dataLimite = lerDataLimite(body?.dataLimite);
+    if (dataLimite instanceof NextResponse) return dataLimite;
 
     const agora = new Date().toISOString();
     const ref = getAdminDb().collection("tarefas").doc();
@@ -52,6 +55,8 @@ export async function POST(req: NextRequest) {
       historicoEtapas: [],
       criadaPor: auth.uid,
       criadaPorNome: auth.nome,
+      // Sem data informada: 3 dias úteis a partir de hoje.
+      dataLimite: dataLimite ?? adicionarDiasUteis(hojeBrasilISO(), 3),
     };
     await ref.set(tarefa);
 

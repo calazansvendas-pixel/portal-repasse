@@ -76,14 +76,17 @@ service cloud.firestore {
       allow create: if false; // só o motor de auditoria cria tarefas
       allow delete: if souGerencia(); // exclusão de importação — ver /api/importacoes/[id]
 
-      // Dono do quadro: conclui/desfaz a própria tarefa (com nota de conclusão).
+      // Gerência (God Mode): controle absoluto — edita, alterna status e apaga qualquer tarefa.
+      // Dono do quadro: conclui/desfaz a própria tarefa (nota de conclusão e, nas agregadas,
+      // o check de cada cliente envolvido).
       // Gerência/Coordenador/Analista: auditoria humana — só podem DEVOLVER uma
       // tarefa de assistente para "pendente" (nunca concluir nem editar outros campos).
       allow update: if logado() && (
+        souGerencia() ||
         (souDonoDoQuadro(resource.data.praca) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(
             ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao',
-             'observacaoNoMomentoResolucao', 'notaResolucao']
+             'observacaoNoMomentoResolucao', 'notaResolucao', 'clientesEnvolvidos']
           )) ||
         (papelGestor() &&
           resource.data.praca in ['laiza', 'eliane', 'catarina'] &&

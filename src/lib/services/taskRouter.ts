@@ -39,10 +39,15 @@ export function dentroDoCooldownInclusao(importacaoId: string, resolvidoEmISO: s
   return dias < DIAS_COOLDOWN_INCLUSAO;
 }
 
+/** Etapa 0.99 (espera do Crédito) — não gera tarefa individual; vira gargalo agregado do Coordenador. */
+export function ehEtapaCredito(etapa: string | null | undefined): boolean {
+  return (etapa ?? "").trim().startsWith("0.99");
+}
+
 /** Fim de esteira: etapas 9.xx ou indicativo de venda imputada — a pasta é arquivada. */
 export function ehFimDeEsteira(etapa: string | null | undefined): boolean {
   const e = (etapa ?? "").trim();
-  return /^9./.test(e) || normalize(e).includes("imputad");
+  return /^9\./.test(e) || normalize(e).includes("imputad");
 }
 
 function nomeCliente(linha: LinhaPlanilha): string {
@@ -63,6 +68,7 @@ export interface EspecTarefaAgregada {
   tipoPendencia: string;
   descricao: string;
   numerosRelacionados: string[];
+  linhas: LinhaPlanilha[]; // as pastas do grupo (viram clientesEnvolvidos)
 }
 
 function contemAlgumTermo(observacaoNormalizada: string, termos: string[]): string | null {
@@ -115,6 +121,9 @@ export function gerarEspecOperacional(
 ): EspecTarefaLinha | null {
   const obsNorm = normalize(linha.observacao);
   const etapaNorm = linha.etapa.trim();
+  // 0.99: espera do Crédito — nenhuma tarefa individual para as assistentes.
+  if (ehEtapaCredito(etapaNorm)) return null;
+
   const cliente = nomeCliente(linha);
   const imobiliaria = nomeImobiliaria(linha);
 
@@ -222,6 +231,7 @@ const TERMOS_FILTRO_RUIM = ["margem insuficiente", "alto endividamento"];
 export function detectarGargalos(linhas: LinhaPlanilha[]): EspecTarefaAgregada[] {
   const grupos = new Map<string, LinhaPlanilha[]>();
   for (const linha of linhas) {
+    if (ehEtapaCredito(linha.etapa)) continue; // 0.99 tem regra própria (Coordenador)
     const chave = `${normalize(linha.cidade)}::${linha.etapa.trim()}`;
     grupos.set(chave, [...(grupos.get(chave) ?? []), linha]);
   }
@@ -244,9 +254,32 @@ export function detectarGargalos(linhas: LinhaPlanilha[]): EspecTarefaAgregada[]
       tipoPendencia: "Gargalo de etapa",
       descricao: `Gargalo de ${grupo.length} pastas na etapa ${etapa} em ${cidade}. Alinhar plano de ação tático com a assistente ${nomeAssistente}.`,
       numerosRelacionados: grupo.map((l) => l.numero),
+      linhas: grupo,
     });
   }
   return especs;
+}
+
+/** Mais de 5 pastas na 0.99 -> UMA tarefa agregada de gargalo de Crédito para o Coordenador. */
+export const LIMITE_GARGALO_CREDITO = 5;
+
+export function detectarGargaloCredito(linhas: LinhaPlanilha[]): EspecTarefaAgregada[] {
+  const naCredito = linhas.filter((l) => ehEtapaCredito(l.etapa));
+  if (naCredito.length <= LIMITE_GARGALO_CREDITO) return [];
+  return [
+    {
+      chaveRegra: "AGREGADO::gargalo_credito::0.99",
+      nivel: "tatico",
+      quadro: "coordenador",
+      cidade: "",
+      etapa: naCredito[0].etapa,
+      imobiliaria: "",
+      tipoPendencia: "Gargalo de crédito",
+      descricao: "Ligar para o setor de Crédito e Assessoria: informar gargalo na 0.99 e verificar os clientes abaixo.",
+      numerosRelacionados: naCredito.map((l) => l.numero),
+      linhas: naCredito,
+    },
+  ];
 }
 
 /** 2+ pastas da mesma imobiliária com margem insuficiente/alto endividamento -> alinhar régua com o Coordenador. */
@@ -271,6 +304,7 @@ export function detectarFiltroRuim(linhas: LinhaPlanilha[]): EspecTarefaAgregada
       tipoPendencia: "Filtro de qualificação",
       descricao: `Alinhar régua MCMV com a Imobiliária ${imobiliaria}.`,
       numerosRelacionados: grupo.map((l) => l.numero),
+      linhas: grupo,
     });
   }
   return especs;

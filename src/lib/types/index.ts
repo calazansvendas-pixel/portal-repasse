@@ -88,6 +88,18 @@ export type TarefaStatus =
   | "validated_done"
   | "audit_failed";
 
+/** Pasta dentro de uma tarefa agregada (gargalo): vira uma sub-tarefa com check próprio. */
+export interface ClienteEnvolvido {
+  numero: string;
+  clienteNome: string;
+  imobiliaria: string;
+  observacao: string;
+  etapa: string;
+  dataEntrada: string | null;
+  historicoEtapas: EtapaHistorico[];
+  concluido: boolean;
+}
+
 /** Um "salto" de etapa no trajeto da pasta — um item do Stepper/Timeline do card. */
 export interface EtapaHistorico {
   etapa: string;
@@ -134,7 +146,13 @@ export interface Tarefa {
   // Tarefa avulsa (origem "manual"): quem delegou.
   criadaPor?: string | null; // uid
   criadaPorNome?: string | null;
-  notaResolucao?: string | null; // "O que foi feito?" — anotação de quem concluiu
+  notaResolucao?: string | null;
+  // Tarefas agregadas: as pastas do gargalo, cada uma com o próprio check.
+  clientesEnvolvidos?: ClienteEnvolvido[];
+  // Prazo para a ação (yyyy-MM-dd), definido na criação; editável pela Gerência.
+  dataLimite?: string | null;
+  // A Gerência reescreveu o texto: as importações seguintes não o sobrescrevem.
+  descricaoEditada?: boolean; // "O que foi feito?" — anotação de quem concluiu
   etapaNoMomentoResolucao?: string | null;
   observacaoNoMomentoResolucao?: string | null;
   falhaAuditoriaMotivo?: string | null;

@@ -3,6 +3,7 @@ import type { LinhaPlanilha } from "./parseSheet";
 import {
   calcularEscalonamento,
   detectarFiltroRuim,
+  detectarGargaloCredito,
   dentroDoCooldownInclusao,
   detectarGargalos,
   ehEtapaInclusao,
@@ -13,7 +14,8 @@ import {
 } from "./taskRouter";
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
-import type { EtapaHistorico, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
+import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
+import type { ClienteEnvolvido, EtapaHistorico, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
 
 /**
  * Emenda um novo passo no trajeto da pasta: se a etapa é a mesma do último
@@ -30,6 +32,37 @@ function acumularHistorico(atual: EtapaHistorico[] | undefined, novo: EtapaHisto
     lista.push(novo);
   }
   return lista;
+}
+
+/**
+ * Monta a lista de sub-tarefas (uma por pasta) de uma tarefa agregada,
+ * preservando o check e o trajeto já acumulados das pastas que continuam no grupo.
+ */
+function montarClientesEnvolvidos(
+  linhas: LinhaPlanilha[],
+  anteriores: ClienteEnvolvido[] | undefined,
+  importacaoId: string
+): ClienteEnvolvido[] {
+  const porNumero = new Map((anteriores ?? []).map((c) => [c.numero, c]));
+  return linhas.map((l) => {
+    const ant = porNumero.get(l.numero);
+    const passo: EtapaHistorico = {
+      etapa: l.etapa,
+      data: importacaoId,
+      observacao: l.observacao,
+      status: calcularSlaStatus(l.prazoEtapa),
+    };
+    return {
+      numero: l.numero,
+      clienteNome: l.clienteNome,
+      imobiliaria: l.responsavel,
+      observacao: l.observacao,
+      etapa: l.etapa,
+      dataEntrada: l.dataEntrada,
+      historicoEtapas: acumularHistorico(ant?.historicoEtapas, passo),
+      concluido: ant?.concluido ?? false,
+    };
+  });
 }
 
 export interface ResumoImportacao {
@@ -61,6 +94,8 @@ interface DadosParaReconciliar {
   // Passo do trajeto a emendar em historicoEtapas nesta importação (origem
   // "linha" apenas — agregados não têm uma única pasta/etapa a rastrear).
   novoPassoHistorico?: EtapaHistorico;
+  // Tarefas agregadas: as pastas do grupo, cada uma com o próprio check.
+  clientesEnvolvidos?: ClienteEnvolvido[];
   cidade: string;
   quadro: Quadro;
   imobiliaria: string;
@@ -176,8 +211,14 @@ export async function executarAuditoriaDiaria(params: {
       const confiancaEtapaInclusao =
         dados.nivel === "operacional" &&
         ehEtapaInclusao(tarefaAtiva.data.etapaNoMomentoResolucao ?? tarefaAtiva.data.etapa);
+      // Mesma confiança no clique para o gargalo de Crédito (0.99): quem aguarda
+      // é o setor de Crédito, não o Coordenador — a baixa vale mesmo com as pastas na 0.99.
+      const confiancaCredito = dados.chaveRegra.startsWith("AGREGADO::gargalo_credito::");
       const sucesso =
-        confiancaEtapaInclusao || dados.fimDeEsteira === true || (dados.avancoDetectado && !dados.condicaoAtiva);
+        confiancaEtapaInclusao ||
+        confiancaCredito ||
+        dados.fimDeEsteira === true ||
+        (dados.avancoDetectado && !dados.condicaoAtiva);
 
       if (sucesso) {
         update(tarefaRef, {
@@ -192,6 +233,10 @@ export async function executarAuditoriaDiaria(params: {
           status: "audit_failed",
           atualizadoEm: agora,
           historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
+          // Falha em tarefa agregada: as sub-tarefas voltam a ficar sem check para refazer.
+          ...(tarefaAtiva.data.clientesEnvolvidos?.length
+            ? { clientesEnvolvidos: (dados.clientesEnvolvidos ?? tarefaAtiva.data.clientesEnvolvidos).map((c) => ({ ...c, concluido: false })) }
+            : {}),
           falhaAuditoriaMotivo: dados.avancoDetectado
             ? "Avançou, mas a mesma pendência foi identificada novamente."
             : "Continua na mesma situação da última importação.",
@@ -234,9 +279,11 @@ export async function executarAuditoriaDiaria(params: {
           slaStatus: dados.slaStatus,
           imobiliaria: dados.imobiliaria,
           tipoPendencia: dados.tipoPendencia,
-          descricao: dados.descricao,
+          // Se a Gerência reescreveu o texto, a importação não o sobrescreve.
+          descricao: tarefaAtiva.data.descricaoEditada ? tarefaAtiva.data.descricao : dados.descricao,
           observacaoOriginal: dados.observacaoOriginal,
           numerosRelacionados: dados.numerosRelacionados ?? null,
+          ...(dados.clientesEnvolvidos ? { clientesEnvolvidos: dados.clientesEnvolvidos } : {}),
           clienteNome: dados.clienteNome ?? null,
           dataEntrada: dados.dataEntrada ?? null,
           historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
@@ -287,6 +334,14 @@ export async function executarAuditoriaDiaria(params: {
           falhouAuditoriaAgora: false,
         }),
         historicoEtapas: acumularHistorico(undefined, dados.novoPassoHistorico),
+        clientesEnvolvidos: dados.clientesEnvolvidos ?? [],
+        dataLimite: calcularDataLimiteAutomatica({
+          base: importacaoId,
+          slaStatus: dados.slaStatus,
+          prazoEtapa: dados.prazoEtapa,
+          agregadoDiasUteis:
+            dados.origem === "agregado" ? (dados.chaveRegra.startsWith("AGREGADO::filtro_ruim::") ? 5 : 2) : undefined,
+        }),
       };
       set(ref, tarefa, false);
       resumo.tarefasCriadas++;
@@ -414,17 +469,21 @@ export async function executarAuditoriaDiaria(params: {
   // --- Passo 2: reconcilia os AGREGADOS (cruzam várias linhas da mesma importação) ---
   // Pastas arquivadas (9.xx) não entram em gargalos nem em filtros de qualificação.
   const linhasEmEsteira = linhas.filter((l) => !ehFimDeEsteira(l.etapa));
+  const paramsAgregados = { tarefasPorChave, reconciliarTarefa, importacaoId };
   reconciliarAgregados({
     especsAtuais: detectarGargalos(linhasEmEsteira),
     prefixoChave: "AGREGADO::gargalo::",
-    tarefasPorChave,
-    reconciliarTarefa,
+    ...paramsAgregados,
+  });
+  reconciliarAgregados({
+    especsAtuais: detectarGargaloCredito(linhasEmEsteira),
+    prefixoChave: "AGREGADO::gargalo_credito::",
+    ...paramsAgregados,
   });
   reconciliarAgregados({
     especsAtuais: detectarFiltroRuim(linhasEmEsteira),
     prefixoChave: "AGREGADO::filtro_ruim::",
-    tarefasPorChave,
-    reconciliarTarefa,
+    ...paramsAgregados,
   });
 
   // Tarefas avulsas não têm evidência na planilha: o check de quem concluiu vale
@@ -471,8 +530,9 @@ function reconciliarAgregados(params: {
   prefixoChave: string;
   tarefasPorChave: Map<string, { id: string; data: Tarefa }>;
   reconciliarTarefa: (dados: DadosParaReconciliar) => void;
+  importacaoId: string;
 }) {
-  const { especsAtuais, prefixoChave, tarefasPorChave, reconciliarTarefa } = params;
+  const { especsAtuais, prefixoChave, tarefasPorChave, reconciliarTarefa, importacaoId } = params;
   const chavesAtuais = new Set(especsAtuais.map((e) => e.chaveRegra));
 
   for (const spec of especsAtuais) {
@@ -482,6 +542,11 @@ function reconciliarAgregados(params: {
       nivel: spec.nivel,
       numero: null,
       numerosRelacionados: spec.numerosRelacionados,
+      clientesEnvolvidos: montarClientesEnvolvidos(
+        spec.linhas,
+        tarefasPorChave.get(spec.chaveRegra)?.data.clientesEnvolvidos,
+        importacaoId
+      ),
       cidade: spec.cidade,
       quadro: spec.quadro,
       imobiliaria: spec.imobiliaria,

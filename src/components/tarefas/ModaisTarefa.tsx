@@ -5,7 +5,7 @@ import { Undo2 } from "lucide-react";
 import type { Tarefa } from "@/lib/types";
 import { formatDateTimeBR } from "@/lib/utils/dates";
 import { Modal } from "@/components/ui/Modal";
-import { ObservacaoChecklist, TrajetoPasta } from "./partesCard";
+import { ListaClientesEnvolvidos, ObservacaoChecklist, TrajetoPasta } from "./partesCard";
 
 export function NotaConclusaoModal({
   onConfirmar,
@@ -105,6 +105,8 @@ export function DetalhesTarefaModal({
 }) {
   const [revertendo, setRevertendo] = useState(false);
   const isManual = tarefa.origem === "manual";
+  const clientes = tarefa.clientesEnvolvidos ?? [];
+  const isGargalo = tarefa.origem === "agregado" && clientes.length > 0;
 
   async function reverter() {
     setRevertendo(true);
@@ -120,12 +122,18 @@ export function DetalhesTarefaModal({
       <div className="space-y-5">
         <div>
           <p className="text-sm font-semibold text-ink-primary dark:text-white">
-            {isManual ? "Solicitação Interna" : tarefa.clienteNome || "Cliente não identificado"}
+            {isManual
+              ? "Solicitação Interna"
+              : isGargalo
+                ? `${tarefa.tipoPendencia}: ${clientes.length} pastas`
+                : tarefa.clienteNome || "Cliente não identificado"}
           </p>
           <p className="text-xs text-ink-muted">
             {isManual
               ? `Enviado por: ${tarefa.criadaPorNome || "—"}`
-              : tarefa.imobiliaria || "Imobiliária não informada"}
+              : isGargalo
+                ? tarefa.descricao
+                : tarefa.imobiliaria || "Imobiliária não informada"}
           </p>
         </div>
 
@@ -135,10 +143,14 @@ export function DetalhesTarefaModal({
               {tarefa.descricao}
             </p>
           </Secao>
+        ) : isGargalo ? (
+          <Secao titulo="Clientes envolvidos">
+            <ListaClientesEnvolvidos clientes={clientes} podeMarcar={false} />
+          </Secao>
         ) : (
           <>
             <Secao titulo="Trajeto da pasta">
-              <TrajetoPasta tarefa={tarefa} />
+              <TrajetoPasta dados={tarefa} />
             </Secao>
 
             <Secao titulo="Observação original">

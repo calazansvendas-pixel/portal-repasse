@@ -54,3 +54,16 @@ export function validarDescricaoEDestino(
   }
   return { descricao, atribuidoPara };
 }
+
+/**
+ * Lê a data limite do corpo da requisição: undefined = não informada;
+ * null = removida ("" ou null); string yyyy-MM-dd válida; senão, resposta 400.
+ */
+export function lerDataLimite(bruta: unknown): string | null | undefined | NextResponse {
+  if (bruta === undefined) return undefined;
+  if (bruta === null || bruta === "") return null;
+  if (typeof bruta !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(bruta) || Number.isNaN(Date.parse(bruta))) {
+    return NextResponse.json({ erro: "Data limite inválida." }, { status: 400 });
+  }
+  return bruta;
+}

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { destinatariosPermitidos } from "@/lib/auth/roles";
-import { criarTarefaManual, editarTarefaManual } from "@/lib/services/tarefasService";
+import { criarTarefaManual, editarTarefa } from "@/lib/services/tarefasService";
 import { QUADRO_LABEL } from "@/lib/types";
 import type { Quadro, Tarefa } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
@@ -18,6 +18,7 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
     tarefa && !permitidos.includes(tarefa.praca) ? [tarefa.praca, ...permitidos] : permitidos;
   const [descricao, setDescricao] = useState(tarefa?.descricao ?? "");
   const [destino, setDestino] = useState<Quadro | "">(tarefa?.praca ?? "");
+  const [dataLimite, setDataLimite] = useState(tarefa?.dataLimite ?? "");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -29,8 +30,8 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
     setErro(null);
     try {
       const token = await firebaseUser.getIdToken();
-      if (tarefa) await editarTarefaManual(tarefa.id, descricao, destino, token);
-      else await criarTarefaManual(descricao, destino, token);
+      if (tarefa) await editarTarefa(tarefa.id, { descricao, atribuidoPara: destino, dataLimite }, token);
+      else await criarTarefaManual(descricao, destino, dataLimite, token);
       onFechar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Falha ao criar a tarefa.");
@@ -68,6 +69,18 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            Data limite {editando ? "" : "(opcional — padrão: 3 dias úteis)"}
+          </span>
+          <input
+            type="date"
+            className="input-field"
+            value={dataLimite}
+            onChange={(e) => setDataLimite(e.target.value)}
+          />
         </label>
 
         {erro && <p className="text-xs text-status-danger">{erro}</p>}
