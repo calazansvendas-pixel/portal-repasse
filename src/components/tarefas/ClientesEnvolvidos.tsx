@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import type { ClienteEnvolvido } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
+import { HistoricoNotas, notasDe } from "./partesCard";
 
 /**
  * NÍVEL 2 da sanfona de gargalo: lista simples (checkbox + nome de cada cliente).
@@ -28,9 +29,10 @@ export function ListaClientesEnvolvidos({
     <>
       <ul className="divide-y divide-border rounded-md border border-border dark:divide-white/10 dark:border-white/10">
         {clientes.map((c) => (
-          // Linha inteira com pelo menos 48px de altura: a área do checkbox (44px de largura) e a do
-          // nome/chevron são alvos de toque separados, para o dedo não acionar um no lugar do outro.
-          <li key={c.numero} className="flex min-h-[48px] items-stretch">
+          <li key={c.numero}>
+          {/* Linha inteira com pelo menos 48px de altura: a área do checkbox (44px de largura) e a do
+              nome/chevron são alvos de toque separados, para o dedo não acionar um no lugar do outro. */}
+          <div className="flex min-h-[48px] items-stretch">
             <label
               className={cn(
                 "flex w-12 shrink-0 items-center justify-center",
@@ -62,6 +64,16 @@ export function ListaClientesEnvolvidos({
               </span>
               <ChevronRight size={20} className="shrink-0 text-ink-muted" />
             </button>
+          </div>
+          {/* Histórico imutável visível para clientes ativos e concluídos. */}
+          {notasDe(c).length > 0 && (
+            <div className="pb-2.5 pl-12 pr-3">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                O que foi feito
+              </p>
+              <HistoricoNotas notas={notasDe(c)} />
+            </div>
+          )}
           </li>
         ))}
       </ul>

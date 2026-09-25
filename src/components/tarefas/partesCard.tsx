@@ -133,9 +133,7 @@ export function HistoricoNotas({ notas }: { notas: NotaResolucao[] }) {
         {notas.map((n, i) => (
           <li key={i} className="border-l-2 border-brand-primary/30 pl-2.5">
             <p className="text-[11px] text-ink-muted">
-              {notas.length > 1 ? `Tentativa ${i + 1}` : "Tentativa"}
-              {n.data && <> · {formatDateTimeBR(n.data)}</>}
-              {n.autor && <> · {n.autor}</>}
+              {[n.data ? formatDateTimeBR(n.data) : null, n.autor].filter(Boolean).join(" - ")}
             </p>
             <p className="whitespace-pre-line break-words text-[13px] leading-relaxed text-ink-secondary sm:text-xs dark:text-white/70">
               {n.texto}
