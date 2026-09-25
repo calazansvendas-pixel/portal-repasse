@@ -22,6 +22,11 @@ export interface EspecTarefaLinha {
   descricao: string;
 }
 
+/** Etapa 0.01 (Inclusão da pasta) — a virada dela não depende das assistentes. */
+export function ehEtapaInclusao(etapa: string | null | undefined): boolean {
+  return (etapa ?? "").trim().startsWith("0.01");
+}
+
 function nomeCliente(linha: LinhaPlanilha): string {
   return linha.clienteNome.trim() || "cliente não identificado";
 }
@@ -96,13 +101,14 @@ export function gerarEspecOperacional(
   const imobiliaria = nomeImobiliaria(linha);
 
   // 1) Inércia inicial: nem começou a ser tratada e o prazo já estourou.
-  if (etapaNorm.startsWith("0.01") && slaStatus === "estourado") {
+  if (ehEtapaInclusao(etapaNorm) && slaStatus === "estourado") {
     return {
       chaveRegra: `${linha.numero}::inercia_inicial`,
       nivel: "operacional",
       quadro: praca,
       tipoPendencia: "Inércia inicial",
-      descricao: `Ligar para a ${imobiliaria} e auxiliar o corretor no preenchimento da pasta do cliente ${cliente}.`,
+      descricao:
+        "Ligar para o corretor para oferecer ajuda com a documentação ou verificar se ele apenas esqueceu de avançar a etapa no sistema.",
     };
   }
 

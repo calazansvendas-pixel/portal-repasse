@@ -4,6 +4,7 @@ import {
   calcularEscalonamento,
   detectarFiltroRuim,
   detectarGargalos,
+  ehEtapaInclusao,
   gerarEspecErroProcesso,
   gerarEspecOperacional,
   gerarEspecRiscoBancario,
@@ -151,7 +152,13 @@ export async function executarAuditoriaDiaria(params: {
 
     if (tarefaAtiva?.data.status === "pending_validation") {
       const tarefaRef = db.collection("tarefas").doc(tarefaAtiva.id);
-      const sucesso = dados.avancoDetectado && !dados.condicaoAtiva;
+      // Exceção de confiança: a virada da etapa 0.01 não depende das
+      // assistentes, então o check delas vale mesmo se a etapa não avançou —
+      // nunca gera Falha de Auditoria para tarefas operacionais da 0.01.
+      const confiancaEtapaInclusao =
+        dados.nivel === "operacional" &&
+        ehEtapaInclusao(tarefaAtiva.data.etapaNoMomentoResolucao ?? tarefaAtiva.data.etapa);
+      const sucesso = confiancaEtapaInclusao || (dados.avancoDetectado && !dados.condicaoAtiva);
 
       if (sucesso) {
         update(tarefaRef, {
