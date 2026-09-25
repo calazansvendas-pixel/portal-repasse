@@ -53,6 +53,10 @@ export interface Registro {
   // não gera mais tarefas nem entra nos quadros ativos.
   arquivada?: boolean;
   arquivadaEm?: string | null;
+  // Régua de follow-up da etapa 0.04: conclusões já dadas e quando a próxima
+  // cobrança fica liberada (null após a 4ª conclusão: ciclo encerrado).
+  ciclosFollowUp004?: number;
+  dataProximaCobranca?: string | null;
 }
 
 /** Snapshot bruto de uma pasta em uma importação específica (histórico/auditoria). */
@@ -151,6 +155,8 @@ export interface Tarefa {
   clientesEnvolvidos?: ClienteEnvolvido[];
   // Prazo para a ação (yyyy-MM-dd), definido na criação; editável pela Gerência.
   dataLimite?: string | null;
+  // Etapa 0.04: em qual ciclo da régua de follow-up (1 a 4) esta tarefa está.
+  cicloFollowUp?: number | null;
   // A Gerência reescreveu o texto: as importações seguintes não o sobrescrevem.
   descricaoEditada?: boolean; // "O que foi feito?" — anotação de quem concluiu
   etapaNoMomentoResolucao?: string | null;

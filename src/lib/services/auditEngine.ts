@@ -1,13 +1,18 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { LinhaPlanilha } from "./parseSheet";
 import {
+  CICLOS_FOLLOW_UP,
   calcularEscalonamento,
   detectarFiltroRuim,
   detectarGargaloCredito,
   dentroDoCooldownInclusao,
   detectarGargalos,
+  calcularProximaCobranca,
+  ehEtapaCredito,
+  ehEtapaFollowUp,
   ehEtapaInclusao,
   ehFimDeEsteira,
+  gerarEspecFollowUp,
   gerarEspecErroProcesso,
   gerarEspecOperacional,
   gerarEspecRiscoBancario,
@@ -96,6 +101,7 @@ interface DadosParaReconciliar {
   novoPassoHistorico?: EtapaHistorico;
   // Tarefas agregadas: as pastas do grupo, cada uma com o próprio check.
   clientesEnvolvidos?: ClienteEnvolvido[];
+  cicloFollowUp?: number; // etapa 0.04: ciclo (1 a 4) da régua
   cidade: string;
   quadro: Quadro;
   imobiliaria: string;
@@ -214,9 +220,12 @@ export async function executarAuditoriaDiaria(params: {
       // Mesma confiança no clique para o gargalo de Crédito (0.99): quem aguarda
       // é o setor de Crédito, não o Coordenador — a baixa vale mesmo com as pastas na 0.99.
       const confiancaCredito = dados.chaveRegra.startsWith("AGREGADO::gargalo_credito::");
+      // E na 0.04 (follow-up): a virada também não depende da equipe interna.
+      const ehFollowUp = dados.chaveRegra.endsWith("::follow_up_004");
       const sucesso =
         confiancaEtapaInclusao ||
         confiancaCredito ||
+        ehFollowUp ||
         dados.fimDeEsteira === true ||
         (dados.avancoDetectado && !dados.condicaoAtiva);
 
@@ -227,6 +236,14 @@ export async function executarAuditoriaDiaria(params: {
           historicoEtapas: acumularHistorico(tarefaAtiva.data.historicoEtapas, dados.novoPassoHistorico),
         });
         resumo.tarefasValidadas++;
+        if (ehFollowUp && dados.numero) {
+          // Régua: registra a conclusão na pasta e libera a próxima cobrança (10/20/30 dias após a baixa).
+          const ciclos = (registrosAntigos.get(dados.numero)?.ciclosFollowUp004 ?? 0) + 1;
+          set(db.collection("registros").doc(dados.numero), {
+            ciclosFollowUp004: ciclos,
+            dataProximaCobranca: calcularProximaCobranca(importacaoId, ciclos),
+          });
+        }
       } else {
         // "Fake done": marcada como resolvida, mas o gatilho continua valendo.
         update(tarefaRef, {
@@ -335,6 +352,7 @@ export async function executarAuditoriaDiaria(params: {
         }),
         historicoEtapas: acumularHistorico(undefined, dados.novoPassoHistorico),
         clientesEnvolvidos: dados.clientesEnvolvidos ?? [],
+        cicloFollowUp: dados.cicloFollowUp ?? null,
         dataLimite: calcularDataLimiteAutomatica({
           base: importacaoId,
           slaStatus: dados.slaStatus,
@@ -427,8 +445,46 @@ export async function executarAuditoriaDiaria(params: {
       continue;
     }
 
-    // Nível Operacional (Laiza/Eliane/Catarina) — só existe se a cidade mapear para uma praça.
-    if (praca) {
+    // 0.04 e 0.99 têm regra própria: tarefas operacionais de outras regras que ainda
+    // estejam abertas nessa pasta são encerradas (a pasta já avançou de etapa).
+    if (ehEtapaFollowUp(linha.etapa) || ehEtapaCredito(linha.etapa)) {
+      const chaveMantida = `${linha.numero}::follow_up_004`;
+      for (const [chave, t] of tarefasPorChave) {
+        if (t.data.numero !== linha.numero || t.data.nivel !== "operacional" || chave === chaveMantida) continue;
+        reconciliarTarefa({
+          ...camposComuns,
+          chaveRegra: chave,
+          nivel: "operacional",
+          quadro: t.data.praca,
+          tipoPendencia: t.data.tipoPendencia,
+          descricao: t.data.descricao,
+          condicaoAtiva: false,
+        });
+      }
+    }
+
+    // Etapa 0.04 — régua de follow-up: só nasce um novo ciclo quando a data de
+    // próxima cobrança chega; após a 4ª conclusão o ciclo se encerra.
+    if (praca && ehEtapaFollowUp(linha.etapa)) {
+      const ciclosFeitos = antigo?.ciclosFollowUp004 ?? 0;
+      const proxima = antigo?.dataProximaCobranca ?? null;
+      const liberado = !proxima || importacaoId >= proxima;
+      const chave = `${linha.numero}::follow_up_004`;
+      const emAndamento = tarefasPorChave.has(chave);
+      const encerrado = ciclosFeitos >= CICLOS_FOLLOW_UP;
+      const spec = gerarEspecFollowUp(linha, praca, ciclosFeitos + 1);
+      reconciliarTarefa({
+        ...camposComuns,
+        chaveRegra: chave,
+        nivel: "operacional",
+        quadro: praca,
+        tipoPendencia: spec.tipoPendencia,
+        descricao: spec.descricao,
+        cicloFollowUp: ciclosFeitos + 1,
+        condicaoAtiva: !encerrado && (emAndamento || liberado),
+      });
+      // Sem tarefa operacional comum para esta pasta enquanto ela estiver na 0.04.
+    } else if (praca && !ehEtapaCredito(linha.etapa)) {
       const spec = gerarEspecOperacional(linha, praca, slaStatus);
       reconciliarTarefa({
         ...camposComuns,

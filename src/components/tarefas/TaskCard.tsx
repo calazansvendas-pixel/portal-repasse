@@ -224,6 +224,11 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary dark:border-white/15 dark:text-white/60">
           {tarefa.tipoPendencia}
         </span>
+        {tarefa.cicloFollowUp && (
+          <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 text-[11px] font-semibold text-brand-primary dark:bg-white/10 dark:text-white/80">
+            Ciclo {tarefa.cicloFollowUp} de 4
+          </span>
+        )}
       </div>
 
       {/* Rodapé: trajeto da pasta (stepper vertical) ou pastas relacionadas em agregados */}

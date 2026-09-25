@@ -54,3 +54,8 @@ export function calcularDataLimiteAutomatica(params: {
   if (prazoEtapa && prazoEtapa >= base && prazoEtapa < porSla) return prazoEtapa;
   return porSla;
 }
+
+/** Soma dias corridos a uma data yyyy-MM-dd. */
+export function adicionarDias(iso: string, dias: number): string {
+  return paraISO(new Date(paraUTC(iso).getTime() + dias * DIA_MS));
+}

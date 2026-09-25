@@ -3,6 +3,7 @@ import type { LinhaPlanilha } from "./parseSheet";
 import type { NivelTarefa, Quadro, QuadroEscalonamento, SlaStatus } from "@/lib/types";
 import { ASSISTENTE_LABEL } from "@/lib/types";
 import { SLA_LABEL } from "@/lib/utils/sla";
+import { adicionarDias } from "@/lib/utils/prazos";
 
 /**
  * Motor de regras hierárquico (Daily Delta): cada nível da operação recebe
@@ -37,6 +38,34 @@ export function dentroDoCooldownInclusao(importacaoId: string, resolvidoEmISO: s
   });
   const dias = (Date.parse(importacaoId) - Date.parse(dataConclusao)) / 86_400_000;
   return dias < DIAS_COOLDOWN_INCLUSAO;
+}
+
+/**
+ * Etapa 0.04 — régua de follow-up: até 4 ciclos por pasta. A cada conclusão a
+ * próxima cobrança é liberada 10, 20 e 30 dias depois da baixa; após a 4ª, o ciclo encerra.
+ */
+export const CICLOS_FOLLOW_UP = 4;
+const DIAS_REGUA_FOLLOW_UP = [10, 20, 30];
+
+export function ehEtapaFollowUp(etapa: string | null | undefined): boolean {
+  return (etapa ?? "").trim().startsWith("0.04");
+}
+
+/** Data (yyyy-MM-dd) em que o próximo follow-up é liberado após a N-ésima conclusão; null = ciclo encerrado. */
+export function calcularProximaCobranca(dataDaBaixa: string, ciclosConcluidos: number): string | null {
+  if (ciclosConcluidos >= CICLOS_FOLLOW_UP) return null;
+  return adicionarDias(dataDaBaixa, DIAS_REGUA_FOLLOW_UP[ciclosConcluidos - 1]);
+}
+
+/** Tarefa de acompanhamento da 0.04 para a Assistente da praça, com o ciclo em que o cliente está. */
+export function gerarEspecFollowUp(linha: LinhaPlanilha, praca: Quadro, ciclo: number): EspecTarefaLinha {
+  return {
+    chaveRegra: `${linha.numero}::follow_up_004`,
+    nivel: "operacional",
+    quadro: praca,
+    tipoPendencia: "Follow-up 0.04",
+    descricao: `Contato de acompanhamento [Ciclo ${ciclo}]: Informar o corretor sobre as pendências do cliente ${nomeCliente(linha)} na imobiliária ${nomeImobiliaria(linha)} e oferecer suporte.`,
+  };
 }
 
 /** Etapa 0.99 (espera do Crédito) — não gera tarefa individual; vira gargalo agregado do Coordenador. */
