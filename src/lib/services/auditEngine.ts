@@ -82,6 +82,7 @@ function montarClientesEnvolvidos(
       ),
       concluido: ant?.concluido ?? false,
       ...(ant?.notaResolucao ? { notaResolucao: ant.notaResolucao } : {}),
+      ...(ant?.historicoNotas?.length ? { historicoNotas: ant.historicoNotas } : {}),
     };
   };
 

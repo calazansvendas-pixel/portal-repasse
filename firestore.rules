@@ -86,8 +86,13 @@ service cloud.firestore {
         (souDonoDoQuadro(resource.data.praca) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(
             ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao',
-             'observacaoNoMomentoResolucao', 'notaResolucao', 'clientesEnvolvidos']
-          )) ||
+             'observacaoNoMomentoResolucao', 'notaResolucao', 'historicoNotas', 'clientesEnvolvidos']
+          ) &&
+          // Concluir (entrar em pending_validation) exige a nota "O que foi feito".
+          (request.resource.data.status != 'pending_validation' ||
+            resource.data.status == 'pending_validation' ||
+            (request.resource.data.notaResolucao is string &&
+              request.resource.data.notaResolucao.size() > 0))) ||
         (papelGestor() &&
           resource.data.praca in ['laiza', 'eliane', 'catarina'] &&
           resource.data.status in ['pending_validation', 'validated_done'] &&

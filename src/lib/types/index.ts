@@ -98,6 +98,13 @@ export type TarefaStatus =
   | "audit_failed";
 
 /** Pasta dentro de uma tarefa agregada (gargalo): vira uma sub-tarefa com check próprio. */
+/** Uma tentativa de resolução ("O que foi feito"). O histórico é imutável: só recebe novas entradas. */
+export interface NotaResolucao {
+  texto: string;
+  data: string; // ISO date-time
+  autor?: string | null;
+}
+
 export interface ClienteEnvolvido {
   numero: string;
   clienteNome: string;
@@ -108,7 +115,8 @@ export interface ClienteEnvolvido {
   historicoEtapas: EtapaHistorico[];
   concluido: boolean;
   // "O que foi feito" deste cliente: sobrevive ao "Desmarcar" para a equipe ler a tentativa anterior.
-  notaResolucao?: string | null;
+  notaResolucao?: string | null; // última nota (o histórico completo está em historicoNotas)
+  historicoNotas?: NotaResolucao[];
 }
 
 /** Um "salto" de etapa no trajeto da pasta — um item do Stepper/Timeline do card. */
@@ -157,7 +165,8 @@ export interface Tarefa {
   // Tarefa avulsa (origem "manual"): quem delegou.
   criadaPor?: string | null; // uid
   criadaPorNome?: string | null;
-  notaResolucao?: string | null;
+  notaResolucao?: string | null; // última nota (o histórico completo está em historicoNotas)
+  historicoNotas?: NotaResolucao[];
   // Tarefas agregadas: as pastas do gargalo, cada uma com o próprio check.
   clientesEnvolvidos?: ClienteEnvolvido[];
   // Prazo para a ação (yyyy-MM-dd), definido na criação; editável pela Gerência.

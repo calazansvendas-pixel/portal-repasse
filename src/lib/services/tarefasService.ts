@@ -1,48 +1,83 @@
 "use client";
 
-import { doc, runTransaction, updateDoc } from "firebase/firestore";
+import { arrayUnion, doc, runTransaction, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import type { ClienteEnvolvido, Quadro, Tarefa } from "@/lib/types";
+import type { ClienteEnvolvido, NotaResolucao, Quadro, Tarefa } from "@/lib/types";
 
-/** Nota automática do God Mode: não foi escrita pelo colaborador, então não sobrevive a uma reversão. */
+/** Texto do registro automático do God Mode (não é uma justificativa escrita pelo colaborador). */
 const NOTA_GERENCIA = "Marcada como feita pela Gerência.";
 
+function exigirNota(nota: string | undefined): string {
+  const texto = (nota ?? "").trim();
+  if (!texto) throw new Error("Descreva o que foi feito para concluir.");
+  return texto;
+}
+
+/** Notas antigas (anteriores ao histórico) viram a primeira entrada, para nunca se perderem. */
+function semente(historico: NotaResolucao[] | undefined, notaLegada: string | null | undefined, data: string | null | undefined) {
+  return !historico?.length && notaLegada ? [{ texto: notaLegada, data: data ?? "", autor: null }] : [];
+}
+
 /**
- * Assistente marca a tarefa como resolvida, registrando a nota de conclusão
- * ("O que foi feito?"). Isso NÃO fecha a tarefa definitivamente: ela vai para
- * "pending_validation" até a próxima importação de planilha confirmar (ou não)
- * o avanço da etapa — ver auditEngine.ts.
+ * Assistente marca a tarefa como resolvida. A nota "O que foi feito" é OBRIGATÓRIA e entra no
+ * histórico de tentativas (imutável: cada nova tentativa acumula, nada é sobrescrito). Isso NÃO
+ * fecha a tarefa definitivamente: ela vai para "pending_validation" até a próxima importação de
+ * planilha confirmar (ou não) o avanço da etapa — ver auditEngine.ts.
  */
-export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: string) {
+export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: string, autor?: string | null) {
+  const texto = exigirNota(nota);
+  const agora = new Date().toISOString();
   await updateDoc(doc(db, "tarefas", tarefa.id), {
     status: "pending_validation",
     resolvidoPor: uid,
-    resolvidoEm: new Date().toISOString(),
+    resolvidoEm: agora,
     etapaNoMomentoResolucao: tarefa.etapa,
     observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
-    notaResolucao: nota.trim() || null,
+    notaResolucao: texto,
+    historicoNotas: arrayUnion(
+      ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
+      { texto, data: agora, autor: autor ?? null }
+    ),
   });
 }
 
 /**
  * Marca/desmarca UM cliente dentro de uma tarefa agregada (gargalo). A tarefa
  * mãe só entra em "pending_validation" quando todos os clientes estão
- * marcados; desmarcar qualquer um a devolve para "pendente". A nota (opcional)
- * é gravada no cliente (e na tarefa, quando este clique a completa). Sem `nota` (check rápido da
- * lista) a nota já gravada do cliente é mantida; desmarcar NUNCA apaga a nota.
+ * marcados; desmarcar qualquer um a devolve para "pendente".
+ * Concluir com `nota` (modal do cliente) exige texto e ACUMULA a tentativa no histórico do cliente.
+ * Sem `nota` (check rápido da lista) nada do histórico muda; desmarcar NUNCA apaga notas.
  */
-export async function alternarClienteEnvolvido(tarefaId: string, numero: string, uid: string, nota?: string) {
+export async function alternarClienteEnvolvido(
+  tarefaId: string,
+  numero: string,
+  uid: string,
+  nota?: string,
+  autor?: string | null
+) {
   const ref = doc(db, "tarefas", tarefaId);
+  const texto = nota === undefined ? undefined : exigirNota(nota);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const tarefa = snap.data() as Tarefa | undefined;
     if (!tarefa) throw new Error("Tarefa não encontrada.");
 
+    const agora = new Date().toISOString();
+    let notaDoClique: string | null = null;
     const clientes = (tarefa.clientesEnvolvidos ?? []).map((c) => {
       if (c.numero !== numero) return c;
       const concluido = !c.concluido;
-      const notaCliente = concluido && nota !== undefined ? nota.trim() || null : c.notaResolucao ?? null;
-      return { ...c, concluido, notaResolucao: notaCliente };
+      if (!concluido || texto === undefined) return { ...c, concluido };
+      notaDoClique = texto;
+      return {
+        ...c,
+        concluido,
+        notaResolucao: texto,
+        historicoNotas: [
+          ...(c.historicoNotas ?? semente(undefined, c.notaResolucao, null)),
+          { texto, data: agora, autor: autor ?? null },
+        ],
+      };
     });
     const todosConcluidos = clientes.length > 0 && clientes.every((c) => c.concluido);
 
@@ -51,31 +86,29 @@ export async function alternarClienteEnvolvido(tarefaId: string, numero: string,
       Object.assign(mudanca, {
         status: "pending_validation",
         resolvidoPor: uid,
-        resolvidoEm: new Date().toISOString(),
+        resolvidoEm: agora,
         etapaNoMomentoResolucao: tarefa.etapa,
         observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
-        notaResolucao: nota?.trim() || null,
+        notaResolucao: notaDoClique ?? tarefa.notaResolucao ?? null,
       });
     } else if (!todosConcluidos && tarefa.status === "pending_validation") {
-      Object.assign(mudanca, camposDeTarefaAtiva(tarefa));
+      Object.assign(mudanca, camposDeTarefaAtiva());
     }
     tx.update(ref, mudanca);
   });
 }
 
 /**
- * Volta a tarefa para "pendente" mexendo só no estado da conclusão. A nota de resolução
- * ("O que foi feito") é PRESERVADA: quem escreveu precisa reler o que tentou para entender
- * por que a tarefa voltou. Só a nota automática do God Mode é descartada.
+ * Volta a tarefa para "pendente" mexendo só no estado da conclusão. As notas (última nota e
+ * histórico de tentativas) nunca são tocadas: quem escreveu precisa reler o que tentou.
  */
-function camposDeTarefaAtiva(tarefa: Pick<Tarefa, "notaResolucao">) {
+function camposDeTarefaAtiva() {
   return {
     status: "pendente",
     resolvidoPor: null,
     resolvidoEm: null,
     etapaNoMomentoResolucao: null,
     observacaoNoMomentoResolucao: null,
-    ...(tarefa.notaResolucao === NOTA_GERENCIA ? { notaResolucao: null } : {}),
   };
 }
 
@@ -88,22 +121,27 @@ function comClientes(tarefa: Tarefa, concluido: boolean): { clientesEnvolvidos?:
 /**
  * Devolve a tarefa para o quadro do responsável, pendente e expandida
  * (auditoria humana, clique por engano ou God Mode). Vale para
- * "pending_validation" e "validated_done"; limpa a marcação e a nota e, nas
- * agregadas, desmarca todos os clientes.
+ * "pending_validation" e "validated_done"; limpa só a marcação e, nas
+ * agregadas, desmarca todos os clientes. Notas e histórico permanecem.
  */
 export async function reverterTarefa(tarefa: Tarefa) {
-  await updateDoc(doc(db, "tarefas", tarefa.id), { ...camposDeTarefaAtiva(tarefa), ...comClientes(tarefa, false) });
+  await updateDoc(doc(db, "tarefas", tarefa.id), { ...camposDeTarefaAtiva(), ...comClientes(tarefa, false) });
 }
 
 /** God Mode (Gerência): marca a tarefa como feita, com todos os clientes concluídos nas agregadas. */
-export async function marcarFeitaPelaGerencia(tarefa: Tarefa, uid: string) {
+export async function marcarFeitaPelaGerencia(tarefa: Tarefa, uid: string, autor?: string | null) {
+  const agora = new Date().toISOString();
   await updateDoc(doc(db, "tarefas", tarefa.id), {
     status: "pending_validation",
     resolvidoPor: uid,
-    resolvidoEm: new Date().toISOString(),
+    resolvidoEm: agora,
     etapaNoMomentoResolucao: tarefa.etapa,
     observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
     notaResolucao: NOTA_GERENCIA,
+    historicoNotas: arrayUnion(
+      ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
+      { texto: NOTA_GERENCIA, data: agora, autor: autor ?? null }
+    ),
     ...comClientes(tarefa, true),
   });
 }

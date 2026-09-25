@@ -6,7 +6,7 @@ import type { ClienteEnvolvido, Tarefa } from "@/lib/types";
 import { formatDateTimeBR } from "@/lib/utils/dates";
 import { Modal } from "@/components/ui/Modal";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
-import { ObservacaoChecklist, TrajetoPasta } from "./partesCard";
+import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, notasDe } from "./partesCard";
 
 export function NotaConclusaoModal({
   onConfirmar,
@@ -17,31 +17,38 @@ export function NotaConclusaoModal({
 }) {
   const [nota, setNota] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   async function confirmar() {
+    if (!nota.trim()) return; // a nota é obrigatória
     setEnviando(true);
+    setErro(null);
     try {
       await onConfirmar(nota);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível concluir. Tente novamente.");
     } finally {
       setEnviando(false);
     }
   }
 
   return (
-    <Modal titulo="O que foi feito? (Opcional)" onClose={onCancelar}>
+    <Modal titulo="O que foi feito?" onClose={onCancelar}>
       <textarea
         autoFocus
         rows={4}
         value={nota}
         onChange={(e) => setNota(e.target.value)}
-        placeholder="Ex.: Liguei para o corretor, ele vai enviar o RG até amanhã."
+        placeholder="Obrigatório. Ex.: Liguei para o corretor, ele vai enviar o RG até amanhã."
+        aria-required="true"
         className="w-full resize-none rounded-md border border-border bg-surface p-3 text-base sm:text-sm text-ink-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 dark:border-white/15 dark:bg-[#1B1E17] dark:text-white"
       />
+      {erro && <p className="mt-2 text-xs text-status-danger">{erro}</p>}
       <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onCancelar} disabled={enviando}>
           Cancelar
         </button>
-        <button type="button" className="btn-primary h-11 sm:h-10" onClick={confirmar} disabled={enviando}>
+        <button type="button" className="btn-primary h-11 sm:h-10" onClick={confirmar} disabled={enviando || !nota.trim()}>
           Confirmar Conclusão
         </button>
       </div>
@@ -111,6 +118,26 @@ export function DetalhesTarefaModal({
   const clientes = tarefa.clientesEnvolvidos ?? [];
   const isGargalo = tarefa.origem === "agregado" && clientes.length > 0;
 
+  // Histórico imutável de tentativas: no gargalo, agrupado por cliente (+ registros do God Mode na tarefa mãe).
+  const notasDaTarefa = notasDe(tarefa, !isGargalo);
+  const clientesComNotas = clientes.filter((c) => notasDe(c).length > 0);
+  const tarefasNotas =
+    notasDaTarefa.length === 0 && clientesComNotas.length === 0 ? (
+      <p className="text-xs text-ink-muted">Nenhuma nota registrada.</p>
+    ) : (
+      <div className="space-y-3">
+        {clientesComNotas.map((c) => (
+          <div key={c.numero}>
+            <p className="mb-1 break-words text-xs font-semibold text-ink-primary dark:text-white">
+              {c.clienteNome || c.numero}
+            </p>
+            <HistoricoNotas notas={notasDe(c)} />
+          </div>
+        ))}
+        {notasDaTarefa.length > 0 && <HistoricoNotas notas={notasDaTarefa} />}
+      </div>
+    );
+
   async function reverter() {
     setRevertendo(true);
     try {
@@ -167,24 +194,7 @@ export function DetalhesTarefaModal({
         )}
 
         <Secao titulo="O que foi feito">
-          {isGargalo && clientes.some((c) => c.notaResolucao) ? (
-            <ul className="space-y-2">
-              {clientes
-                .filter((c) => c.notaResolucao)
-                .map((c) => (
-                  <li key={c.numero} className="text-xs leading-relaxed text-ink-secondary dark:text-white/70">
-                    <span className="font-semibold text-ink-primary dark:text-white">{c.clienteNome || c.numero}:</span>{" "}
-                    <span className="whitespace-pre-line break-words">{c.notaResolucao}</span>
-                  </li>
-                ))}
-            </ul>
-          ) : tarefa.notaResolucao ? (
-            <p className="whitespace-pre-line break-words text-xs leading-relaxed text-ink-secondary dark:text-white/70">
-              {tarefa.notaResolucao}
-            </p>
-          ) : (
-            <p className="text-xs text-ink-muted">Nenhuma nota registrada.</p>
-          )}
+          {tarefasNotas}
           {tarefa.resolvidoEm && (
             <p className="mt-1 text-[11px] text-ink-muted">Concluída em {formatDateTimeBR(tarefa.resolvidoEm)}</p>
           )}

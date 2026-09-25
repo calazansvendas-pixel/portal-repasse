@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { EtapaHistorico } from "@/lib/types";
-import { formatDateBR } from "@/lib/utils/dates";
+import type { EtapaHistorico, NotaResolucao } from "@/lib/types";
+import { formatDateBR, formatDateTimeBR } from "@/lib/utils/dates";
 import { fatiarObservacao } from "@/lib/utils/texto";
 import { cn } from "@/lib/utils/cn";
 
@@ -93,5 +93,45 @@ export function TrajetoPasta({ dados }: { dados: DadosTrajeto }) {
       </p>
     )}
     </>
+  );
+}
+
+interface FonteDeNotas {
+  historicoNotas?: NotaResolucao[] | null;
+  notaResolucao?: string | null;
+  resolvidoEm?: string | null;
+}
+
+/** Histórico de tentativas; notas antigas (sem histórico) aparecem como uma única entrada. */
+export function notasDe(fonte: FonteDeNotas, incluirLegada = true): NotaResolucao[] {
+  if (fonte.historicoNotas?.length) return fonte.historicoNotas;
+  return incluirLegada && fonte.notaResolucao ? [{ texto: fonte.notaResolucao, data: fonte.resolvidoEm ?? "" }] : [];
+}
+
+/** Linha do tempo das tentativas ("O que foi feito"): mais antiga em cima, data/hora e autor em cada uma. */
+export function HistoricoNotas({ notas }: { notas: NotaResolucao[] }) {
+  const rolagem = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = rolagem.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [notas.length]);
+
+  return (
+    <div ref={rolagem} className="max-h-48 overflow-y-auto overscroll-contain scroll-smooth pr-1">
+      <ol className="space-y-2.5">
+        {notas.map((n, i) => (
+          <li key={i} className="border-l-2 border-brand-primary/30 pl-2.5">
+            <p className="text-[11px] text-ink-muted">
+              {notas.length > 1 ? `Tentativa ${i + 1}` : "Tentativa"}
+              {n.data && <> · {formatDateTimeBR(n.data)}</>}
+              {n.autor && <> · {n.autor}</>}
+            </p>
+            <p className="whitespace-pre-line break-words text-[13px] leading-relaxed text-ink-secondary sm:text-xs dark:text-white/70">
+              {n.texto}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

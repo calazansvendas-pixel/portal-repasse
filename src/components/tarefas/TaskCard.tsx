@@ -22,7 +22,7 @@ import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from 
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
 import { NovaTarefaModal } from "./NovaTarefaModal";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
-import { ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha } from "./partesCard";
+import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha, notasDe } from "./partesCard";
 
 const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
 
@@ -74,6 +74,8 @@ export function TaskCard({
       (["coordenador", "analista"].includes(profile.role) && PRACAS_ASSISTENTES.includes(tarefa.praca)));
 
   const tituloAgregado = `${tarefa.tipoPendencia.startsWith("Gargalo") ? "Gargalo detectado" : tarefa.tipoPendencia}: ${totalPastas} pastas`;
+  // Tarefa agregada: as notas ficam em cada cliente (só entradas do God Mode moram na tarefa mãe).
+  const notasCard = notasDe(tarefa, !isAgregado);
   const dataLimiteVencida = !!tarefa.dataLimite && tarefa.dataLimite < hojeISO();
 
   const itensMenu: ItemMenu[] = [];
@@ -92,7 +94,7 @@ export function TaskCard({
     itensMenu.push({
       rotulo: "Marcar como feita",
       icone: CheckCircle2,
-      onClick: () => firebaseUser && marcarFeitaPelaGerencia(tarefa, firebaseUser.uid),
+      onClick: () => firebaseUser && marcarFeitaPelaGerencia(tarefa, firebaseUser.uid, profile?.nome),
     });
   } else if (ehGerencia && aguardandoValidacao) {
     itensMenu.push({ rotulo: "Voltar para ativa", icone: Undo2, onClick: () => reverterTarefa(tarefa) });
@@ -101,7 +103,7 @@ export function TaskCard({
 
   async function confirmarConclusao(nota: string) {
     if (!firebaseUser) return;
-    await marcarTarefaResolvida(tarefa, firebaseUser.uid, nota);
+    await marcarTarefaResolvida(tarefa, firebaseUser.uid, nota, profile?.nome);
     setModal(null);
   }
 
@@ -109,7 +111,7 @@ export function TaskCard({
   // desmarcar só volta o check — a nota gravada fica.
   async function marcarClienteDoGargalo(nota: string) {
     if (!firebaseUser || !gargalo) return;
-    await alternarClienteEnvolvido(gargalo.pai.id, gargalo.numero, firebaseUser.uid, nota);
+    await alternarClienteEnvolvido(gargalo.pai.id, gargalo.numero, firebaseUser.uid, nota, profile?.nome);
     setModal(null);
   }
 
@@ -129,7 +131,7 @@ export function TaskCard({
 
   async function confirmarClientePendente(nota: string) {
     if (!firebaseUser || !clientePendente) return;
-    await alternarClienteEnvolvido(tarefa.id, clientePendente, firebaseUser.uid, nota);
+    await alternarClienteEnvolvido(tarefa.id, clientePendente, firebaseUser.uid, nota, profile?.nome);
     setClientePendente(null);
   }
 
@@ -275,15 +277,13 @@ export function TaskCard({
         </div>
       )}
 
-      {/* Reversão/falha de auditoria: a nota que a pessoa escreveu ao concluir continua visível */}
-      {tarefa.notaResolucao && (
+      {/* Histórico imutável de tentativas: continua visível depois de reverter ou de falha de auditoria */}
+      {notasCard.length > 0 && (
         <div className="rounded-md border border-border bg-surface-secondary/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-            {clienteDoGargalo?.concluido ? "O que foi feito" : "O que foi feito (tentativa anterior)"}
+            O que foi feito
           </p>
-          <p className="max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line break-words text-[13px] leading-relaxed text-ink-secondary sm:text-xs dark:text-white/70">
-            {tarefa.notaResolucao}
-          </p>
+          <HistoricoNotas notas={notasCard} />
         </div>
       )}
 
@@ -410,7 +410,10 @@ function CardClienteGargalo({
     historicoEtapas: historico,
     slaStatus: historico[historico.length - 1]?.status ?? pai.slaStatus,
     clientesEnvolvidos: undefined,
-    notaResolucao: cliente.notaResolucao ?? null, // a nota é do cliente, não a da tarefa mãe
+    // as notas são do cliente, não as da tarefa mãe
+    notaResolucao: cliente.notaResolucao ?? null,
+    historicoNotas: cliente.historicoNotas ?? [],
+    resolvidoEm: null,
     cicloFollowUp: null,
     // O cartão do cliente fica sempre "aberto"; o estado dele aparece no rodapé (check do cliente).
     status: pai.status === "audit_failed" ? "audit_failed" : "pendente",
