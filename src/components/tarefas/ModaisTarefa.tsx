@@ -33,7 +33,15 @@ export function NotaConclusaoModal({
   }
 
   return (
-    <Modal titulo="O que foi feito?" onClose={onCancelar}>
+    <Modal
+      titulo={
+        <>
+          O que foi feito? <span className="text-status-danger">*</span>
+        </>
+      }
+      tituloAriaLabel="O que foi feito? (obrigatório)"
+      onClose={onCancelar}
+    >
       <textarea
         autoFocus
         rows={4}

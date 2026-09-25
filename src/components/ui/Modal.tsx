@@ -12,14 +12,17 @@ export function Modal({
   semMoldura = false,
   rodape,
   children,
+  tituloAriaLabel,
 }: {
-  titulo: string;
+  titulo: string | ReactNode;
   onClose: () => void;
   // Conteúdo que já é um cartão (ex: TaskCard): sem moldura nem título próprios.
   semMoldura?: boolean;
   // Só com `semMoldura`: barra fixa abaixo da área rolável (ex: botão Fechar sempre à mão no celular).
   rodape?: ReactNode;
   children: ReactNode;
+  // Para ReactNode no titulo, fornecer a versão em texto para aria-label.
+  tituloAriaLabel?: string;
 }) {
   const id = useRef(Symbol("modal"));
   // O onClose costuma ser uma arrow nova a cada render: guardá-lo em ref evita re-registrar o
@@ -57,7 +60,7 @@ export function Modal({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={titulo}
+          aria-label={tituloAriaLabel ?? (typeof titulo === "string" ? titulo : "")}
           className={`flex w-full max-w-lg flex-col gap-3 ${alturaMaxima}`}
           onClick={(e) => e.stopPropagation()}
         >
@@ -70,7 +73,7 @@ export function Modal({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={titulo}
+          aria-label={tituloAriaLabel ?? (typeof titulo === "string" ? titulo : "")}
           className={`surface-card w-full max-w-lg overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6 ${alturaMaxima}`}
           onClick={(e) => e.stopPropagation()}
         >
