@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { Assistente, Quadro, QuadroEscalonamento, Tarefa } from "@/lib/types";
+import type { Assistente, Quadro, QuadroEscalonamento, Role, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 import { TaskCard } from "./TaskCard";
@@ -14,22 +14,29 @@ interface Coluna {
 }
 
 export function TaskBoard({
+  role,
   pracas,
   tarefas,
   loading,
   meusQuadros = [],
   quadrosEscalonamento = [],
 }: {
+  role: Role;
   pracas: Assistente[];
   tarefas: Tarefa[];
   loading: boolean;
   /** Quadros em que o usuário atual pode marcar/desmarcar o checkbox. */
   meusQuadros?: Quadro[];
-  /** Colunas extras de Coordenador/Analista: tarefas nativas + escalonadas. */
+  /** Quadros de Coordenador/Analista visíveis (tarefas nativas + escalonadas). */
   quadrosEscalonamento?: QuadroEscalonamento[];
 }) {
-  const { colunasTop, colunaCoordenador } = useMemo(() => {
-    const regionais: Coluna[] = pracas.map((praca) => ({
+  // Ordem hierárquica de cima para baixo:
+  //  1) quadro do próprio usuário (Coordenador ou Analista; a Gerência não tem
+  //     quadro próprio, então o do Coordenador ocupa o topo para ela);
+  //  2) quadro da Analista, se não for a própria logada (evita duplicar);
+  //  3) grid das assistentes.
+  const { topo, meio, assistentes } = useMemo(() => {
+    const assistentes: Coluna[] = pracas.map((praca) => ({
       chave: praca as Quadro,
       titulo: ASSISTENTE_LABEL[praca],
       tarefas: ordenarPorSla(tarefas.filter((t) => t.praca === praca)),
@@ -45,18 +52,15 @@ export function TaskBoard({
       escalonamento: true,
     }));
 
-    // Andressa (Analista) sobe para a linha de cima, ao lado das 3 praças —
-    // trabalho dela é interno/operação. Paulo (Coordenador) fica isolado
-    // embaixo, à parte — o trabalho dele é externo/relacionamento com a
-    // imobiliária, não faz sentido competir por espaço com as praças.
-    const analista = escalonadas.find((c) => c.chave === "analista");
-    const coordenador = escalonadas.find((c) => c.chave === "coordenador");
+    const analista = escalonadas.find((c) => c.chave === "analista") ?? null;
+    const coordenador = escalonadas.find((c) => c.chave === "coordenador") ?? null;
 
     return {
-      colunasTop: analista ? [...regionais, analista] : regionais,
-      colunaCoordenador: coordenador ?? null,
+      topo: role === "analista" ? analista : coordenador,
+      meio: role === "analista" ? null : analista,
+      assistentes,
     };
-  }, [pracas, tarefas, quadrosEscalonamento]);
+  }, [role, pracas, tarefas, quadrosEscalonamento]);
 
   if (loading) {
     return <p className="text-sm text-ink-muted">Carregando tarefas…</p>;
@@ -64,28 +68,27 @@ export function TaskBoard({
 
   return (
     <div className="flex flex-col gap-8">
-      <div
-        className={
-          colunasTop.length > 1
-            ? "grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
-            : "max-w-xl"
-        }
-      >
-        {colunasTop.map((coluna) => (
-          <ColunaTarefas key={coluna.chave} coluna={coluna} interativo={meusQuadros.includes(coluna.chave)} />
-        ))}
-      </div>
+      {topo && <ColunaTarefas coluna={topo} interativo={meusQuadros.includes(topo.chave)} faixa />}
+      {meio && <ColunaTarefas coluna={meio} interativo={meusQuadros.includes(meio.chave)} faixa />}
 
-      {colunaCoordenador && (
-        <div className="max-w-xl">
-          <ColunaTarefas coluna={colunaCoordenador} interativo={meusQuadros.includes(colunaCoordenador.chave)} />
+      {assistentes.length > 0 && (
+        <div
+          className={
+            assistentes.length > 1
+              ? "grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+              : "max-w-xl"
+          }
+        >
+          {assistentes.map((coluna) => (
+            <ColunaTarefas key={coluna.chave} coluna={coluna} interativo={meusQuadros.includes(coluna.chave)} />
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function ColunaTarefas({ coluna, interativo }: { coluna: Coluna; interativo: boolean }) {
+function ColunaTarefas({ coluna, interativo, faixa = false }: { coluna: Coluna; interativo: boolean; faixa?: boolean }) {
   const { titulo, tarefas: tarefasDaColuna, escalonamento } = coluna;
   return (
     <div className="flex flex-col gap-3">
@@ -115,7 +118,7 @@ function ColunaTarefas({ coluna, interativo }: { coluna: Coluna; interativo: boo
           Nenhuma pendência no momento.
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className={faixa ? "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
           {tarefasDaColuna.map((t) => (
             <TaskCard key={t.id} tarefa={t} somenteLeitura={!interativo} />
           ))}

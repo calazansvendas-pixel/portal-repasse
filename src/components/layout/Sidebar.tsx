@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardList, UploadCloud } from "lucide-react";
+import { LayoutDashboard, UploadCloud } from "lucide-react";
 import type { UserProfile } from "@/lib/types";
 import { ROLE_LABEL, ASSISTENTE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
@@ -16,8 +16,6 @@ interface NavItem {
 
 function navItemsPara(profile: UserProfile): NavItem[] {
   const items: NavItem[] = [{ href: "/dashboard", label: "Painel", icon: LayoutDashboard }];
-
-  items.push({ href: "/tarefas", label: "Tarefas", icon: ClipboardList });
 
   if (profile.role === "gerencia" || profile.role === "coordenador" || profile.role === "analista") {
     items.push({ href: "/auditoria", label: "Auditoria de Planilha", icon: UploadCloud });
