@@ -35,13 +35,13 @@ export function NotaConclusaoModal({
         value={nota}
         onChange={(e) => setNota(e.target.value)}
         placeholder="Ex.: Liguei para o corretor, ele vai enviar o RG até amanhã."
-        className="w-full resize-none rounded-md border border-border bg-surface p-3 text-sm text-ink-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 dark:border-white/15 dark:bg-[#1B1E17] dark:text-white"
+        className="w-full resize-none rounded-md border border-border bg-surface p-3 text-base sm:text-sm text-ink-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 dark:border-white/15 dark:bg-[#1B1E17] dark:text-white"
       />
-      <div className="mt-4 flex justify-end gap-3">
-        <button type="button" className="btn-secondary h-10" onClick={onCancelar} disabled={enviando}>
+      <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onCancelar} disabled={enviando}>
           Cancelar
         </button>
-        <button type="button" className="btn-primary h-10" onClick={confirmar} disabled={enviando}>
+        <button type="button" className="btn-primary h-11 sm:h-10" onClick={confirmar} disabled={enviando}>
           Confirmar Conclusão
         </button>
       </div>
@@ -76,13 +76,13 @@ export function ConfirmarExclusaoModal({
         A tarefa será apagada definitivamente. Essa ação não pode ser desfeita.
       </p>
       {erro && <p className="mt-3 text-xs text-status-danger">{erro}</p>}
-      <div className="mt-6 flex justify-end gap-3">
-        <button type="button" className="btn-secondary h-10" onClick={onCancelar} disabled={excluindo}>
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onCancelar} disabled={excluindo}>
           Cancelar
         </button>
         <button
           type="button"
-          className="inline-flex h-10 items-center rounded-md bg-status-danger px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="inline-flex h-11 items-center justify-center sm:h-10 rounded-md bg-status-danger px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           onClick={confirmar}
           disabled={excluindo}
         >
@@ -180,11 +180,11 @@ export function DetalhesTarefaModal({
         </Secao>
       </div>
 
-      <div className="mt-6 flex justify-end gap-3">
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         {podeReverter && (
           <button
             type="button"
-            className="inline-flex h-10 items-center gap-1.5 rounded-md border border-status-danger/40 bg-status-danger/10 px-4 text-sm font-semibold text-status-danger transition-colors hover:bg-status-danger/15 disabled:opacity-50"
+            className="inline-flex h-11 items-center justify-center sm:h-10 gap-1.5 rounded-md border border-status-danger/40 bg-status-danger/10 px-4 text-sm font-semibold text-status-danger transition-colors hover:bg-status-danger/15 disabled:opacity-50"
             onClick={reverter}
             disabled={revertendo}
           >
@@ -192,7 +192,7 @@ export function DetalhesTarefaModal({
             Reverter / Tarefa Incompleta
           </button>
         )}
-        <button type="button" className="btn-secondary h-10" onClick={onFechar}>
+        <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onFechar}>
           Fechar
         </button>
       </div>

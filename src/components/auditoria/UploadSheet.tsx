@@ -52,8 +52,8 @@ export function UploadSheet() {
   }
 
   return (
-    <div className="surface-card p-5">
-      <div className="flex items-start justify-between gap-4">
+    <div className="surface-card p-4 sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h2 className="text-base font-bold text-ink-primary dark:text-white">Importar planilha do dia</h2>
           <p className="text-sm text-ink-secondary dark:text-white/60">
@@ -61,18 +61,18 @@ export function UploadSheet() {
             auditoria automática comparando com a importação anterior.
           </p>
         </div>
-        <div className="flex shrink-0 items-end gap-3">
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end">
         <label className="flex flex-col gap-1">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Data da planilha</span>
           <input
             type="date"
-            className="input-field h-12 w-40"
+            className="input-field h-12 w-full sm:w-40"
             value={dataPlanilha}
             disabled={enviando}
             onChange={(e) => setDataPlanilha(e.target.value)}
           />
         </label>
-        <label className="btn-primary shrink-0 cursor-pointer">
+        <label className="btn-primary w-full shrink-0 cursor-pointer sm:w-auto">
           <UploadCloud size={16} />
           {enviando ? "Processando…" : "Selecionar arquivo"}
           <input

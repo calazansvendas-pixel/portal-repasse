@@ -34,7 +34,8 @@ export function Sidebar({ profile }: { profile: UserProfile }) {
       : ROLE_LABEL[profile.role];
 
   return (
-    <aside className="surface-card flex w-60 shrink-0 flex-col gap-6 p-5">
+    <aside className="surface-card flex w-full shrink-0 flex-col gap-3 p-3 lg:w-60 lg:gap-6 lg:p-5">
+      <div className="flex items-center justify-between gap-3">
       <Image
         src="/logos/logo-morar-verde.png"
         alt="Morar"
@@ -42,8 +43,13 @@ export function Sidebar({ profile }: { profile: UserProfile }) {
         height={34}
         className="h-8 w-auto object-contain"
       />
+      {/* No celular o cartão do usuário vem para o topo, ao lado do logo */}
+      <p className="min-w-0 truncate text-right text-xs text-ink-secondary lg:hidden dark:text-white/60">
+        <span className="font-semibold text-ink-primary dark:text-white">{profile.nome}</span> · {subtitulo}
+      </p>
+      </div>
 
-      <nav className="flex flex-col gap-1">
+      <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0">
         {items.map((item) => {
           const ativo = pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
@@ -52,7 +58,7 @@ export function Sidebar({ profile }: { profile: UserProfile }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex min-h-[44px] shrink-0 items-center gap-3 whitespace-nowrap rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
                 ativo
                   ? "bg-brand-primary text-white"
                   : "text-ink-secondary hover:bg-surface-soft dark:text-white/70 dark:hover:bg-white/5"
@@ -65,7 +71,7 @@ export function Sidebar({ profile }: { profile: UserProfile }) {
         })}
       </nav>
 
-      <div className="mt-auto rounded-md bg-surface-green px-3 py-3 text-xs text-ink-secondary dark:bg-white/5 dark:text-white/60">
+      <div className="mt-auto hidden rounded-md bg-surface-green px-3 py-3 text-xs text-ink-secondary lg:block dark:bg-white/5 dark:text-white/60">
         <p className="font-semibold text-ink-primary dark:text-white">{profile.nome}</p>
         <p>{subtitulo}</p>
       </div>

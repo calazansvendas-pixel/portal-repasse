@@ -18,7 +18,7 @@ export function HistoricoImportacoes() {
   if (importacoes.length === 0) return null;
 
   return (
-    <div className="surface-card p-5">
+    <div className="surface-card p-4 sm:p-5">
       <h2 className="mb-1 text-base font-bold text-ink-primary dark:text-white">
         Histórico de Importações
       </h2>

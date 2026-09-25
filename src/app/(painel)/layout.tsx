@@ -47,7 +47,7 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen bg-surface-soft dark:bg-[#12140F]">
-      <div className="mx-auto flex max-w-content gap-6 px-6 py-6">
+      <div className="mx-auto flex max-w-content flex-col gap-4 px-3 py-4 sm:px-6 sm:py-6 lg:flex-row lg:gap-6">
         <Sidebar profile={profile} />
         <main className="min-w-0 flex-1">{children}</main>
       </div>

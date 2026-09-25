@@ -69,7 +69,7 @@ export function FiltrosTarefas({
   const ativo = valor.cidade !== "" || valor.pessoa !== "todos";
 
   return (
-    <div className="surface-card mb-6 flex flex-wrap items-end gap-4 p-4">
+    <div className="surface-card mb-4 flex flex-wrap items-end gap-3 p-3 sm:mb-6 sm:gap-4 sm:p-4">
       <label className="flex w-full flex-col gap-1.5 sm:w-56">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Cidade</span>
         <select
@@ -114,7 +114,7 @@ export function FiltrosTarefas({
         <button
           type="button"
           onClick={() => onChange(FILTROS_INICIAIS)}
-          className="btn-secondary"
+          className="btn-secondary w-full sm:w-auto"
         >
           <X size={16} />
           Limpar filtros

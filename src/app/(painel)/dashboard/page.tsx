@@ -65,7 +65,7 @@ export default function DashboardPage() {
               onChange={setFiltros}
               acao={
                 destinatariosPermitidos(profile.role).length > 0 && (
-                  <button type="button" className="btn-primary" onClick={() => setNovaTarefaAberta(true)}>
+                  <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setNovaTarefaAberta(true)}>
                     <Plus size={16} />
                     Nova Tarefa
                   </button>

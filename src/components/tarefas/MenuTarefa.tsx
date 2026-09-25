@@ -33,15 +33,16 @@ export function MenuTarefa({ itens }: { itens: ItemMenu[] }) {
         aria-haspopup="menu"
         aria-expanded={aberto}
         onClick={() => setAberto((v) => !v)}
-        className="rounded-md p-1 text-ink-muted transition-colors hover:bg-surface-soft hover:text-ink-primary dark:hover:bg-white/10 dark:hover:text-white"
+        // Alvo de toque de 44px (o padding "sai" da caixa com margem negativa para não engordar o cabeçalho).
+        className="-m-2 flex h-11 w-11 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-surface-soft hover:text-ink-primary active:bg-surface-soft dark:hover:bg-white/10 dark:hover:text-white"
       >
-        <MoreVertical size={16} />
+        <MoreVertical size={20} />
       </button>
 
       {aberto && (
         <div
           role="menu"
-          className="surface-card absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden py-1 shadow-md"
+          className="surface-card absolute right-0 top-full z-20 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden py-1 shadow-md"
         >
           {itens.map(({ rotulo, icone: Icone, onClick, perigo }) => (
             <button
@@ -53,13 +54,13 @@ export function MenuTarefa({ itens }: { itens: ItemMenu[] }) {
                 onClick();
               }}
               className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium",
+                "flex min-h-[44px] w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium",
                 perigo
                   ? "text-status-danger hover:bg-status-danger/10"
                   : "text-ink-primary hover:bg-surface-soft dark:text-white dark:hover:bg-white/10"
               )}
             >
-              <Icone size={14} />
+              <Icone size={16} />
               {rotulo}
             </button>
           ))}

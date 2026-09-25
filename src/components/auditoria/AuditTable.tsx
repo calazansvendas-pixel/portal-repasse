@@ -24,16 +24,16 @@ export function AuditTable() {
   }, [registros, busca, verConcluidas]);
 
   return (
-    <div className="surface-card p-5">
-      <div className="mb-4 flex items-center justify-between gap-4">
+    <div className="surface-card p-4 sm:p-5">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
         <h2 className="text-base font-bold text-ink-primary dark:text-white">
           {verConcluidas ? "Vendas Concluídas" : "Tabela de Auditoria"} ({filtrados.length})
         </h2>
-        <button type="button" className="btn-secondary h-10" onClick={() => setVerConcluidas((v) => !v)}>
+        <button type="button" className="btn-secondary h-11 sm:h-10" onClick={() => setVerConcluidas((v) => !v)}>
           {verConcluidas ? "Ver pastas em andamento" : `Vendas Concluídas (${totalConcluidas})`}
         </button>
         <input
-          className="input-field h-10 max-w-xs"
+          className="input-field h-11 w-full sm:h-10 sm:max-w-xs"
           placeholder="Buscar por número, CPF, cidade, imobiliária…"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}

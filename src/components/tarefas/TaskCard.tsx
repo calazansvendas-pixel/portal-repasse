@@ -144,9 +144,9 @@ export function TaskCard({
           tabIndex={0}
           onClick={() => setModal("detalhes")}
           onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setModal("detalhes")}
-          className="surface-card flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-shadow hover:shadow-md"
+          className="surface-card flex min-h-[56px] cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-shadow hover:shadow-md active:shadow-md"
         >
-          <p className="truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
+          <p className="min-w-0 truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
           <div className="flex shrink-0 items-center gap-1">
             {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
             <span className="rounded-full bg-status-success/15 p-1.5 text-status-success">
@@ -174,7 +174,7 @@ export function TaskCard({
   return (
     <div
       className={cn(
-        "surface-card space-y-3 p-4",
+        "surface-card min-w-0 space-y-3 break-words p-4",
         falhaAuditoria && "border-status-danger/50 bg-status-danger/5"
       )}
     >
@@ -201,11 +201,11 @@ export function TaskCard({
               type="button"
               onClick={() => setExpandido((v) => !v)}
               aria-expanded={expandido}
-              className="flex items-start gap-1.5 text-left"
+              className="-my-1.5 flex min-h-[44px] min-w-0 flex-1 items-start gap-2 py-1.5 text-left"
             >
-              <span className="mt-0.5 shrink-0">{expandido ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
+              <span className="mt-0 shrink-0">{expandido ? <ChevronDown size={20} /> : <ChevronRight size={20} />}</span>
               <span>
-                <span className="block text-sm font-semibold leading-snug text-ink-primary dark:text-white">
+                <span className="block break-words text-sm font-semibold leading-snug text-ink-primary dark:text-white">
                   {tituloAgregado}{" "}
                   <span className="text-xs font-normal text-ink-muted">
                     ({concluidos}/{clientes.length})
@@ -218,18 +218,18 @@ export function TaskCard({
             <p className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">{tituloAgregado}</p>
           )
         ) : (
-          <div>
-            <p className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">
+          <div className="min-w-0">
+            <p className="break-words text-sm font-semibold leading-snug text-ink-primary dark:text-white">
               {tarefa.clienteNome || "Cliente não identificado"}
             </p>
-            <p className="text-xs text-ink-muted">{tarefa.imobiliaria || "Imobiliária não informada"}</p>
+            <p className="break-words text-xs text-ink-muted">{tarefa.imobiliaria || "Imobiliária não informada"}</p>
           </div>
         )}
         {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
       </div>
 
       {/* Corpo 1: ação de consultoria/ajuda */}
-      <p className="whitespace-pre-line text-sm font-medium leading-snug text-ink-primary dark:text-white">
+      <p className="whitespace-pre-line break-words text-sm font-medium leading-snug text-ink-primary dark:text-white">
         {tarefa.descricao}
       </p>
 
@@ -281,7 +281,7 @@ export function TaskCard({
       {/* Rodapé: trajeto da pasta (stepper vertical) ou pastas relacionadas em agregados */}
       <div className="border-t border-border pt-3 dark:border-white/10">
         {isAgregado ? (
-          <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
+          <span className="flex flex-wrap items-center gap-x-1 text-xs text-ink-muted">
             <Layers size={12} />
             {totalPastas} pastas relacionadas
             {ultimaPlanilhaAgregado && <> · Última planilha importada: {formatDateBR(ultimaPlanilhaAgregado)}</>}
@@ -303,7 +303,7 @@ export function TaskCard({
             type="button"
             onClick={() => alternarCliente(clienteDoGargalo.numero)}
             className={cn(
-              "mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+              "mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2.5 text-sm font-semibold transition-colors sm:text-xs",
               clienteDoGargalo.concluido
                 ? "border-border text-ink-secondary hover:bg-surface-soft dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
                 : "border-status-success/40 bg-status-success/10 text-status-success hover:bg-status-success/15"
@@ -317,7 +317,7 @@ export function TaskCard({
           <button
             type="button"
             onClick={() => setModal("nota")}
-            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-status-success/40 bg-status-success/10 px-2.5 py-1.5 text-xs font-semibold text-status-success transition-colors hover:bg-status-success/15"
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-status-success/40 bg-status-success/10 px-3 py-2.5 min-h-[44px] text-sm font-semibold sm:text-xs text-status-success transition-colors hover:bg-status-success/15"
           >
             <Check size={14} />
             Marcar como resolvida
@@ -391,13 +391,17 @@ function CardClienteGargalo({
   };
 
   return (
-    <Modal titulo={cliente.clienteNome || `Pasta ${cliente.numero}`} onClose={onFechar} semMoldura>
-      <TaskCard tarefa={comoTarefaIndividual} somenteLeitura={somenteLeitura} gargalo={{ pai, numero: cliente.numero }} />
-      <div className="mt-3 flex justify-end">
-        <button type="button" className="btn-secondary h-10" onClick={onFechar}>
+    <Modal
+      titulo={cliente.clienteNome || `Pasta ${cliente.numero}`}
+      onClose={onFechar}
+      semMoldura
+      rodape={
+        <button type="button" className="btn-secondary h-11 w-full bg-surface dark:bg-[#1B1E17]" onClick={onFechar}>
           Fechar
         </button>
-      </div>
+      }
+    >
+      <TaskCard tarefa={comoTarefaIndividual} somenteLeitura={somenteLeitura} gargalo={{ pai, numero: cliente.numero }} />
     </Modal>
   );
 }

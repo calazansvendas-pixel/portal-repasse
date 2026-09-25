@@ -51,7 +51,7 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
             placeholder="O que precisa ser feito?"
-            className="w-full resize-none rounded-md border border-border bg-surface p-3 text-sm text-ink-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 dark:border-white/15 dark:bg-[#1B1E17] dark:text-white"
+            className="w-full resize-none rounded-md border border-border bg-surface p-3 text-base sm:text-sm text-ink-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 dark:border-white/15 dark:bg-[#1B1E17] dark:text-white"
           />
         </label>
 
@@ -86,11 +86,11 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
         {erro && <p className="text-xs text-status-danger">{erro}</p>}
       </div>
 
-      <div className="mt-6 flex justify-end gap-3">
-        <button type="button" className="btn-secondary h-10" onClick={onFechar} disabled={enviando}>
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onFechar} disabled={enviando}>
           Cancelar
         </button>
-        <button type="button" className="btn-primary h-10" onClick={criar} disabled={!podeEnviar}>
+        <button type="button" className="btn-primary h-11 sm:h-10" onClick={criar} disabled={!podeEnviar}>
           {editando ? "Salvar Alterações" : "Criar Tarefa"}
         </button>
       </div>

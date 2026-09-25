@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { EtapaHistorico } from "@/lib/types";
 import { formatDateBR } from "@/lib/utils/dates";
 import { fatiarObservacao } from "@/lib/utils/texto";
@@ -9,11 +10,11 @@ export function ObservacaoChecklist({ texto }: { texto: string }) {
   const itens = fatiarObservacao(texto);
   if (itens.length === 0) return null;
   return (
-    <ul className="space-y-1">
+    <ul className="max-h-48 space-y-1.5 overflow-y-auto overscroll-contain scroll-smooth pr-1">
       {itens.map((item, i) => (
-        <li key={i} className="flex gap-1.5 text-xs leading-relaxed text-ink-secondary dark:text-white/70">
+        <li key={i} className="flex gap-1.5 break-words text-[13px] leading-relaxed text-ink-secondary sm:text-xs dark:text-white/70">
           <span className="mt-0.5 shrink-0 text-ink-muted">▢</span>
-          <span>{item}</span>
+          <span className="min-w-0">{item}</span>
         </li>
       ))}
     </ul>
@@ -44,9 +45,18 @@ export function TrajetoPasta({ dados }: { dados: DadosTrajeto }) {
     passos.push({ titulo: `Etapa ${dados.etapa}`, data: null });
   }
   const ultimaPlanilha = dataUltimaPlanilha(dados.historicoEtapas);
+  const rolagem = useRef<HTMLDivElement>(null);
+  const totalPassos = passos.length;
+
+  // Linha do tempo longa rola por dentro; começa no fim, onde está a situação mais recente.
+  useEffect(() => {
+    const el = rolagem.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [totalPassos]);
 
   return (
     <>
+    <div ref={rolagem} className="max-h-56 overflow-y-auto overscroll-contain scroll-smooth pr-1">
     <ol>
       {passos.map((passo, i) => {
         const ultimo = i === passos.length - 1;
@@ -64,18 +74,19 @@ export function TrajetoPasta({ dados }: { dados: DadosTrajeto }) {
             <div className={cn("flex flex-1 items-center justify-between gap-2", !ultimo && "pb-2")}>
               <span
                 className={cn(
-                  "text-xs",
+                  "min-w-0 break-words text-[13px] sm:text-xs",
                   ultimo ? "font-semibold text-ink-primary dark:text-white" : "text-ink-secondary dark:text-white/60"
                 )}
               >
                 {passo.titulo}
               </span>
-              <span className="text-[11px] text-ink-muted">{formatDateBR(passo.data)}</span>
+              <span className="shrink-0 text-[11px] text-ink-muted">{formatDateBR(passo.data)}</span>
             </div>
           </li>
         );
       })}
     </ol>
+    </div>
     {ultimaPlanilha && (
       <p className="mt-2 border-t border-border pt-2 text-[11px] text-ink-muted dark:border-white/10">
         Última planilha importada: {formatDateBR(ultimaPlanilha)}
