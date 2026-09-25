@@ -10,9 +10,12 @@ import {
   calcularProximaCobranca,
   ehEtapaCredito,
   ehEtapaFollowUp,
+  ehEtapa080,
   ehEtapaInclusao,
   ehFimDeEsteira,
+  gerarEspec080,
   gerarEspecFollowUp,
+  MENSAGEM_FALHA_080,
   gerarEspecErroProcesso,
   gerarEspecOperacional,
   gerarEspecRiscoBancario,
@@ -103,6 +106,9 @@ interface DadosParaReconciliar {
   // Tarefas agregadas: as pastas do grupo, cada uma com o próprio check.
   clientesEnvolvidos?: ClienteEnvolvido[];
   cicloFollowUp?: number; // etapa 0.04: ciclo (1 a 4) da régua
+  // O responsável pode mudar entre importações enquanto a tarefa segue aberta (0.80: a observação
+  // passa a conter — ou deixa de conter — pendência complexa).
+  reroteavel?: boolean;
   cidade: string;
   quadro: Quadro;
   imobiliaria: string;
@@ -260,9 +266,12 @@ export async function executarAuditoriaDiaria(params: {
           ...(tarefaAtiva.data.clientesEnvolvidos?.length
             ? { clientesEnvolvidos: (dados.clientesEnvolvidos ?? tarefaAtiva.data.clientesEnvolvidos).map((c) => ({ ...c, concluido: false })) }
             : {}),
-          falhaAuditoriaMotivo: dados.avancoDetectado
-            ? "Avançou, mas a mesma pendência foi identificada novamente."
-            : "Continua na mesma situação da última importação.",
+          falhaAuditoriaMotivo:
+            dados.origem === "linha" && ehEtapa080(dados.etapa)
+              ? MENSAGEM_FALHA_080
+              : dados.avancoDetectado
+                ? "Avançou, mas a mesma pendência foi identificada novamente."
+                : "Continua na mesma situação da última importação.",
           falhaAuditoriaEm: agora,
           escalonadoPara: calcularEscalonamento({
             quadro: dados.quadro,
@@ -302,6 +311,7 @@ export async function executarAuditoriaDiaria(params: {
           slaStatus: dados.slaStatus,
           imobiliaria: dados.imobiliaria,
           tipoPendencia: dados.tipoPendencia,
+          ...(dados.reroteavel ? { praca: dados.quadro, nivel: dados.nivel } : {}),
           // Se a Gerência reescreveu o texto, a importação não o sobrescreve.
           descricao: tarefaAtiva.data.descricaoEditada ? tarefaAtiva.data.descricao : dados.descricao,
           observacaoOriginal: dados.observacaoOriginal,
@@ -480,20 +490,30 @@ export async function executarAuditoriaDiaria(params: {
     // deixou de valer), a tarefa antiga não fica órfã nem duplicada — recebe baixa antes de a
     // nova nascer (continuidade entre planilhas).
     const emFollowUp = ehEtapaFollowUp(linha.etapa);
-    const specComum = praca && !emFollowUp && !ehEtapaCredito(linha.etapa) ? gerarEspecOperacional(linha, praca, slaStatus) : null;
-    const chaveOperacionalDesejada = praca && emFollowUp ? `${linha.numero}::follow_up_004` : (specComum?.chaveRegra ?? null);
+    const em080 = ehEtapa080(linha.etapa);
+    // 0.80: uma tarefa por pasta, roteada pela observação (Analista x Assistente da praça).
+    const spec080 = em080 ? gerarEspec080(linha, praca) : null;
+    const specComum =
+      praca && !emFollowUp && !em080 && !ehEtapaCredito(linha.etapa)
+        ? gerarEspecOperacional(linha, praca, slaStatus)
+        : null;
+    const chaveOperacionalDesejada =
+      praca && emFollowUp ? `${linha.numero}::follow_up_004` : (spec080?.chaveRegra ?? specComum?.chaveRegra ?? null);
 
+    // Órfãs: a baixa só vale se a ETAPA avançou (camposComuns.avancoDetectado). Se a pasta continua
+    // na mesma etapa, uma tarefa clicada cujo gatilho mudou volta como Falha de Auditoria.
     for (const [chave, t] of tarefasPorChave) {
-      if (t.data.numero !== linha.numero || t.data.nivel !== "operacional" || chave === chaveOperacionalDesejada) continue;
+      const ehDaPasta = t.data.numero === linha.numero;
+      const ehDaRegraOperacional = t.data.nivel === "operacional" || chave.endsWith("::etapa_080");
+      if (!ehDaPasta || !ehDaRegraOperacional || chave === chaveOperacionalDesejada) continue;
       reconciliarTarefa({
         ...camposComuns,
         chaveRegra: chave,
-        nivel: "operacional",
+        nivel: t.data.nivel,
         quadro: t.data.praca,
         tipoPendencia: t.data.tipoPendencia,
         descricao: t.data.descricao,
         condicaoAtiva: false,
-        avancoDetectado: true, // o gatilho original deixou de valer: baixa (sem falsa Falha de Auditoria)
       });
     }
 
@@ -514,6 +534,17 @@ export async function executarAuditoriaDiaria(params: {
         descricao: spec.descricao,
         cicloFollowUp: ciclosFeitos + 1,
         condicaoAtiva: !encerrado && (emAndamento || liberado),
+      });
+    } else if (spec080) {
+      reconciliarTarefa({
+        ...camposComuns,
+        chaveRegra: spec080.chaveRegra,
+        nivel: spec080.nivel,
+        quadro: spec080.quadro,
+        tipoPendencia: spec080.tipoPendencia,
+        descricao: spec080.descricao,
+        condicaoAtiva: true,
+        reroteavel: true,
       });
     } else if (praca && specComum) {
       reconciliarTarefa({

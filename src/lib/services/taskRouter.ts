@@ -68,6 +68,45 @@ export function gerarEspecFollowUp(linha: LinhaPlanilha, praca: Quadro, ciclo: n
   };
 }
 
+/**
+ * Etapa 0.80: a equipe tem poder de resolução — auditoria ESTRITA (sem confiança no clique;
+ * só a mudança de etapa na planilha completa a tarefa) e roteamento inteligente pela observação.
+ */
+export function ehEtapa080(etapa: string | null | undefined): boolean {
+  return (etapa ?? "").trim().startsWith("0.80");
+}
+
+export const MENSAGEM_FALHA_080 = "A tarefa para ser completa precisa ter a etapa modificada na planilha.";
+
+/** Pendências complexas (restrição, banco, crédito, assessoria) vão para a Analista; o resto, para a Assistente da praça. */
+const TERMOS_COMPLEXOS_080 = ["restricao", "restricoes", "banco", "credito", "assessoria"];
+
+export function gerarEspec080(linha: LinhaPlanilha, pracaAssistente: Quadro | null): EspecTarefaLinha | null {
+  const cliente = nomeCliente(linha);
+  const imobiliaria = nomeImobiliaria(linha);
+  const chaveRegra = `${linha.numero}::etapa_080`;
+
+  if (contemAlgumTermo(normalize(linha.observacao), TERMOS_COMPLEXOS_080)) {
+    return {
+      chaveRegra,
+      nivel: "analitico",
+      quadro: "analista",
+      tipoPendencia: "Pendência complexa (0.80)",
+      descricao: `Tratar a pendência complexa do cliente ${cliente} na imobiliária ${imobiliaria} (restrição, banco ou crédito) e destravar a pasta para a etapa avançar.`,
+    };
+  }
+
+  // Pendência de documentos básicos: precisa de uma praça para saber qual Assistente atende.
+  if (!pracaAssistente) return null;
+  return {
+    chaveRegra,
+    nivel: "operacional",
+    quadro: pracaAssistente,
+    tipoPendencia: "Pendência de documentos (0.80)",
+    descricao: `Ligar para a ${imobiliaria} e apoiar o corretor a regularizar a documentação do cliente ${cliente} para a pasta avançar da 0.80.`,
+  };
+}
+
 /** Etapa 0.99 (espera do Crédito) — não gera tarefa individual; vira gargalo agregado do Coordenador. */
 export function ehEtapaCredito(etapa: string | null | undefined): boolean {
   return (etapa ?? "").trim().startsWith("0.99");
