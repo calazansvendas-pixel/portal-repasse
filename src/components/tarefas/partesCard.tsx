@@ -103,9 +103,20 @@ interface FonteDeNotas {
 }
 
 /** Histórico de tentativas; notas antigas (sem histórico) aparecem como uma única entrada. */
-export function notasDe(fonte: FonteDeNotas, incluirLegada = true): NotaResolucao[] {
-  if (fonte.historicoNotas?.length) return fonte.historicoNotas;
-  return incluirLegada && fonte.notaResolucao ? [{ texto: fonte.notaResolucao, data: fonte.resolvidoEm ?? "" }] : [];
+export function notasDe(fonte: FonteDeNotas | undefined, incluirLegada = true): NotaResolucao[] {
+  if (!fonte) return [];
+
+  // Se há histórico, usá-lo (com validação de tipo para dados legados)
+  if (Array.isArray(fonte.historicoNotas) && fonte.historicoNotas.length > 0) {
+    return fonte.historicoNotas.filter((n): n is NotaResolucao => n && typeof n === "object" && "texto" in n);
+  }
+
+  // Fallback legado: string simples em notaResolucao
+  if (incluirLegada && typeof fonte.notaResolucao === "string" && fonte.notaResolucao.trim()) {
+    return [{ texto: fonte.notaResolucao, data: fonte.resolvidoEm ?? "" }];
+  }
+
+  return [];
 }
 
 /** Linha do tempo das tentativas ("O que foi feito"): mais antiga em cima, data/hora e autor em cada uma. */
