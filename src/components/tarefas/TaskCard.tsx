@@ -7,6 +7,7 @@ import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
 import { marcarTarefaResolvida, reverterTarefa } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { meuQuadroInterativo } from "@/lib/auth/roles";
+import { formatDateBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 import { DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { ObservacaoChecklist, TrajetoPasta } from "./partesCard";
@@ -20,6 +21,7 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
   const aguardandoValidacao = tarefa.status === "pending_validation";
   const falhaAuditoria = tarefa.status === "audit_failed";
   const isAgregado = tarefa.origem === "agregado";
+  const isManual = tarefa.origem === "manual";
 
   // Reverter: o dono do quadro (clique por engano) ou a gestão auditando cards das assistentes.
   const podeReverter =
@@ -40,7 +42,9 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
   }
 
   if (aguardandoValidacao) {
-    const nome = tarefa.clienteNome || tarefa.imobiliaria || tarefa.tipoPendencia;
+    const nome = isManual
+      ? tarefa.descricao
+      : tarefa.clienteNome || tarefa.imobiliaria || tarefa.tipoPendencia;
     return (
       <>
         <div
@@ -84,8 +88,14 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
         <p className="text-xs text-status-danger">{tarefa.falhaAuditoriaMotivo}</p>
       )}
 
-      {/* Cabeçalho: cliente + imobiliária */}
-      {!isAgregado && (
+      {/* Cabeçalho: cliente + imobiliária (tarefa avulsa: solicitação interna + quem delegou) */}
+      {isManual && (
+        <div>
+          <p className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">Solicitação Interna</p>
+          <p className="text-xs text-ink-muted">Enviado por: {tarefa.criadaPorNome || "—"}</p>
+        </div>
+      )}
+      {!isAgregado && !isManual && (
         <div>
           <p className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">
             {tarefa.clienteNome || "Cliente não identificado"}
@@ -95,7 +105,7 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
       )}
 
       {/* Corpo 1: ação de consultoria/ajuda */}
-      <p className="text-sm font-medium leading-snug text-ink-primary dark:text-white">
+      <p className="whitespace-pre-line text-sm font-medium leading-snug text-ink-primary dark:text-white">
         {tarefa.descricao}
       </p>
 
@@ -110,9 +120,11 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
       )}
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", SLA_BADGE_CLASSES[tarefa.slaStatus])}>
-          {SLA_LABEL[tarefa.slaStatus]}
-        </span>
+        {!isManual && (
+          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", SLA_BADGE_CLASSES[tarefa.slaStatus])}>
+            {SLA_LABEL[tarefa.slaStatus]}
+          </span>
+        )}
         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary dark:border-white/15 dark:text-white/60">
           {tarefa.tipoPendencia}
         </span>
@@ -125,6 +137,8 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
             <Layers size={12} />
             {tarefa.numerosRelacionados?.length ?? 0} pastas relacionadas
           </span>
+        ) : isManual ? (
+          <span className="text-xs text-ink-muted">Criada em {formatDateBR(tarefa.criadoEm)}</span>
         ) : (
           <TrajetoPasta tarefa={tarefa} />
         )}

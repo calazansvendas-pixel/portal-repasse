@@ -129,7 +129,9 @@ function ColunaTarefas({ coluna, interativo, faixa = false }: { coluna: Coluna; 
 }
 
 function ordenarPorSla(lista: Tarefa[]): Tarefa[] {
-  return [...lista].sort((a, b) => ordemSla(a.slaStatus) - ordemSla(b.slaStatus));
+  // Tarefas avulsas (delegadas por alguém) vêm primeiro; o resto por urgência de SLA.
+  const peso = (t: Tarefa) => (t.origem === "manual" ? -1 : ordemSla(t.slaStatus));
+  return [...lista].sort((a, b) => peso(a) - peso(b));
 }
 
 function ordemSla(status: Tarefa["slaStatus"]): number {

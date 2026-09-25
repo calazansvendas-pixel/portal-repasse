@@ -20,7 +20,7 @@ export type NivelTarefa = "operacional" | "analitico" | "tatico";
 /** Uma tarefa nasce de uma linha específica da planilha (uma pasta) ou de uma
  * agregação entre várias linhas (ex: gargalo de etapa, filtro de qualificação
  * ruim por imobiliária). */
-export type OrigemTarefa = "linha" | "agregado";
+export type OrigemTarefa = "linha" | "agregado" | "manual";
 
 export interface UserProfile {
   uid: string;
@@ -131,6 +131,9 @@ export interface Tarefa {
   atualizadoEm: string;
   resolvidoPor?: string | null;
   resolvidoEm?: string | null;
+  // Tarefa avulsa (origem "manual"): quem delegou.
+  criadaPor?: string | null; // uid
+  criadaPorNome?: string | null;
   notaResolucao?: string | null; // "O que foi feito?" — anotação de quem concluiu
   etapaNoMomentoResolucao?: string | null;
   observacaoNoMomentoResolucao?: string | null;

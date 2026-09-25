@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { CIDADES_FILTRO, normalize } from "@/lib/auth/roles";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
@@ -46,7 +47,7 @@ export function aplicarFiltros(visao: Visao, { cidade, pessoa }: FiltrosState): 
     pracasF = pracasF.filter((p) => p === pracaDaCidade);
   }
 
-  const tarefasF = cidade ? tarefas.filter((t) => normalize(t.cidade ?? "").includes(cidade)) : tarefas;
+  const tarefasF = cidade ? tarefas.filter((t) => t.origem === "manual" || normalize(t.cidade ?? "").includes(cidade)) : tarefas;
   return { pracas: pracasF, quadrosEscalonamento: escalF, tarefas: tarefasF };
 }
 
@@ -55,11 +56,14 @@ export function FiltrosTarefas({
   quadrosEscalonamento,
   valor,
   onChange,
+  acao,
 }: {
   pracas: Assistente[];
   quadrosEscalonamento: QuadroEscalonamento[];
   valor: FiltrosState;
   onChange: (novo: FiltrosState) => void;
+  /** Ação extra ao lado dos filtros (ex: botão "Nova Tarefa"). */
+  acao?: ReactNode;
 }) {
   const cidades = CIDADES_FILTRO.filter((c) => pracas.includes(c.praca));
   const ativo = valor.cidade !== "" || valor.pessoa !== "todos";
@@ -116,6 +120,7 @@ export function FiltrosTarefas({
           Limpar filtros
         </button>
       )}
+      {acao}
     </div>
   );
 }

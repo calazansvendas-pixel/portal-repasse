@@ -70,6 +70,20 @@ export function quadrosEscalonamentoVisiveis(profile: UserProfile): QuadroEscalo
   }
 }
 
+/** Para quem o perfil pode delegar uma tarefa avulsa (hierarquia: só para baixo). */
+export function destinatariosPermitidos(role: Role): Quadro[] {
+  switch (role) {
+    case "gerencia":
+      return ["coordenador", "analista", "laiza", "eliane", "catarina"];
+    case "coordenador":
+      return ["analista", "laiza", "eliane", "catarina"];
+    case "analista":
+      return ["laiza", "eliane", "catarina"];
+    default:
+      return [];
+  }
+}
+
 /**
  * Todos os quadros que precisam ser buscados no Firestore para montar a tela
  * de um perfil: as praças regionais visíveis + os quadros nativos de

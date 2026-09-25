@@ -1,17 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import {
   pracasVisiveis,
   quadrosEscalonamentoVisiveis,
   quadrosParaBuscar,
   meuQuadroInterativo,
+  destinatariosPermitidos,
 } from "@/lib/auth/roles";
 import { useTarefasPorQuadros } from "@/lib/hooks/useTarefas";
 import { Topbar } from "@/components/layout/Topbar";
 import { TaskBoard } from "@/components/tarefas/TaskBoard";
+import { NovaTarefaModal } from "@/components/tarefas/NovaTarefaModal";
 import { FILTROS_INICIAIS, FiltrosTarefas, aplicarFiltros } from "@/components/tarefas/FiltrosTarefas";
 
 export default function DashboardPage() {
@@ -22,6 +24,7 @@ export default function DashboardPage() {
   const meusQuadros = profile ? meuQuadroInterativo(profile) : [];
   const { tarefas, loading, erro } = useTarefasPorQuadros(quadrosBusca);
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
+  const [novaTarefaAberta, setNovaTarefaAberta] = useState(false);
   const visao = useMemo(
     () => aplicarFiltros({ pracas, quadrosEscalonamento, tarefas }, filtros),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,6 +63,14 @@ export default function DashboardPage() {
               quadrosEscalonamento={quadrosEscalonamento}
               valor={filtros}
               onChange={setFiltros}
+              acao={
+                destinatariosPermitidos(profile.role).length > 0 && (
+                  <button type="button" className="btn-primary" onClick={() => setNovaTarefaAberta(true)}>
+                    <Plus size={16} />
+                    Nova Tarefa
+                  </button>
+                )
+              }
             />
           )}
           {semColunas ? (
@@ -76,6 +87,8 @@ export default function DashboardPage() {
           )}
         </>
       )}
+
+      {novaTarefaAberta && <NovaTarefaModal onFechar={() => setNovaTarefaAberta(false)} />}
     </div>
   );
 }

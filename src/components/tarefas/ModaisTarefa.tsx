@@ -60,6 +60,7 @@ export function DetalhesTarefaModal({
   onFechar: () => void;
 }) {
   const [revertendo, setRevertendo] = useState(false);
+  const isManual = tarefa.origem === "manual";
 
   async function reverter() {
     setRevertendo(true);
@@ -75,22 +76,36 @@ export function DetalhesTarefaModal({
       <div className="space-y-5">
         <div>
           <p className="text-sm font-semibold text-ink-primary dark:text-white">
-            {tarefa.clienteNome || "Cliente não identificado"}
+            {isManual ? "Solicitação Interna" : tarefa.clienteNome || "Cliente não identificado"}
           </p>
-          <p className="text-xs text-ink-muted">{tarefa.imobiliaria || "Imobiliária não informada"}</p>
+          <p className="text-xs text-ink-muted">
+            {isManual
+              ? `Enviado por: ${tarefa.criadaPorNome || "—"}`
+              : tarefa.imobiliaria || "Imobiliária não informada"}
+          </p>
         </div>
 
-        <Secao titulo="Trajeto da pasta">
-          <TrajetoPasta tarefa={tarefa} />
-        </Secao>
+        {isManual ? (
+          <Secao titulo="Descrição">
+            <p className="whitespace-pre-line text-xs leading-relaxed text-ink-secondary dark:text-white/70">
+              {tarefa.descricao}
+            </p>
+          </Secao>
+        ) : (
+          <>
+            <Secao titulo="Trajeto da pasta">
+              <TrajetoPasta tarefa={tarefa} />
+            </Secao>
 
-        <Secao titulo="Observação original">
-          {tarefa.observacaoOriginal ? (
-            <ObservacaoChecklist texto={tarefa.observacaoOriginal} />
-          ) : (
-            <p className="text-xs text-ink-muted">Sem observação.</p>
-          )}
-        </Secao>
+            <Secao titulo="Observação original">
+              {tarefa.observacaoOriginal ? (
+                <ObservacaoChecklist texto={tarefa.observacaoOriginal} />
+              ) : (
+                <p className="text-xs text-ink-muted">Sem observação.</p>
+              )}
+            </Secao>
+          </>
+        )}
 
         <Secao titulo="O que foi feito">
           {tarefa.notaResolucao ? (

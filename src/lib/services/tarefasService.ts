@@ -2,7 +2,7 @@
 
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import type { Tarefa } from "@/lib/types";
+import type { Quadro, Tarefa } from "@/lib/types";
 
 /**
  * Assistente marca a tarefa como resolvida, registrando a nota de conclusão
@@ -19,6 +19,18 @@ export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: s
     observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
     notaResolucao: nota.trim() || null,
   });
+}
+
+/** Cria uma tarefa avulsa via rota admin (a hierarquia de destinatários é validada no servidor). */
+export async function criarTarefaManual(descricao: string, atribuidoPara: Quadro, idToken: string) {
+  const res = await fetch("/api/tarefas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ descricao, atribuidoPara }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.erro ?? "Falha ao criar a tarefa.");
+  return json as { id: string };
 }
 
 /**

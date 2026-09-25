@@ -427,6 +427,15 @@ export async function executarAuditoriaDiaria(params: {
     reconciliarTarefa,
   });
 
+  // Tarefas avulsas não têm evidência na planilha: o check de quem concluiu vale
+  // e a próxima importação apenas as arquiva (validated_done).
+  for (const { id, data } of tarefasPorChave.values()) {
+    if (data.origem === "manual" && data.status === "pending_validation") {
+      update(db.collection("tarefas").doc(id), { status: "validated_done", atualizadoEm: agora });
+      resumo.tarefasValidadas++;
+    }
+  }
+
   batches.push(batch);
 
   const importacaoRef = db.collection("importacoes").doc(importacaoId);
