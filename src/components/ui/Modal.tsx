@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+
+// Modais empilhados (ex: detalhe do cliente sobre o detalhe da tarefa): o Esc fecha só o de cima.
+const pilha: symbol[] = [];
 
 export function Modal({
   titulo,
@@ -12,13 +15,24 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const id = useRef(Symbol("modal"));
+  // O onClose costuma ser uma arrow nova a cada render: guardá-lo em ref evita re-registrar o
+  // modal (e reordenar a pilha) toda vez que o pai renderiza.
+  const fechar = useRef(onClose);
+  fechar.current = onClose;
+
   useEffect(() => {
+    const meu = id.current;
+    pilha.push(meu);
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && pilha[pilha.length - 1] === meu) fechar.current();
     }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      pilha.splice(pilha.indexOf(meu), 1);
+    };
+  }, []);
 
   return createPortal(
     <div

@@ -18,7 +18,8 @@ import { cn } from "@/lib/utils/cn";
 import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
 import { NovaTarefaModal } from "./NovaTarefaModal";
-import { ListaClientesEnvolvidos, ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha } from "./partesCard";
+import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
+import { ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha } from "./partesCard";
 
 const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
 
@@ -171,14 +172,17 @@ export function TaskCard({ tarefa, somenteLeitura = false }: { tarefa: Tarefa; s
               type="button"
               onClick={() => setExpandido((v) => !v)}
               aria-expanded={expandido}
-              className="flex items-center gap-1.5 text-left"
+              className="flex items-start gap-1.5 text-left"
             >
-              {expandido ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              <span className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">
-                {tituloAgregado}
-              </span>
-              <span className="text-xs text-ink-muted">
-                ({concluidos}/{clientes.length})
+              <span className="mt-0.5 shrink-0">{expandido ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
+              <span>
+                <span className="block text-sm font-semibold leading-snug text-ink-primary dark:text-white">
+                  {tituloAgregado}{" "}
+                  <span className="text-xs font-normal text-ink-muted">
+                    ({concluidos}/{clientes.length})
+                  </span>
+                </span>
+                {tarefa.etapa && <span className="block text-xs text-ink-muted">Etapa {tarefa.etapa}</span>}
               </span>
             </button>
           ) : (

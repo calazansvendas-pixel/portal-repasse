@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import type { ClienteEnvolvido, EtapaHistorico } from "@/lib/types";
+import type { EtapaHistorico } from "@/lib/types";
 import { formatDateBR } from "@/lib/utils/dates";
 import { fatiarObservacao } from "@/lib/utils/texto";
 import { cn } from "@/lib/utils/cn";
@@ -84,68 +82,5 @@ export function TrajetoPasta({ dados }: { dados: DadosTrajeto }) {
       </p>
     )}
     </>
-  );
-}
-
-/**
- * Sanfona de sub-tarefas de um gargalo: cada cliente tem o próprio check e,
- * ao clicar no nome, abre os detalhes (imobiliária, observação e trajeto).
- */
-export function ListaClientesEnvolvidos({
-  clientes,
-  podeMarcar,
-  onAlternar,
-}: {
-  clientes: ClienteEnvolvido[];
-  podeMarcar: boolean;
-  onAlternar?: (numero: string) => void;
-}) {
-  const [aberto, setAberto] = useState<string | null>(null);
-
-  return (
-    <ul className="divide-y divide-border rounded-md border border-border dark:divide-white/10 dark:border-white/10">
-      {clientes.map((c) => {
-        const expandido = aberto === c.numero;
-        return (
-          <li key={c.numero} className="px-3 py-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={c.concluido}
-                disabled={!podeMarcar}
-                onChange={() => onAlternar?.(c.numero)}
-                aria-label={`Concluir ${c.clienteNome || c.numero}`}
-                className="h-4 w-4 shrink-0 accent-brand-primary disabled:cursor-default"
-              />
-              <button
-                type="button"
-                onClick={() => setAberto(expandido ? null : c.numero)}
-                className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
-              >
-                <span
-                  className={cn(
-                    "truncate text-xs font-medium",
-                    c.concluido
-                      ? "text-ink-muted line-through"
-                      : "text-ink-primary dark:text-white"
-                  )}
-                >
-                  {c.clienteNome || `Pasta ${c.numero}`}
-                </span>
-                {expandido ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
-              </button>
-            </div>
-
-            {expandido && (
-              <div className="mt-2 space-y-3 pl-6">
-                <p className="text-xs text-ink-muted">{c.imobiliaria || "Imobiliária não informada"}</p>
-                {c.observacao && <ObservacaoChecklist texto={c.observacao} />}
-                <TrajetoPasta dados={c} />
-              </div>
-            )}
-          </li>
-        );
-      })}
-    </ul>
   );
 }

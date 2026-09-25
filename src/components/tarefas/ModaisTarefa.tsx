@@ -5,7 +5,8 @@ import { Undo2 } from "lucide-react";
 import type { Tarefa } from "@/lib/types";
 import { formatDateTimeBR } from "@/lib/utils/dates";
 import { Modal } from "@/components/ui/Modal";
-import { ListaClientesEnvolvidos, ObservacaoChecklist, TrajetoPasta } from "./partesCard";
+import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
+import { ObservacaoChecklist, TrajetoPasta } from "./partesCard";
 
 export function NotaConclusaoModal({
   onConfirmar,
