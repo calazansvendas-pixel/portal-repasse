@@ -28,18 +28,22 @@ export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: s
  * Marca/desmarca UM cliente dentro de uma tarefa agregada (gargalo). A tarefa
  * mãe só entra em "pending_validation" quando todos os clientes estão
  * marcados; desmarcar qualquer um a devolve para "pendente". A nota (opcional)
- * é gravada quando este clique completa a tarefa.
+ * é gravada no cliente (e na tarefa, quando este clique a completa). Sem `nota` (check rápido da
+ * lista) a nota já gravada do cliente é mantida; desmarcar NUNCA apaga a nota.
  */
-export async function alternarClienteEnvolvido(tarefaId: string, numero: string, uid: string, nota = "") {
+export async function alternarClienteEnvolvido(tarefaId: string, numero: string, uid: string, nota?: string) {
   const ref = doc(db, "tarefas", tarefaId);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const tarefa = snap.data() as Tarefa | undefined;
     if (!tarefa) throw new Error("Tarefa não encontrada.");
 
-    const clientes = (tarefa.clientesEnvolvidos ?? []).map((c) =>
-      c.numero === numero ? { ...c, concluido: !c.concluido } : c
-    );
+    const clientes = (tarefa.clientesEnvolvidos ?? []).map((c) => {
+      if (c.numero !== numero) return c;
+      const concluido = !c.concluido;
+      const notaCliente = concluido && nota !== undefined ? nota.trim() || null : c.notaResolucao ?? null;
+      return { ...c, concluido, notaResolucao: notaCliente };
+    });
     const todosConcluidos = clientes.length > 0 && clientes.every((c) => c.concluido);
 
     const mudanca: Record<string, unknown> = { clientesEnvolvidos: clientes };
@@ -50,7 +54,7 @@ export async function alternarClienteEnvolvido(tarefaId: string, numero: string,
         resolvidoEm: new Date().toISOString(),
         etapaNoMomentoResolucao: tarefa.etapa,
         observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
-        notaResolucao: nota.trim() || null,
+        notaResolucao: nota?.trim() || null,
       });
     } else if (!todosConcluidos && tarefa.status === "pending_validation") {
       Object.assign(mudanca, camposDeTarefaAtiva(tarefa));

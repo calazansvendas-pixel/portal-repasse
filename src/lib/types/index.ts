@@ -107,6 +107,8 @@ export interface ClienteEnvolvido {
   dataEntrada: string | null;
   historicoEtapas: EtapaHistorico[];
   concluido: boolean;
+  // "O que foi feito" deste cliente: sobrevive ao "Desmarcar" para a equipe ler a tentativa anterior.
+  notaResolucao?: string | null;
 }
 
 /** Um "salto" de etapa no trajeto da pasta — um item do Stepper/Timeline do card. */

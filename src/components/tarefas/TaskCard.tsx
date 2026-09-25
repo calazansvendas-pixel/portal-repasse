@@ -85,7 +85,7 @@ export function TaskCard({
       itensMenu.push({
         rotulo: clienteDoGargalo.concluido ? "Voltar para ativa" : "Marcar como feita",
         icone: clienteDoGargalo.concluido ? Undo2 : CheckCircle2,
-        onClick: () => alternarCliente(clienteDoGargalo.numero),
+        onClick: () => (clienteDoGargalo.concluido ? desmarcarClienteDoGargalo() : setModal("nota")),
       });
     }
   } else if (ehGerencia && !aguardandoValidacao) {
@@ -103,6 +103,19 @@ export function TaskCard({
     if (!firebaseUser) return;
     await marcarTarefaResolvida(tarefa, firebaseUser.uid, nota);
     setModal(null);
+  }
+
+  // Cliente dentro do gargalo (modal do cliente): concluir pede a nota, como num card individual;
+  // desmarcar só volta o check — a nota gravada fica.
+  async function marcarClienteDoGargalo(nota: string) {
+    if (!firebaseUser || !gargalo) return;
+    await alternarClienteEnvolvido(gargalo.pai.id, gargalo.numero, firebaseUser.uid, nota);
+    setModal(null);
+  }
+
+  async function desmarcarClienteDoGargalo() {
+    if (!firebaseUser || !gargalo) return;
+    await alternarClienteEnvolvido(gargalo.pai.id, gargalo.numero, firebaseUser.uid);
   }
 
   async function alternarCliente(numero: string) {
@@ -266,7 +279,7 @@ export function TaskCard({
       {tarefa.notaResolucao && (
         <div className="rounded-md border border-border bg-surface-secondary/60 px-3 py-2 dark:border-white/10 dark:bg-white/5">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-            O que foi feito (tentativa anterior)
+            {clienteDoGargalo?.concluido ? "O que foi feito" : "O que foi feito (tentativa anterior)"}
           </p>
           <p className="max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line break-words text-[13px] leading-relaxed text-ink-secondary sm:text-xs dark:text-white/70">
             {tarefa.notaResolucao}
@@ -313,7 +326,7 @@ export function TaskCard({
         {!somenteLeitura && gargalo && clienteDoGargalo && (
           <button
             type="button"
-            onClick={() => alternarCliente(clienteDoGargalo.numero)}
+            onClick={() => (clienteDoGargalo.concluido ? desmarcarClienteDoGargalo() : setModal("nota"))}
             className={cn(
               "mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2.5 text-sm font-semibold transition-colors sm:text-xs",
               clienteDoGargalo.concluido
@@ -339,7 +352,7 @@ export function TaskCard({
 
       {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
       {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
-      {modal === "nota" && <NotaConclusaoModal onConfirmar={confirmarConclusao} onCancelar={() => setModal(null)} />}
+      {modal === "nota" && <NotaConclusaoModal onConfirmar={gargalo ? marcarClienteDoGargalo : confirmarConclusao} onCancelar={() => setModal(null)} />}
       {clientePendente && (
         <NotaConclusaoModal onConfirmar={confirmarClientePendente} onCancelar={() => setClientePendente(null)} />
       )}
@@ -397,6 +410,7 @@ function CardClienteGargalo({
     historicoEtapas: historico,
     slaStatus: historico[historico.length - 1]?.status ?? pai.slaStatus,
     clientesEnvolvidos: undefined,
+    notaResolucao: cliente.notaResolucao ?? null, // a nota é do cliente, não a da tarefa mãe
     cicloFollowUp: null,
     // O cartão do cliente fica sempre "aberto"; o estado dele aparece no rodapé (check do cliente).
     status: pai.status === "audit_failed" ? "audit_failed" : "pendente",

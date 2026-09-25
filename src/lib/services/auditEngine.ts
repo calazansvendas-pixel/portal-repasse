@@ -81,6 +81,7 @@ function montarClientesEnvolvidos(
         -MAX_ENTRADAS_HISTORICO_CLIENTE
       ),
       concluido: ant?.concluido ?? false,
+      ...(ant?.notaResolucao ? { notaResolucao: ant.notaResolucao } : {}),
     };
   };
 

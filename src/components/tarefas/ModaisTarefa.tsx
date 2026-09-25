@@ -167,8 +167,19 @@ export function DetalhesTarefaModal({
         )}
 
         <Secao titulo="O que foi feito">
-          {tarefa.notaResolucao ? (
-            <p className="whitespace-pre-line text-xs leading-relaxed text-ink-secondary dark:text-white/70">
+          {isGargalo && clientes.some((c) => c.notaResolucao) ? (
+            <ul className="space-y-2">
+              {clientes
+                .filter((c) => c.notaResolucao)
+                .map((c) => (
+                  <li key={c.numero} className="text-xs leading-relaxed text-ink-secondary dark:text-white/70">
+                    <span className="font-semibold text-ink-primary dark:text-white">{c.clienteNome || c.numero}:</span>{" "}
+                    <span className="whitespace-pre-line break-words">{c.notaResolucao}</span>
+                  </li>
+                ))}
+            </ul>
+          ) : tarefa.notaResolucao ? (
+            <p className="whitespace-pre-line break-words text-xs leading-relaxed text-ink-secondary dark:text-white/70">
               {tarefa.notaResolucao}
             </p>
           ) : (
