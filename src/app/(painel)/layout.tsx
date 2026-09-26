@@ -14,7 +14,8 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
   }, [loading, firebaseUser, router]);
 
   // Perfil desativado: encerra a sessão e manda para o login (o app não deve continuar aberto).
-  const inativo = !!profile && profile.ativo === false;
+  // Mesmo rigor do firestore.rules: só `ativo === true` mantém a sessão (campo ausente também encerra).
+  const inativo = !!profile && profile.ativo !== true;
   useEffect(() => {
     if (!inativo) return;
     signOut().finally(() => router.replace("/login?inativo=1"));

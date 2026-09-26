@@ -31,7 +31,8 @@ export async function autenticar(req: NextRequest): Promise<Autenticado | NextRe
 
   const userSnap = await getAdminDb().collection("users").doc(decoded.uid).get();
   const perfil = userSnap.data() as { role?: Role; nome?: string; ativo?: boolean } | undefined;
-  if (!perfil?.role || perfil.ativo === false) {
+  // Mesmo rigor do firestore.rules: só `ativo === true` passa (campo ausente ou false = sem acesso).
+  if (!perfil?.role || perfil.ativo !== true) {
     return NextResponse.json({ erro: "Usuário sem perfil ativo." }, { status: 403 });
   }
   return { uid: decoded.uid, role: perfil.role, nome: perfil.nome ?? null };
