@@ -88,7 +88,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const alvo = await carregarTarefa(params.id, auth.uid, auth.role);
     if (alvo instanceof NextResponse) return alvo;
 
-    await alvo.ref.delete();
+    // Cascata: leva junto qualquer subcoleção da tarefa, sem deixar documentos órfãos.
+    await getAdminDb().recursiveDelete(alvo.ref);
     return NextResponse.json({ id: params.id });
   } catch (error) {
     console.error("[tarefas/DELETE] erro:", error);

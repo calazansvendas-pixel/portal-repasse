@@ -1,33 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { autenticar } from "@/lib/server/tarefasManuais";
 import { podeVerPainelAnalitico } from "@/lib/auth/roles";
 import { calcularEvolucaoEtapas, type SnapshotEtapa } from "@/lib/services/analiseEtapas";
-import type { Role } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 const DIAS_PADRAO = 21;
+const DIAS_MAXIMO = 90; // teto da janela de análise (cada dia lê milhares de snapshots)
 const LIMITE_SNAPSHOTS = 8000; // proteção contra datasets muito grandes
 
 export async function GET(req: NextRequest) {
   try {
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
-
-    const authHeader = req.headers.get("authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (!token) return NextResponse.json({ erro: "Não autenticado." }, { status: 401 });
-
-    const decoded = await adminAuth.verifyIdToken(token).catch(() => null);
-    if (!decoded) return NextResponse.json({ erro: "Sessão inválida." }, { status: 401 });
-
-    const userSnap = await adminDb.collection("users").doc(decoded.uid).get();
-    const role = userSnap.data()?.role as Role | undefined;
-    if (!role || !podeVerPainelAnalitico(role)) {
+    const auth = await autenticar(req);
+    if (auth instanceof NextResponse) return auth;
+    if (!podeVerPainelAnalitico(auth.role)) {
       return NextResponse.json({ erro: "Sem permissão." }, { status: 403 });
     }
+    const adminDb = getAdminDb();
 
-    const dias = Number(req.nextUrl.searchParams.get("dias") ?? DIAS_PADRAO);
+    // Teto obrigatório: valor ausente, inválido ou absurdo nunca vira uma consulta sem limite.
+    const pedido = Math.floor(Number(req.nextUrl.searchParams.get("dias") ?? DIAS_PADRAO));
+    const dias = Number.isFinite(pedido) ? Math.min(Math.max(pedido, 1), DIAS_MAXIMO) : DIAS_PADRAO;
 
     const importacoesSnap = await adminDb
       .collection("importacoes")

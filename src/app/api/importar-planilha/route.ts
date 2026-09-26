@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { autenticar } from "@/lib/server/tarefasManuais";
 import { parseWorkbookBuffer } from "@/lib/services/parseSheet";
 import { executarAuditoriaDiaria } from "@/lib/services/auditEngine";
 import { podeImportarPlanilha } from "@/lib/auth/roles";
 import { hojeISO } from "@/lib/utils/dates";
-import type { Role } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -17,28 +17,15 @@ function dataDeCalendarioValida(valor: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
-
-    const authHeader = req.headers.get("authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (!token) {
-      return NextResponse.json({ erro: "Não autenticado." }, { status: 401 });
-    }
-
-    const decoded = await adminAuth.verifyIdToken(token).catch(() => null);
-    if (!decoded) {
-      return NextResponse.json({ erro: "Sessão inválida ou expirada." }, { status: 401 });
-    }
-
-    const userSnap = await adminDb.collection("users").doc(decoded.uid).get();
-    const role = userSnap.data()?.role as Role | undefined;
-    if (!role || !podeImportarPlanilha(role)) {
+    const auth = await autenticar(req);
+    if (auth instanceof NextResponse) return auth;
+    if (!podeImportarPlanilha(auth.role)) {
       return NextResponse.json(
         { erro: "Seu perfil não tem permissão para importar planilhas." },
         { status: 403 }
       );
     }
+    const adminDb = getAdminDb();
 
     const formData = await req.formData();
     const file = formData.get("arquivo");
@@ -72,7 +59,7 @@ export async function POST(req: NextRequest) {
       sheetName,
       importacaoId,
       nomeArquivo: file.name,
-      importadoPor: decoded.uid,
+      importadoPor: auth.uid,
     });
 
     return NextResponse.json({ resumo, colunasNaoEncontradas });

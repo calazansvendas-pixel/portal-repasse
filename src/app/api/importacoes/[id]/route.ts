@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
-import type { Role } from "@/lib/types";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { autenticar } from "@/lib/server/tarefasManuais";
 
 export const runtime = "nodejs";
 
@@ -19,32 +19,23 @@ const LOTE = 450; // margem de segurança abaixo do limite de 500 do Firestore p
  *     objetivo é o dashboard voltar a refletir exatamente o estado sem essa
  *     planilha, mesmo que isso remova a pasta inteira da esteira.
  *
- * Snapshots de OUTROS dias para a mesma pasta não são tocados (só o vínculo
- * com este importacaoId é eliminado).
+ * A exclusão da pasta é EM CASCATA: as subcoleções (snapshots de todos os dias) vão
+ * junto, para não sobrar snapshot órfão apontando para uma pasta que não existe mais.
  *
  * Restrito a role === "gerencia", verificado aqui no servidor (além das
  * regras do Firestore, que também travam delete direto pelo client SDK).
  */
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
-
-    const authHeader = req.headers.get("authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (!token) return NextResponse.json({ erro: "Não autenticado." }, { status: 401 });
-
-    const decoded = await adminAuth.verifyIdToken(token).catch(() => null);
-    if (!decoded) return NextResponse.json({ erro: "Sessão inválida ou expirada." }, { status: 401 });
-
-    const userSnap = await adminDb.collection("users").doc(decoded.uid).get();
-    const role = userSnap.data()?.role as Role | undefined;
-    if (role !== "gerencia") {
+    const auth = await autenticar(req);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.role !== "gerencia") {
       return NextResponse.json(
         { erro: "Somente a Gerência pode excluir uma importação." },
         { status: 403 }
       );
     }
+    const adminDb = getAdminDb();
 
     const importacaoId = params.id;
 
@@ -66,10 +57,15 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     });
     const registrosRefs = [...registrosRefsPorPath.values()];
 
+    // Pastas primeiro, com suas subcoleções (recursiveDelete): nenhum snapshot fica órfão.
+    for (const registroRef of registrosRefs) {
+      await adminDb.recursiveDelete(registroRef);
+    }
+
+    // Snapshots deste dia que não pertençam a uma pasta já apagada (defesa) + tarefas + resumo.
     const refs = [
       ...snapshotsSnap.docs.map((d) => d.ref),
       ...tarefasSnap.docs.map((d) => d.ref),
-      ...registrosRefs,
       adminDb.collection("importacoes").doc(importacaoId),
     ];
 

@@ -6,6 +6,8 @@ import { db } from "@/lib/firebase/client";
 import type { EtapaHistorico, Quadro, QuadroEscalonamento, Tarefa } from "@/lib/types";
 import { normalizarTarefa } from "@/lib/utils/normalizarTarefa";
 
+const STATUS_ATIVOS: Tarefa["status"][] = ["pendente", "pending_validation", "audit_failed"];
+
 /**
  * Tarefas ativas dos quadros informados, mais recentes primeiro. `quadros`
  * deve ser a união das praças regionais visíveis + os quadros nativos de
@@ -30,6 +32,8 @@ export function useTarefasPorQuadros(quadros: Quadro[]) {
     const q = query(
       collection(db, "tarefas"),
       where("praca", "in", quadros),
+      // Filtra no servidor: tarefas já validadas (validated_done) nunca são baixadas.
+      where("status", "in", STATUS_ATIVOS),
       orderBy("criadoEm", "desc")
     );
     const unsubscribe = onSnapshot(
@@ -44,7 +48,7 @@ export function useTarefasPorQuadros(quadros: Quadro[]) {
           } as Tarefa;
           return normalizarTarefa(raw);
         });
-        setTarefas(todas.filter((t) => t.status !== "validated_done"));
+        setTarefas(todas);
         setLoading(false);
       },
       (err) => {
