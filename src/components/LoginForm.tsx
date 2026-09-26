@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -19,6 +19,13 @@ export function LoginForm() {
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Redirecionado do painel porque o perfil foi desativado.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("inativo") === "1") {
+      setErro("Seu acesso foi desativado. Fale com a gerência.");
+    }
+  }, []);
   const router = useRouter();
 
   async function handleSubmit(e: FormEvent) {

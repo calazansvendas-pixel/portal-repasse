@@ -4,16 +4,9 @@ import { autenticar } from "@/lib/server/tarefasManuais";
 import { parseWorkbookBuffer } from "@/lib/services/parseSheet";
 import { executarAuditoriaDiaria } from "@/lib/services/auditEngine";
 import { podeImportarPlanilha } from "@/lib/auth/roles";
-import { hojeISO } from "@/lib/utils/dates";
+import { dataDeCalendarioValida, hojeISO } from "@/lib/utils/dates";
 
 export const runtime = "nodejs";
-
-/** yyyy-MM-dd que existe no calendário (recusa, por exemplo, 2026-02-31). */
-function dataDeCalendarioValida(valor: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
-  const d = new Date(`${valor}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === valor;
-}
 
 export async function POST(req: NextRequest) {
   try {

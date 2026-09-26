@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { podeVerPainelAnalitico } from "@/lib/auth/roles";
 import { autenticar } from "@/lib/server/tarefasManuais";
-import { lerDias, lerAnaliseSnapshots, lerTarefasDaJanela } from "@/lib/server/analytics";
+import { lerDias, lerAnaliseSnapshots, lerTarefasDaJanela, LIMITE_SNAPSHOTS, LIMITE_TAREFAS } from "@/lib/server/analytics";
 import { calcularMapaTreinamento, calcularRankingParceiros } from "@/lib/services/analiseParceiros";
 import type { Tarefa } from "@/lib/types";
 
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
     const db = getAdminDb();
     const dias = lerDias(req);
-    const [{ evolucao, estrategicas }, tarefas] = await Promise.all([
+    const [{ evolucao, estrategicas, truncado }, tarefas] = await Promise.all([
       lerAnaliseSnapshots(db, dias),
       lerTarefasDaJanela(db, dias),
     ]);
@@ -35,6 +35,11 @@ export async function GET(req: NextRequest) {
       ranking: calcularRankingParceiros(lista),
       mapa: calcularMapaTreinamento(lista),
       totalTarefas: lista.length,
+      // Avisa a tela quando algum teto de leitura foi atingido (dados parciais).
+      parcial: {
+        snapshots: truncado ? LIMITE_SNAPSHOTS : null,
+        tarefas: lista.length >= LIMITE_TAREFAS ? LIMITE_TAREFAS : null,
+      },
     });
   } catch (error) {
     console.error("[analytics/painel] erro:", error);

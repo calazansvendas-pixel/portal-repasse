@@ -13,6 +13,13 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
     if (!loading && !firebaseUser) router.replace("/login");
   }, [loading, firebaseUser, router]);
 
+  // Perfil desativado: encerra a sessão e manda para o login (o app não deve continuar aberto).
+  const inativo = !!profile && profile.ativo === false;
+  useEffect(() => {
+    if (!inativo) return;
+    signOut().finally(() => router.replace("/login?inativo=1"));
+  }, [inativo, signOut, router]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-soft dark:bg-[#12140F]">
@@ -43,7 +50,7 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  if (!profile) return null;
+  if (!profile || inativo) return null;
 
   return (
     <div className="min-h-screen bg-surface-soft dark:bg-[#12140F]">

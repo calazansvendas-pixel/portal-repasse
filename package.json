@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "seed:users": "node scripts/seed-users.mjs",
     "wipe:data": "node scripts/wipe-data.mjs",
+    "normalizar:users": "node scripts/normalizar-users-ativo.mjs",
     "deploy:rules": "node scripts/deploy-firestore-rules.mjs",
     "deploy:indexes": "node scripts/deploy-firestore-indexes.mjs"
   },

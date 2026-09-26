@@ -72,6 +72,25 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {dados && (dados.parcial.snapshots || dados.parcial.tarefas) && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-md border border-status-warning/30 bg-status-warning/10 p-3 text-xs text-status-warning"
+        >
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <p>
+            <span className="font-semibold">Dados parciais.</span>{" "}
+            {[
+              dados.parcial.snapshots && `o limite de ${dados.parcial.snapshots.toLocaleString("pt-BR")} snapshots foi atingido`,
+              dados.parcial.tarefas && `o limite de ${dados.parcial.tarefas.toLocaleString("pt-BR")} tarefas foi atingido`,
+            ]
+              .filter(Boolean)
+              .join(" e ")}
+            . Os números abaixo não cobrem todo o período; reduza a janela de dias para uma leitura completa.
+          </p>
+        </div>
+      )}
+
       {loading && !dados ? (
         <p className="text-sm text-ink-muted">Carregando indicadores…</p>
       ) : (

@@ -74,3 +74,10 @@ export function diasDesde(isoDate: string | null | undefined): number | null {
     return null;
   }
 }
+
+/** yyyy-MM-dd que existe no calendário (recusa 2026-02-31, 2026-04-31 etc.; aceita 29/02 só em ano bissexto). */
+export function dataDeCalendarioValida(valor: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const d = new Date(`${valor}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === valor;
+}

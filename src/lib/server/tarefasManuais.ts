@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { destinatariosPermitidos } from "@/lib/auth/roles";
+import { dataDeCalendarioValida } from "@/lib/utils/dates";
 import type { NivelTarefa, Quadro, Role } from "@/lib/types";
 
 export const LIMITE_DESCRICAO = 1000;
@@ -62,7 +63,7 @@ export function validarDescricaoEDestino(
 export function lerDataLimite(bruta: unknown): string | null | undefined | NextResponse {
   if (bruta === undefined) return undefined;
   if (bruta === null || bruta === "") return null;
-  if (typeof bruta !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(bruta) || Number.isNaN(Date.parse(bruta))) {
+  if (typeof bruta !== "string" || !dataDeCalendarioValida(bruta)) {
     return NextResponse.json({ erro: "Data limite inválida." }, { status: 400 });
   }
   return bruta;

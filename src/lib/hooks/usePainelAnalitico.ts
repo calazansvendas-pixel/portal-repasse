@@ -13,6 +13,8 @@ export interface PainelAnalitico {
   ranking: RankingParceiro[];
   mapa: CruzamentoPendencia[];
   totalTarefas: number;
+  /** Tetos de leitura atingidos (null = completo). */
+  parcial: { snapshots: number | null; tarefas: number | null };
 }
 
 /**

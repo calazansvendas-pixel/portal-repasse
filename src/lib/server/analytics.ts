@@ -6,7 +6,7 @@ import type { Registro, Tarefa } from "@/lib/types";
 
 export const DIAS_PADRAO = 21;
 export const DIAS_MAXIMO = 90; // teto da janela de análise (cada dia lê milhares de snapshots)
-const LIMITE_SNAPSHOTS = 8000; // proteção contra datasets muito grandes
+export const LIMITE_SNAPSHOTS = 8000; // proteção contra datasets muito grandes
 export const LIMITE_TAREFAS = 5000;
 
 /** Teto obrigatório: valor ausente, inválido ou absurdo nunca vira uma consulta sem limite. */
@@ -18,6 +18,8 @@ export function lerDias(req: NextRequest): number {
 export interface AnaliseSnapshots {
   evolucao: EvolucaoEtapas;
   estrategicas: MetricasEstrategicas;
+  /** Alguma consulta de snapshots bateu no teto: os números são parciais. */
+  truncado: boolean;
 }
 
 /**
@@ -30,11 +32,12 @@ export async function lerAnaliseSnapshots(db: Firestore, dias: number): Promise<
   const importacoesSnap = await db.collection("importacoes").orderBy("id", "desc").limit(dias).get();
   const importacaoIds = importacoesSnap.docs.map((d) => d.id);
   if (importacaoIds.length === 0) {
-    return { evolucao: calcularEvolucaoEtapas([]), estrategicas: calcularMetricasEstrategicas([]) };
+    return { evolucao: calcularEvolucaoEtapas([]), estrategicas: calcularMetricasEstrategicas([]), truncado: false };
   }
   const maisRecente = importacaoIds[0]; // ordenado por id (yyyy-MM-dd) decrescente
 
   const entradas: SnapshotEtapa[] = [];
+  let truncado = false;
   const pastasAtuais: Pick<Registro, "etapa" | "observacao">[] = [];
   for (let i = 0; i < importacaoIds.length; i += 10) {
     const snap = await db
@@ -43,6 +46,7 @@ export async function lerAnaliseSnapshots(db: Firestore, dias: number): Promise<
       .select("numero", "importacaoId", "etapa", "observacao")
       .limit(LIMITE_SNAPSHOTS)
       .get();
+    if (snap.size >= LIMITE_SNAPSHOTS) truncado = true;
     snap.forEach((doc) => {
       const data = doc.data();
       entradas.push({ numero: data.numero, importacaoId: data.importacaoId, etapa: data.etapa });
@@ -54,6 +58,7 @@ export async function lerAnaliseSnapshots(db: Firestore, dias: number): Promise<
   return {
     evolucao: calcularEvolucaoEtapas(entradas),
     estrategicas: calcularMetricasEstrategicas(pastasAtuais as Registro[]),
+    truncado,
   };
 }
 

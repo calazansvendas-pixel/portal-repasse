@@ -15,18 +15,24 @@ service cloud.firestore {
       return meuPerfil().role;
     }
 
+    // Perfil desativado (ativo != true) perde TODO acesso, mesmo com login e token válidos.
+    function perfilAtivo() {
+      return meuPerfil().get('ativo', false) == true;
+    }
+
     function papelGestor() {
       // gerencia, coordenador e analista enxergam a operação inteira (cada um dentro
       // do seu próprio escopo de telas — a UI já filtra o que cada um pode ver).
-      return logado() && minhaRole() in ['gerencia', 'coordenador', 'analista'];
+      return logado() && perfilAtivo() && minhaRole() in ['gerencia', 'coordenador', 'analista'];
     }
 
     function souGerencia() {
       // Exclusão de importação (snapshot + tarefas + resumo) é ação exclusiva da Gerência.
-      return logado() && minhaRole() == 'gerencia';
+      return logado() && perfilAtivo() && minhaRole() == 'gerencia';
     }
 
-    // --- users: cada um lê o próprio perfil; escrita só via Admin SDK/console. ---
+    // --- users: cada um lê o próprio perfil (mesmo inativo, para o app conseguir encerrar a
+    // sessão); o de outros só gestor ativo. Escrita só via Admin SDK/console. ---
     match /users/{uid} {
       allow read: if logado() && (request.auth.uid == uid || papelGestor());
       allow write: if false;
@@ -67,7 +73,7 @@ service cloud.firestore {
     }
 
     function souDonoDoQuadro(quadroDaTarefa) {
-      return minhaRole() in ['assistente', 'coordenador', 'analista'] && quadroDaTarefa == meuQuadro();
+      return perfilAtivo() && minhaRole() in ['assistente', 'coordenador', 'analista'] && quadroDaTarefa == meuQuadro();
     }
 
     match /tarefas/{tarefaId} {
