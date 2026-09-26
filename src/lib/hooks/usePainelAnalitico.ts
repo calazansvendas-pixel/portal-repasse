@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import type { MetricasEstrategicas } from "@/lib/services/analiseEstrategica";
 import type { EvolucaoEtapas } from "@/lib/services/analiseEtapas";
 import type { CruzamentoPendencia, RankingParceiro } from "@/lib/services/analiseParceiros";
 
 export interface PainelAnalitico {
   dias: number;
   evolucao: EvolucaoEtapas;
+  estrategicas: MetricasEstrategicas;
   ranking: RankingParceiro[];
   mapa: CruzamentoPendencia[];
   totalTarefas: number;

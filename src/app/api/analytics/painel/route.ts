@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { podeVerPainelAnalitico } from "@/lib/auth/roles";
 import { autenticar } from "@/lib/server/tarefasManuais";
-import { lerDias, lerEvolucaoEtapas, lerTarefasDaJanela } from "@/lib/server/analytics";
+import { lerDias, lerAnaliseSnapshots, lerTarefasDaJanela } from "@/lib/server/analytics";
 import { calcularMapaTreinamento, calcularRankingParceiros } from "@/lib/services/analiseParceiros";
 import type { Tarefa } from "@/lib/types";
 
@@ -22,12 +22,16 @@ export async function GET(req: NextRequest) {
 
     const db = getAdminDb();
     const dias = lerDias(req);
-    const [evolucao, tarefas] = await Promise.all([lerEvolucaoEtapas(db, dias), lerTarefasDaJanela(db, dias)]);
+    const [{ evolucao, estrategicas }, tarefas] = await Promise.all([
+      lerAnaliseSnapshots(db, dias),
+      lerTarefasDaJanela(db, dias),
+    ]);
     const lista = tarefas as Tarefa[];
 
     return NextResponse.json({
       dias,
       evolucao,
+      estrategicas,
       ranking: calcularRankingParceiros(lista),
       mapa: calcularMapaTreinamento(lista),
       totalTarefas: lista.length,

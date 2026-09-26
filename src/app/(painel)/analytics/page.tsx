@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardList, Hourglass, Undo2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, Hourglass, Rocket, Undo2, UserX } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { podeVerPainelAnalitico } from "@/lib/auth/roles";
 import type { RankingParceiro } from "@/lib/services/analiseParceiros";
@@ -84,6 +84,21 @@ export default function AnalyticsPage() {
               <StatTile label="Devolvidas (falha)" value={resumo.falhas} icon={Undo2} tone="danger" />
               <StatTile label="Taxa de falha" value={`${resumo.taxaFalha}%`} icon={AlertTriangle} tone="warning" />
               <StatTile label="Maior gargalo" value={resumo.etapaGargalo} icon={Hourglass} tone="warning" />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <StatTile
+                label="Vazamento do funil (qualificação ruim)"
+                value={`${dados.estrategicas.taxaVazamentoFunilPct}%`}
+                icon={UserX}
+                tone="danger"
+              />
+              <StatTile
+                label="Eficiência de inclusão (saíram da 0.01)"
+                value={`${dados.estrategicas.eficienciaInclusaoPct}%`}
+                icon={Rocket}
+                tone="success"
+              />
             </div>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
