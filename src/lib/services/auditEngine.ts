@@ -115,6 +115,27 @@ export interface ResumoImportacao {
 // "audit_failed" entra como ativa para que a próxima importação continue
 // atualizando/rastreando a mesma tarefa em vez de criar um card duplicado.
 const ATIVAS: Tarefa["status"][] = ["pendente", "pending_validation", "audit_failed"];
+
+// Regras que exigem uma ação tática/analítica real da equipe (ligar para um setor externo, agendar
+// visita/treinamento com a imobiliária) — a planilha não tem como confirmar isso, então um texto que
+// muda ou desaparece na próxima importação NÃO prova que a ação aconteceu. A importação NUNCA pode
+// arquivar, auto-resolver ou devolver por falha de auditoria essas tarefas sozinha: só fecham quando
+// alguém clica em "Concluir".
+const SUFIXOS_ACAO_HUMANA = [
+  "::erro_processo", // Coordenador: agendar visita de relacionamento/treinamento com a imobiliária
+  "::risco_bancario", // Analista: acionar a Caixa para destravar a pasta
+];
+// Agregados cuja chave varia por imobiliária (não dá para usar endsWith com sufixo fixo).
+const PREFIXOS_ACAO_HUMANA = [
+  "AGREGADO::filtro_ruim::", // Coordenador: alinhar a régua MCMV com a imobiliária
+];
+
+function ehTarefaDeAcaoHumana(chaveRegra: string): boolean {
+  return (
+    SUFIXOS_ACAO_HUMANA.some((sufixo) => chaveRegra.endsWith(sufixo)) ||
+    PREFIXOS_ACAO_HUMANA.some((prefixo) => chaveRegra.startsWith(prefixo))
+  );
+}
 const FIRESTORE_BATCH_LIMIT = 450; // margem de segurança abaixo do limite de 500 do Firestore
 
 interface DadosParaReconciliar {
@@ -259,7 +280,10 @@ export async function executarAuditoriaDiaria(params: {
       const confiancaCredito = dados.chaveRegra.startsWith("AGREGADO::gargalo_credito::");
       // E na 0.04 (follow-up): a virada também não depende da equipe interna.
       const ehFollowUp = dados.chaveRegra.endsWith("::follow_up_004");
+      // Ação humana (visita/treinamento): a planilha não audita evento do mundo real — o clique
+      // de quem concluiu é a única confirmação que existe, então a baixa vale sempre.
       const sucesso =
+        ehTarefaDeAcaoHumana(dados.chaveRegra) ||
         confiancaEtapaInclusao ||
         confiancaCredito ||
         ehFollowUp ||
@@ -324,6 +348,11 @@ export async function executarAuditoriaDiaria(params: {
 
     if (tarefaAtiva?.data.status === "pendente" || tarefaAtiva?.data.status === "audit_failed") {
       const tarefaRef = db.collection("tarefas").doc(tarefaAtiva.id);
+      if (!dados.condicaoAtiva && ehTarefaDeAcaoHumana(dados.chaveRegra)) {
+        // Ação humana: o texto que disparou a regra sumiu da planilha, mas isso não prova que a
+        // visita/treinamento aconteceu. A tarefa fica intocada — só fecha com o clique de quem a fez.
+        return;
+      }
       if (!dados.condicaoAtiva) {
         // O gatilho deixou de valer sem passar por validação manual: fecha silenciosamente.
         update(tarefaRef, { status: "validated_done", atualizadoEm: agora });
