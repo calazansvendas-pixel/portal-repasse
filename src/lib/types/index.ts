@@ -40,6 +40,7 @@ export interface Registro {
   numero: string; // ID único da pasta — chave primária
   cpfCnpj: string;
   cidade: string;
+  produto?: string; // nome do empreendimento (coluna "Empreendimento"), separado da cidade
   responsavel: string; // Imobiliária parceira
   etapa: string;
   prazoEtapa: string | null; // ISO date
@@ -69,6 +70,7 @@ export interface RegistroSnapshot {
   numero: string;
   cpfCnpj: string;
   cidade: string;
+  produto?: string;
   responsavel: string;
   etapa: string;
   prazoEtapa: string | null;

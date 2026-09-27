@@ -453,6 +453,7 @@ export async function executarAuditoriaDiaria(params: {
       historicoEtapas: historicoPasta,
       cpfCnpj: linha.cpfCnpj,
       cidade: linha.cidade,
+      produto: linha.produto,
       responsavel: linha.responsavel,
       etapa: linha.etapa,
       prazoEtapa: linha.prazoEtapa,

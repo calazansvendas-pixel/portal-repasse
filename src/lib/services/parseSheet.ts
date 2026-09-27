@@ -6,6 +6,7 @@ export interface LinhaPlanilha {
   numero: string;
   cpfCnpj: string;
   cidade: string;
+  produto: string;
   responsavel: string;
   etapa: string;
   prazoEtapa: string | null;
@@ -28,6 +29,8 @@ const MATCHERS: { chave: ColunaChave; teste: (h: string) => boolean }[] = [
   { chave: "numero", teste: (h) => h === "numero" || h.startsWith("numero") },
   { chave: "cpfCnpj", teste: (h) => h.includes("cpf") },
   { chave: "cidade", teste: (h) => h.includes("cidade") },
+  // Coluna própria "Empreendimento" (nome do produto) — distinta de "Cidade do empreendimento".
+  { chave: "produto", teste: (h) => h.includes("empreendimento") && !h.includes("cidade") },
   { chave: "responsavel", teste: (h) => h.includes("responsav") },
   { chave: "prazoEtapa", teste: (h) => h.includes("prazo") && h.includes("etapa") },
   { chave: "etapa", teste: (h) => h.includes("etapa") && h.includes("processo") },
@@ -40,6 +43,7 @@ const NOME_COLUNA: Record<ColunaChave, string> = {
   numero: "Número",
   cpfCnpj: "CPF / CNPJ (1º Prop)",
   cidade: "Cidade do empreendimento",
+  produto: "Empreendimento",
   responsavel: "Responsáveis pela pasta",
   etapa: "Etapa do processo",
   prazoEtapa: "Prazo da etapa",
@@ -98,6 +102,7 @@ export function parseWorkbookBuffer(buffer: ArrayBuffer | Buffer): ResultadoPars
       numero,
       cpfCnpj: celulaParaTexto(linha[indicePorColuna.cpfCnpj]),
       cidade: celulaParaTexto(linha[indicePorColuna.cidade]),
+      produto: celulaParaTexto(linha[indicePorColuna.produto]),
       responsavel: celulaParaTexto(linha[indicePorColuna.responsavel]),
       etapa: celulaParaTexto(linha[indicePorColuna.etapa]),
       prazoEtapa: excelCellToISODate(linha[indicePorColuna.prazoEtapa]),

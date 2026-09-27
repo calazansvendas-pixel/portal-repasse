@@ -20,7 +20,6 @@ export function NotaConclusaoModal({
   const [erro, setErro] = useState<string | null>(null);
 
   async function confirmar() {
-    if (!nota.trim()) return; // a nota é obrigatória
     setEnviando(true);
     setErro(null);
     try {
@@ -34,12 +33,7 @@ export function NotaConclusaoModal({
 
   return (
     <Modal
-      titulo={
-        <>
-          O que foi feito? <span className="text-status-danger">*</span>
-        </>
-      }
-      tituloAriaLabel="O que foi feito? (obrigatório)"
+      titulo="O que foi feito?"
       onClose={onCancelar}
     >
       <textarea
@@ -47,8 +41,7 @@ export function NotaConclusaoModal({
         rows={4}
         value={nota}
         onChange={(e) => setNota(e.target.value)}
-        placeholder="Obrigatório. Ex.: Liguei para o corretor, ele vai enviar o RG até amanhã."
-        aria-required="true"
+        placeholder="Opcional. Ex.: Liguei para o corretor, ele vai enviar o RG até amanhã."
         className="w-full resize-none rounded-md border border-border bg-surface p-3 text-base sm:text-sm text-ink-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 dark:border-white/15 dark:bg-[#1B1E17] dark:text-white"
       />
       {erro && <p className="mt-2 text-xs text-status-danger">{erro}</p>}
@@ -56,7 +49,7 @@ export function NotaConclusaoModal({
         <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onCancelar} disabled={enviando}>
           Cancelar
         </button>
-        <button type="button" className="btn-primary h-11 sm:h-10" onClick={confirmar} disabled={enviando || !nota.trim()}>
+        <button type="button" className="btn-primary h-11 sm:h-10" onClick={confirmar} disabled={enviando}>
           Confirmar Conclusão
         </button>
       </div>

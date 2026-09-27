@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { BarChart3, LayoutDashboard, UploadCloud } from "lucide-react";
+import { BarChart3, Building2, LayoutDashboard, UploadCloud } from "lucide-react";
 import type { UserProfile } from "@/lib/types";
 import { ROLE_LABEL, ASSISTENTE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
@@ -20,6 +20,9 @@ function navItemsPara(profile: UserProfile): NavItem[] {
   if (profile.role === "gerencia" || profile.role === "coordenador" || profile.role === "analista") {
     items.push({ href: "/auditoria", label: "Auditoria de Planilha", icon: UploadCloud });
     items.push({ href: "/analytics", label: "Analytics", icon: BarChart3 });
+  }
+  if (profile.role === "gerencia" || profile.role === "coordenador") {
+    items.push({ href: "/relatorio-imobiliarias", label: "Relatório Imobiliárias", icon: Building2 });
   }
 
   return items;

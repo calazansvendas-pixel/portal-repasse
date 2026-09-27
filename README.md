@@ -96,8 +96,9 @@ primeiro lugar a olhar se for preciso ajustar quem vê o quê.
 - Envie o Excel pela tela **Auditoria de Planilha** (Gerência/Coordenador).
 - O parser (`src/lib/services/parseSheet.ts`) procura a aba no padrão
   `"0.01 dd-mm"` (ou usa a primeira aba) e mapeia as colunas: Número, CPF/CNPJ
-  (1º Prop), Cidade do empreendimento, Responsáveis pela pasta, Etapa do
-  processo, Prazo da etapa, Observação.
+  (1º Prop), Cidade do empreendimento, Empreendimento (produto — coluna própria,
+  desvinculada da cidade), Responsáveis pela pasta, Etapa do processo, Prazo da
+  etapa, Observação.
 - O motor de auditoria (`src/lib/services/auditEngine.ts`) roda no servidor
   (`/api/importar-planilha`, Firebase Admin SDK) e, comparando com o snapshot
   anterior por "Número":

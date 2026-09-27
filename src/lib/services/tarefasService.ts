@@ -7,10 +7,9 @@ import type { ClienteEnvolvido, NotaResolucao, Quadro, Tarefa } from "@/lib/type
 /** Texto do registro automático do God Mode (não é uma justificativa escrita pelo colaborador). */
 const NOTA_GERENCIA = "Marcada como feita pela Gerência.";
 
-function exigirNota(nota: string | undefined): string {
-  const texto = (nota ?? "").trim();
-  if (!texto) throw new Error("Descreva o que foi feito para concluir.");
-  return texto;
+/** A nota "O que foi feito" é OPCIONAL: aceita vazio/undefined sem bloquear a conclusão. */
+function normalizarNota(nota: string | undefined): string {
+  return (nota ?? "").trim();
 }
 
 /** Notas antigas (anteriores ao histórico) viram a primeira entrada, para nunca se perderem. */
@@ -19,13 +18,14 @@ function semente(historico: NotaResolucao[] | undefined, notaLegada: string | nu
 }
 
 /**
- * Assistente marca a tarefa como resolvida. A nota "O que foi feito" é OBRIGATÓRIA e entra no
- * histórico de tentativas (imutável: cada nova tentativa acumula, nada é sobrescrito). Isso NÃO
+ * Assistente marca a tarefa como resolvida. A nota "O que foi feito" é OPCIONAL: se vier vazia,
+ * a conclusão acontece do mesmo jeito e nada é adicionado ao histórico de tentativas (que
+ * continua imutável quando preenchido — cada nova tentativa acumula, nada é sobrescrito). Isso NÃO
  * fecha a tarefa definitivamente: ela vai para "pending_validation" até a próxima importação de
  * planilha confirmar (ou não) o avanço da etapa — ver auditEngine.ts.
  */
 export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: string, autor?: string | null) {
-  const texto = exigirNota(nota);
+  const texto = normalizarNota(nota);
   const agora = new Date().toISOString();
   await updateDoc(doc(db, "tarefas", tarefa.id), {
     status: "pending_validation",
@@ -33,11 +33,15 @@ export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: s
     resolvidoEm: agora,
     etapaNoMomentoResolucao: tarefa.etapa,
     observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
-    notaResolucao: texto,
-    historicoNotas: arrayUnion(
-      ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
-      { texto, data: agora, autor: autor ?? null }
-    ),
+    notaResolucao: texto || tarefa.notaResolucao || null,
+    ...(texto
+      ? {
+          historicoNotas: arrayUnion(
+            ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
+            { texto, data: agora, autor: autor ?? null }
+          ),
+        }
+      : {}),
   });
 }
 
@@ -45,7 +49,8 @@ export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: s
  * Marca/desmarca UM cliente dentro de uma tarefa agregada (gargalo). A tarefa
  * mãe só entra em "pending_validation" quando todos os clientes estão
  * marcados; desmarcar qualquer um a devolve para "pendente".
- * Concluir com `nota` (modal do cliente) exige texto e ACUMULA a tentativa no histórico do cliente.
+ * Concluir com `nota` (modal do cliente) ACUMULA a tentativa no histórico do cliente quando o
+ * texto vem preenchido; vazia ou ausente, conclui do mesmo jeito sem tocar no histórico.
  * Sem `nota` (check rápido da lista) nada do histórico muda; desmarcar NUNCA apaga notas.
  */
 export async function alternarClienteEnvolvido(
@@ -56,7 +61,7 @@ export async function alternarClienteEnvolvido(
   autor?: string | null
 ) {
   const ref = doc(db, "tarefas", tarefaId);
-  const texto = nota === undefined ? undefined : exigirNota(nota);
+  const texto = nota === undefined ? undefined : normalizarNota(nota);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const tarefa = snap.data() as Tarefa | undefined;
@@ -68,6 +73,7 @@ export async function alternarClienteEnvolvido(
       if (c.numero !== numero) return c;
       const concluido = !c.concluido;
       if (!concluido || texto === undefined) return { ...c, concluido };
+      if (!texto) return { ...c, concluido }; // conclusão sem nota: nada entra no histórico
       notaDoClique = texto;
       return {
         ...c,
