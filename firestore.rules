@@ -65,6 +65,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // --- regras_auditoria: Motor de Regras Dinâmicas (No-Code). Configuração restrita à
+    // Gerência — mesmo nível de confiança do God Mode nas tarefas. ---
+    match /regras_auditoria/{regraId} {
+      allow read, write: if souGerencia();
+    }
+
     // --- tarefas: o campo "praca" guarda o Quadro (regional OU "coordenador"/"analista"
     // nativo). Cada um só marca/desmarca o checkbox no PRÓPRIO quadro — assistente na sua
     // praça, Coordenador em "coordenador", Analista em "analista". Gerência só observa. ---

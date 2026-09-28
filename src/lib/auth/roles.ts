@@ -137,3 +137,8 @@ export function podeImportarPlanilha(role: Role): boolean {
 export function podeVerTodosOsQuadros(role: Role): boolean {
   return role === "gerencia" || role === "coordenador" || role === "analista";
 }
+
+/** Motor de Regras Dinâmicas (No-Code): configuração restrita à Gerência. */
+export function podeConfigurarRegrasAuditoria(role: Role): boolean {
+  return role === "gerencia";
+}

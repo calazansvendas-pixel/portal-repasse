@@ -23,6 +23,7 @@ import {
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
+import { buscarRegrasAtivas } from "./dynamicRuleEngine";
 import type { ClienteEnvolvido, EtapaHistorico, Importacao, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
 
 // Teto de segurança: o documento do Firestore tem limite de 1 MB e cada tarefa copia o trajeto da pasta.
@@ -216,6 +217,15 @@ export async function executarAuditoriaDiaria(params: {
     const data = doc.data() as Tarefa;
     tarefasPorChave.set(data.chaveRegra, { id: doc.id, data });
   });
+
+  // Motor de Regras Dinâmicas (No-Code): busca as regras ativas cadastradas pela Gerência.
+  // Ainda não aplicadas a esta importação — só o fetch + o esqueleto do Avaliador Dinâmico
+  // (dynamicRuleEngine.ts). A próxima etapa é passar `regrasDinamicasAtivas` e `linhas` para
+  // `avaliarRegrasDinamicas` e reconciliar os specs devolvidos, no mesmo formato das regras fixas.
+  const regrasDinamicasAtivas = await buscarRegrasAtivas(db);
+  if (regrasDinamicasAtivas.length > 0) {
+    console.info(`[auditEngine] ${regrasDinamicasAtivas.length} regra(s) dinâmica(s) ativa(s) — ainda não aplicadas.`);
+  }
 
   // Janela de respiro da 0.01: última conclusão recente por chaveRegra de "Inércia inicial".
   // Consulta só por resolvidoEm (índice automático de campo único) e filtra o resto em memória.
