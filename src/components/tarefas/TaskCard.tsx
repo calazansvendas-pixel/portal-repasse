@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Layers, Pencil, Trash2, Undo2 } from "lucide-react";
-import type { ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
+import type { Assistente, ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
+import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
 import { SLA_BADGE_CLASSES, SLA_LABEL, calcularSlaStatus, slaExibido } from "@/lib/utils/sla";
 import {
@@ -25,6 +26,56 @@ import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
 import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha, notasDe } from "./partesCard";
 
 const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
+
+/** Primeiro nome a partir de um rótulo como "Andressa (Analista)" ou "Laiza (Serra)". */
+function primeiroNome(rotulo: string): string {
+  return rotulo.split(" (")[0]?.trim() || rotulo;
+}
+
+/**
+ * Segunda passada de substituição de variáveis no texto da tarefa. `{analista}` e `{assistente}`
+ * o Motor de Regras não resolve sozinho no servidor (dependem de quem ocupa o cargo hoje, não da
+ * planilha); aqui viram o nome real via os rótulos já existentes no app. `{cliente}`/
+ * `{imobiliaria}` já chegam substituídos pelo motor em tarefas de linha — a troca aqui é só uma
+ * rede de segurança (normalmente um no-op). Em tarefas agregadas (Volume/Gargalos) não há um
+ * cliente/imobiliária único, então essas duas ficam de fora: o texto permanece coeso e o
+ * detalhamento mora na lista de pastas relacionadas.
+ */
+function formatarDescricao(tarefa: Tarefa): string {
+  let texto = tarefa.descricao
+    .replaceAll("{analista}", primeiroNome(QUADRO_LABEL.analista))
+    .replaceAll(
+      "{assistente}",
+      PRACAS_ASSISTENTES.includes(tarefa.praca)
+        ? primeiroNome(ASSISTENTE_LABEL[tarefa.praca as Assistente])
+        : "a assistente responsável"
+    );
+
+  if (tarefa.origem !== "agregado") {
+    texto = texto
+      .replaceAll("{cliente}", tarefa.clienteNome || "cliente não identificado")
+      .replaceAll("{imobiliaria}", tarefa.imobiliaria || "imobiliária não informada");
+  }
+
+  return texto;
+}
+
+/**
+ * Dias consecutivos que a pasta aparece na etapa atual, contando as entradas mais recentes do
+ * trajeto (`historicoEtapas`) — um item por Daily Delta importado, o mesmo critério que o Motor de
+ * Regras usa para SLA/Estagnação. Só existe para tarefas de linha (origem "linha"); agregadas e
+ * avulsas não têm um trajeto de pasta único para contar.
+ */
+function diasNaEtapaAtual(tarefa: Tarefa): number | null {
+  if (tarefa.origem !== "linha" || !tarefa.historicoEtapas?.length) return null;
+  const etapaAtual = tarefa.etapa.trim();
+  let dias = 0;
+  for (let i = tarefa.historicoEtapas.length - 1; i >= 0; i--) {
+    if (tarefa.historicoEtapas[i].etapa.trim() !== etapaAtual) break;
+    dias++;
+  }
+  return dias || null;
+}
 
 /**
  * `gargalo` = este card representa UM cliente dentro de uma tarefa agregada (aberto a partir da lista
@@ -48,6 +99,7 @@ export function TaskCard({
 
   const aguardandoValidacao = tarefa.status === "pending_validation";
   const falhaAuditoria = tarefa.status === "audit_failed";
+  const diasEtapa = diasNaEtapaAtual(tarefa);
   const isAgregado = tarefa.origem === "agregado";
   const isManual = tarefa.origem === "manual";
   const clientes = (gargalo ? gargalo.pai : tarefa).clientesEnvolvidos ?? [];
@@ -148,7 +200,7 @@ export function TaskCard({
 
   if (aguardandoValidacao) {
     const nome = isManual
-      ? tarefa.descricao
+      ? formatarDescricao(tarefa)
       : isAgregado
         ? tituloAgregado
         : tarefa.clienteNome || tarefa.imobiliaria || tarefa.tipoPendencia;
@@ -269,12 +321,19 @@ export function TaskCard({
             <p className="break-words text-xs text-ink-muted">{tarefa.imobiliaria || "Imobiliária não informada"}</p>
           </div>
         )}
-        {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {diasEtapa !== null && (
+            <span className="whitespace-nowrap text-[11px] text-gray-400 dark:text-white/30">
+              Há {diasEtapa} {diasEtapa === 1 ? "dia" : "dias"} na etapa
+            </span>
+          )}
+          {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
+        </div>
       </div>
 
       {/* Corpo 1: ação de consultoria/ajuda */}
       <p className="whitespace-pre-line break-words text-sm font-medium leading-snug text-ink-primary dark:text-white">
-        {tarefa.descricao}
+        {formatarDescricao(tarefa)}
       </p>
 
       {tarefa.dataLimite && (

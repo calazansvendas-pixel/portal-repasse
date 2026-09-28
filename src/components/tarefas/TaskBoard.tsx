@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Assistente, Quadro, QuadroEscalonamento, Role, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
@@ -63,26 +63,124 @@ export function TaskBoard({
     };
   }, [role, pracas, tarefas, quadrosEscalonamento]);
 
+  // Etapas com tarefa ativa em QUALQUER swimlane, na mesma ordem numérica das colunas — alimenta
+  // o filtro do topo do painel.
+  const etapasDisponiveis = useMemo(
+    () => [...new Set(tarefas.map((t) => codigoEtapa(t.etapa)))].sort(compararCodigosEtapa),
+    [tarefas]
+  );
+  const [etapasSelecionadas, setEtapasSelecionadas] = useState<Set<string>>(new Set());
+
+  function alternarEtapa(codigo: string) {
+    setEtapasSelecionadas((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(codigo)) novo.delete(codigo);
+      else novo.add(codigo);
+      return novo;
+    });
+  }
+
   if (loading) {
     return <p className="text-sm text-ink-muted">Carregando tarefas…</p>;
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      {topo && <ColunaTarefas coluna={topo} interativo={meusQuadros.includes(topo.chave)} />}
-      {meio && <ColunaTarefas coluna={meio} interativo={meusQuadros.includes(meio.chave)} />}
+    <div className="flex flex-col gap-6">
+      {etapasDisponiveis.length > 1 && (
+        <FiltroEtapas
+          etapas={etapasDisponiveis}
+          selecionadas={etapasSelecionadas}
+          onAlternar={alternarEtapa}
+          onLimpar={() => setEtapasSelecionadas(new Set())}
+        />
+      )}
 
-      {/* Cada assistente ocupa uma swimlane própria, de largura total, empilhadas — mesmo padrão
-          visual do Coordenador/Analista acima. Sem agrupamento lado a lado. */}
-      {assistentes.map((coluna) => (
-        <ColunaTarefas key={coluna.chave} coluna={coluna} interativo={meusQuadros.includes(coluna.chave)} />
-      ))}
+      <div className="flex flex-col gap-8">
+        {topo && (
+          <ColunaTarefas coluna={topo} interativo={meusQuadros.includes(topo.chave)} etapasSelecionadas={etapasSelecionadas} />
+        )}
+        {meio && (
+          <ColunaTarefas coluna={meio} interativo={meusQuadros.includes(meio.chave)} etapasSelecionadas={etapasSelecionadas} />
+        )}
+
+        {/* Cada assistente ocupa uma swimlane própria, de largura total, empilhadas — mesmo padrão
+            visual do Coordenador/Analista acima. Sem agrupamento lado a lado. */}
+        {assistentes.map((coluna) => (
+          <ColunaTarefas
+            key={coluna.chave}
+            coluna={coluna}
+            interativo={meusQuadros.includes(coluna.chave)}
+            etapasSelecionadas={etapasSelecionadas}
+          />
+        ))}
+      </div>
     </div>
   );
 }
 
-function ColunaTarefas({ coluna, interativo }: { coluna: Coluna; interativo: boolean }) {
+/** Tags de seleção múltipla: nenhuma marcada = mostra tudo (comportamento padrão). */
+function FiltroEtapas({
+  etapas,
+  selecionadas,
+  onAlternar,
+  onLimpar,
+}: {
+  etapas: string[];
+  selecionadas: Set<string>;
+  onAlternar: (codigo: string) => void;
+  onLimpar: () => void;
+}) {
+  return (
+    <div className="surface-card flex flex-wrap items-center gap-2 p-3">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Filtrar etapas</span>
+      {etapas.map((codigo) => {
+        const ativo = selecionadas.has(codigo);
+        return (
+          <button
+            key={codigo}
+            type="button"
+            onClick={() => onAlternar(codigo)}
+            aria-pressed={ativo}
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+              ativo
+                ? "border-brand-primary bg-brand-primary text-white"
+                : "border-border text-ink-secondary hover:bg-surface-soft dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+            )}
+          >
+            {codigo}
+          </button>
+        );
+      })}
+      {selecionadas.size > 0 && (
+        <button
+          type="button"
+          onClick={onLimpar}
+          className="ml-1 text-xs font-medium text-ink-muted underline-offset-2 hover:underline"
+        >
+          Limpar filtro
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ColunaTarefas({
+  coluna,
+  interativo,
+  etapasSelecionadas,
+}: {
+  coluna: Coluna;
+  interativo: boolean;
+  /** Vazio = mostra todas as etapas (comportamento padrão); com itens, só essas colunas aparecem. */
+  etapasSelecionadas: Set<string>;
+}) {
   const { titulo, tarefas: tarefasDaColuna, escalonamento } = coluna;
+  const grupos = agruparPorEtapa(tarefasDaColuna).filter(
+    (g) => etapasSelecionadas.size === 0 || etapasSelecionadas.has(g.etapa)
+  );
+  const totalVisivel = grupos.reduce((soma, g) => soma + g.tarefas.length, 0);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -102,7 +200,7 @@ function ColunaTarefas({ coluna, interativo }: { coluna: Coluna; interativo: boo
               : "bg-surface-green text-brand-primaryDark dark:bg-white/10 dark:text-white/70"
           )}
         >
-          {tarefasDaColuna.length}
+          {totalVisivel}
         </span>
       </div>
 
@@ -110,11 +208,15 @@ function ColunaTarefas({ coluna, interativo }: { coluna: Coluna; interativo: boo
         <div className="surface-card p-4 text-center text-xs text-ink-muted">
           Nenhuma pendência no momento.
         </div>
+      ) : grupos.length === 0 ? (
+        <div className="surface-card p-4 text-center text-xs text-ink-muted">
+          Nenhuma tarefa nas etapas selecionadas.
+        </div>
       ) : (
         // flex-row + overflow-x-auto: uma coluna de Kanban por etapa, lado a lado, com scroll
         // horizontal. Puramente organizacional — a etapa vem do motor, sem drag-and-drop.
         <div className="flex flex-row gap-4 overflow-x-auto pb-2">
-          {agruparPorEtapa(tarefasDaColuna).map((grupo) => (
+          {grupos.map((grupo) => (
             <div key={grupo.etapa} className="flex w-72 shrink-0 flex-col gap-3">
               <div className="flex items-center justify-between px-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
@@ -147,6 +249,16 @@ function codigoEtapa(etapa: string | null | undefined): string {
   return valor.split(" - ")[0]?.trim() || "Geral";
 }
 
+/** Numérico crescente primeiro ("Geral" e afins vão para o fim); alfabético como desempate. */
+function compararCodigosEtapa(a: string, b: string): number {
+  const na = Number.parseFloat(a);
+  const nb = Number.parseFloat(b);
+  if (Number.isNaN(na) && Number.isNaN(nb)) return a.localeCompare(b);
+  if (Number.isNaN(na)) return 1;
+  if (Number.isNaN(nb)) return -1;
+  return na - nb;
+}
+
 /** Agrupa preservando a ordem por SLA já aplicada dentro de cada etapa; só as etapas com tarefa aparecem. */
 function agruparPorEtapa(tarefas: Tarefa[]): GrupoEtapa[] {
   const grupos = new Map<string, Tarefa[]>();
@@ -156,14 +268,7 @@ function agruparPorEtapa(tarefas: Tarefa[]): GrupoEtapa[] {
   }
   return [...grupos.entries()]
     .map(([etapa, tarefas]) => ({ etapa, tarefas }))
-    .sort((a, b) => {
-      const na = Number.parseFloat(a.etapa);
-      const nb = Number.parseFloat(b.etapa);
-      if (Number.isNaN(na) && Number.isNaN(nb)) return a.etapa.localeCompare(b.etapa);
-      if (Number.isNaN(na)) return 1; // "Geral" e afins vão para o fim
-      if (Number.isNaN(nb)) return -1;
-      return na - nb;
-    });
+    .sort((a, b) => compararCodigosEtapa(a.etapa, b.etapa));
 }
 
 function ordenarPorSla(lista: Tarefa[]): Tarefa[] {
