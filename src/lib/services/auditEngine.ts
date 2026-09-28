@@ -23,7 +23,8 @@ import {
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
-import { buscarRegrasAtivas } from "./dynamicRuleEngine";
+import { avaliarRegrasAgregadasDinamicas, avaliarSlaEstagnacaoParaLinha, buscarRegrasAtivas } from "./dynamicRuleEngine";
+import { NIVEL_POR_QUADRO } from "@/lib/server/tarefasManuais";
 import type { ClienteEnvolvido, EtapaHistorico, Importacao, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
 
 // Teto de segurança: o documento do Firestore tem limite de 1 MB e cada tarefa copia o trajeto da pasta.
@@ -219,13 +220,9 @@ export async function executarAuditoriaDiaria(params: {
   });
 
   // Motor de Regras Dinâmicas (No-Code): busca as regras ativas cadastradas pela Gerência.
-  // Ainda não aplicadas a esta importação — só o fetch + o esqueleto do Avaliador Dinâmico
-  // (dynamicRuleEngine.ts). A próxima etapa é passar `regrasDinamicasAtivas` e `linhas` para
-  // `avaliarRegrasDinamicas` e reconciliar os specs devolvidos, no mesmo formato das regras fixas.
+  // "SLA e Estagnação", "Volume e Gargalos" e "Ociosidade de Imobiliária" já geram tarefa de
+  // verdade (ver Passo 1 e Passo 3 abaixo); as outras 6 categorias ainda não fazem nada.
   const regrasDinamicasAtivas = await buscarRegrasAtivas(db);
-  if (regrasDinamicasAtivas.length > 0) {
-    console.info(`[auditEngine] ${regrasDinamicasAtivas.length} regra(s) dinâmica(s) ativa(s) — ainda não aplicadas.`);
-  }
 
   // Janela de respiro da 0.01: última conclusão recente por chaveRegra de "Inércia inicial".
   // Consulta só por resolvidoEm (índice automático de campo único) e filtra o resto em memória.
@@ -274,6 +271,16 @@ export async function executarAuditoriaDiaria(params: {
     opsNoBatchAtual++;
   }
 
+  // Mesma blindagem de ação humana, agora incluindo regras dinâmicas com `exigeAcaoHumana`.
+  // Limitação: se a regra for desativada ou excluída, essa proteção some retroativamente para
+  // as tarefas dela que ainda estejam abertas — evite apagar uma regra dessas com tarefa em aberto.
+  function chaveExigeAcaoHumana(chaveRegra: string): boolean {
+    if (ehTarefaDeAcaoHumana(chaveRegra)) return true;
+    const idDaRegra = /^DINAMICA::([^:]+)::/.exec(chaveRegra)?.[1];
+    if (!idDaRegra) return false;
+    return regrasDinamicasAtivas.some((r) => r.id === idDaRegra && r.exigeAcaoHumana);
+  }
+
   function reconciliarTarefa(dados: DadosParaReconciliar) {
     const tarefaAtiva = tarefasPorChave.get(dados.chaveRegra);
 
@@ -293,7 +300,7 @@ export async function executarAuditoriaDiaria(params: {
       // Ação humana (visita/treinamento): a planilha não audita evento do mundo real — o clique
       // de quem concluiu é a única confirmação que existe, então a baixa vale sempre.
       const sucesso =
-        ehTarefaDeAcaoHumana(dados.chaveRegra) ||
+        chaveExigeAcaoHumana(dados.chaveRegra) ||
         confiancaEtapaInclusao ||
         confiancaCredito ||
         ehFollowUp ||
@@ -358,7 +365,7 @@ export async function executarAuditoriaDiaria(params: {
 
     if (tarefaAtiva?.data.status === "pendente" || tarefaAtiva?.data.status === "audit_failed") {
       const tarefaRef = db.collection("tarefas").doc(tarefaAtiva.id);
-      if (!dados.condicaoAtiva && ehTarefaDeAcaoHumana(dados.chaveRegra)) {
+      if (!dados.condicaoAtiva && chaveExigeAcaoHumana(dados.chaveRegra)) {
         // Ação humana: o texto que disparou a regra sumiu da planilha, mas isso não prova que a
         // visita/treinamento aconteceu. A tarefa fica intocada — só fecha com o clique de quem a fez.
         return;
@@ -569,7 +576,10 @@ export async function executarAuditoriaDiaria(params: {
     // na mesma etapa, uma tarefa clicada cujo gatilho mudou volta como Falha de Auditoria.
     for (const [chave, t] of tarefasPorChave) {
       const ehDaPasta = t.data.numero === linha.numero;
-      const ehDaRegraOperacional = t.data.nivel === "operacional" || chave.endsWith("::etapa_080");
+      // Regra dinâmica (DINAMICA::) nunca entra nesta limpeza: ela tem o próprio ciclo de vida
+      // (avaliarSlaEstagnacaoParaLinha, abaixo), mesmo quando nasce com nivel "operacional".
+      const ehDaRegraOperacional =
+        (t.data.nivel === "operacional" && !chave.startsWith("DINAMICA::")) || chave.endsWith("::etapa_080");
       if (!ehDaPasta || !ehDaRegraOperacional || chave === chaveOperacionalDesejada) continue;
       reconciliarTarefa({
         ...camposComuns,
@@ -646,6 +656,19 @@ export async function executarAuditoriaDiaria(params: {
       descricao: specErro?.descricao ?? "",
       condicaoAtiva: specErro !== null,
     });
+
+    // Motor de Regras Dinâmicas — "SLA e Estagnação" (por pasta, precisa do histórico do dia).
+    for (const dinamica of avaliarSlaEstagnacaoParaLinha(regrasDinamicasAtivas, linha, historicoPasta)) {
+      reconciliarTarefa({
+        ...camposComuns,
+        chaveRegra: dinamica.chaveRegra,
+        nivel: NIVEL_POR_QUADRO[dinamica.quadro],
+        quadro: dinamica.quadro,
+        tipoPendencia: dinamica.tipoPendencia,
+        descricao: dinamica.descricao,
+        condicaoAtiva: dinamica.condicaoAtiva,
+      });
+    }
   }
 
   // --- Passo 2: reconcilia os AGREGADOS (cruzam várias linhas da mesma importação) ---
@@ -668,6 +691,30 @@ export async function executarAuditoriaDiaria(params: {
     prefixoChave: "AGREGADO::filtro_ruim::",
     ...paramsAgregados,
   });
+
+  // --- Passo 3: Motor de Regras Dinâmicas — categorias agregadas ("Volume e Gargalos",
+  // "Ociosidade de Imobiliária"). Fecha sozinha quando a contagem/ociosidade cai abaixo do
+  // limiar, a não ser que a regra tenha `exigeAcaoHumana` (ver chaveExigeAcaoHumana acima).
+  for (const dinamica of avaliarRegrasAgregadasDinamicas(regrasDinamicasAtivas, linhasEmEsteira, registrosAntigos, importacaoId)) {
+    reconciliarTarefa({
+      chaveRegra: dinamica.chaveRegra,
+      origem: dinamica.origem,
+      nivel: NIVEL_POR_QUADRO[dinamica.quadro],
+      numero: null,
+      numerosRelacionados: dinamica.numerosRelacionados ?? undefined,
+      cidade: "",
+      quadro: dinamica.quadro,
+      imobiliaria: dinamica.imobiliaria,
+      etapa: dinamica.etapa,
+      prazoEtapa: null,
+      slaStatus: "no_prazo",
+      tipoPendencia: dinamica.tipoPendencia,
+      descricao: dinamica.descricao,
+      observacaoOriginal: "",
+      condicaoAtiva: dinamica.condicaoAtiva,
+      avancoDetectado: true,
+    });
+  }
 
   // Tarefas avulsas não têm evidência na planilha: o check de quem concluiu vale
   // e a próxima importação apenas as arquiva (validated_done).
