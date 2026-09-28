@@ -111,18 +111,59 @@ function ColunaTarefas({ coluna, interativo }: { coluna: Coluna; interativo: boo
           Nenhuma pendência no momento.
         </div>
       ) : (
-        // flex-row + overflow-x-auto: contentor já pronto para receber múltiplas colunas de
-        // Kanban (uma por etapa) lado a lado, com scroll horizontal em vez de quebrar linha.
-        <div className="flex flex-row gap-3 overflow-x-auto pb-2">
-          {tarefasDaColuna.map((t) => (
-            <div key={t.id} className="w-72 shrink-0">
-              <TaskCard tarefa={t} somenteLeitura={!interativo} />
+        // flex-row + overflow-x-auto: uma coluna de Kanban por etapa, lado a lado, com scroll
+        // horizontal. Puramente organizacional — a etapa vem do motor, sem drag-and-drop.
+        <div className="flex flex-row gap-4 overflow-x-auto pb-2">
+          {agruparPorEtapa(tarefasDaColuna).map((grupo) => (
+            <div key={grupo.etapa} className="flex w-72 shrink-0 flex-col gap-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                  Etapa {grupo.etapa}
+                </span>
+                <span className="text-[11px] text-ink-muted">{grupo.tarefas.length}</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                {grupo.tarefas.map((t) => (
+                  <TaskCard key={t.id} tarefa={t} somenteLeitura={!interativo} />
+                ))}
+              </div>
             </div>
           ))}
         </div>
       )}
     </div>
   );
+}
+
+interface GrupoEtapa {
+  etapa: string; // código exibido no cabeçalho, ex.: "0.01", "1.17", "Geral"
+  tarefas: Tarefa[];
+}
+
+/** Código da etapa: a planilha traz "1.17 - Documentação incompleta", a coluna mostra só "1.17". */
+function codigoEtapa(etapa: string | null | undefined): string {
+  const valor = (etapa ?? "").trim();
+  if (!valor) return "Geral"; // tarefas agregadas (gargalo, ociosidade, SLA interno) não têm etapa própria
+  return valor.split(" - ")[0]?.trim() || "Geral";
+}
+
+/** Agrupa preservando a ordem por SLA já aplicada dentro de cada etapa; só as etapas com tarefa aparecem. */
+function agruparPorEtapa(tarefas: Tarefa[]): GrupoEtapa[] {
+  const grupos = new Map<string, Tarefa[]>();
+  for (const t of tarefas) {
+    const codigo = codigoEtapa(t.etapa);
+    grupos.set(codigo, [...(grupos.get(codigo) ?? []), t]);
+  }
+  return [...grupos.entries()]
+    .map(([etapa, tarefas]) => ({ etapa, tarefas }))
+    .sort((a, b) => {
+      const na = Number.parseFloat(a.etapa);
+      const nb = Number.parseFloat(b.etapa);
+      if (Number.isNaN(na) && Number.isNaN(nb)) return a.etapa.localeCompare(b.etapa);
+      if (Number.isNaN(na)) return 1; // "Geral" e afins vão para o fim
+      if (Number.isNaN(nb)) return -1;
+      return na - nb;
+    });
 }
 
 function ordenarPorSla(lista: Tarefa[]): Tarefa[] {
