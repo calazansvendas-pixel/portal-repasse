@@ -7,7 +7,6 @@ import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Layers, 
 import type { Assistente, ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
-import { SLA_BADGE_CLASSES, SLA_LABEL, calcularSlaStatus, slaExibido } from "@/lib/utils/sla";
 import {
   alternarClienteEnvolvido,
   excluirTarefa,
@@ -128,7 +127,6 @@ export function TaskCard({
   const tituloAgregado = `${tarefa.tipoPendencia.startsWith("Gargalo") ? "Gargalo detectado" : tarefa.tipoPendencia}: ${totalPastas} pastas`;
   // Tarefa agregada: as notas ficam em cada cliente (só entradas do God Mode moram na tarefa mãe).
   const notasCard = notasDe(tarefa, !isAgregado);
-  const dataLimiteVencida = !!tarefa.dataLimite && calcularSlaStatus(tarefa.dataLimite) === "estourado";
 
   const itensMenu: ItemMenu[] = [];
   if (podeEditarExcluir) itensMenu.push({ rotulo: "Editar", icone: Pencil, onClick: () => setModal("editar") });
@@ -284,8 +282,20 @@ export function TaskCard({
         <p className="text-xs text-status-danger">{tarefa.falhaAuditoriaMotivo}</p>
       )}
 
-      {/* Cabeçalho: cliente + imobiliária | solicitação interna | gargalo (sanfona) */}
-      <div className="flex items-start justify-between gap-2">
+      {/* Cabeçalho empilhado: 1) dias na etapa + menu · 2/3) identidade do card (cliente + imobiliária
+          | solicitação interna | gargalo/sanfona) */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          {diasEtapa !== null ? (
+            <span className="whitespace-nowrap text-[11px] text-gray-400 dark:text-white/30">
+              Há {diasEtapa} {diasEtapa === 1 ? "dia" : "dias"} na etapa
+            </span>
+          ) : (
+            <span />
+          )}
+          {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
+        </div>
+
         {isManual ? (
           <div>
             <p className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">Solicitação Interna</p>
@@ -297,7 +307,7 @@ export function TaskCard({
               type="button"
               onClick={() => setExpandido((v) => !v)}
               aria-expanded={expandido}
-              className="-my-1.5 flex min-h-[44px] min-w-0 flex-1 items-start gap-2 py-1.5 text-left"
+              className="-mx-1.5 -my-1.5 flex min-h-[44px] w-[calc(100%+0.75rem)] items-start gap-2 px-1.5 py-1.5 text-left"
             >
               <span className="mt-0 shrink-0">{expandido ? <ChevronDown size={20} /> : <ChevronRight size={20} />}</span>
               <span>
@@ -321,27 +331,12 @@ export function TaskCard({
             <p className="break-words text-xs text-ink-muted">{tarefa.imobiliaria || "Imobiliária não informada"}</p>
           </div>
         )}
-        <div className="flex shrink-0 items-center gap-1.5">
-          {diasEtapa !== null && (
-            <span className="whitespace-nowrap text-[11px] text-gray-400 dark:text-white/30">
-              Há {diasEtapa} {diasEtapa === 1 ? "dia" : "dias"} na etapa
-            </span>
-          )}
-          {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
-        </div>
       </div>
 
       {/* Corpo 1: ação de consultoria/ajuda */}
       <p className="whitespace-pre-line break-words text-sm font-medium leading-snug text-ink-primary dark:text-white">
         {formatarDescricao(tarefa)}
       </p>
-
-      {tarefa.dataLimite && (
-        <p className={cn("text-xs", dataLimiteVencida ? "font-semibold text-status-danger" : "text-ink-muted")}>
-          Realizar até: {formatDateBR(tarefa.dataLimite)}
-          {dataLimiteVencida && " (atrasada)"}
-        </p>
-      )}
 
       {/* Sub-tarefas do gargalo: um check por cliente */}
       {temSubtarefas && expandido && (
@@ -376,13 +371,8 @@ export function TaskCard({
       )}
 
       <div className="flex flex-wrap items-center gap-1.5">
-        {!isManual && (
-          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", SLA_BADGE_CLASSES[slaExibido(tarefa)])}>
-            {SLA_LABEL[slaExibido(tarefa)]}
-          </span>
-        )}
         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary dark:border-white/15 dark:text-white/60">
-          {tarefa.tipoPendencia}
+          {tarefa.tipoPendencia.replace(/\(Cópia\)/g, "").trim()}
         </span>
         {tarefa.cicloFollowUp && (
           <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 text-[11px] font-semibold text-brand-primary dark:bg-white/10 dark:text-white/80">

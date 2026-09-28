@@ -59,7 +59,9 @@ export default function MotorDeRegrasPage() {
     // update — mesmo com todos os campos vindos da regra original.
     setRegraEditando(null);
     setRascunhoDuplicando({
-      nomeRegra: `${regra.nomeRegra} (Cópia)`,
+      // Sem sufixo: é só um atalho para pré-preencher o formulário e ganhar tempo — o Calazans
+      // decide se quer renomear.
+      nomeRegra: regra.nomeRegra,
       cargoDestino: regra.cargoDestino,
       categoriaGatilho: regra.categoriaGatilho,
       parametros: { ...regra.parametros },
