@@ -69,27 +69,19 @@ export function TaskBoard({
 
   return (
     <div className="flex flex-col gap-8">
-      {topo && <ColunaTarefas coluna={topo} interativo={meusQuadros.includes(topo.chave)} faixa />}
-      {meio && <ColunaTarefas coluna={meio} interativo={meusQuadros.includes(meio.chave)} faixa />}
+      {topo && <ColunaTarefas coluna={topo} interativo={meusQuadros.includes(topo.chave)} />}
+      {meio && <ColunaTarefas coluna={meio} interativo={meusQuadros.includes(meio.chave)} />}
 
-      {assistentes.length > 0 && (
-        <div
-          className={
-            assistentes.length > 1
-              ? "grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
-              : "max-w-xl"
-          }
-        >
-          {assistentes.map((coluna) => (
-            <ColunaTarefas key={coluna.chave} coluna={coluna} interativo={meusQuadros.includes(coluna.chave)} />
-          ))}
-        </div>
-      )}
+      {/* Cada assistente ocupa uma swimlane própria, de largura total, empilhadas — mesmo padrão
+          visual do Coordenador/Analista acima. Sem agrupamento lado a lado. */}
+      {assistentes.map((coluna) => (
+        <ColunaTarefas key={coluna.chave} coluna={coluna} interativo={meusQuadros.includes(coluna.chave)} />
+      ))}
     </div>
   );
 }
 
-function ColunaTarefas({ coluna, interativo, faixa = false }: { coluna: Coluna; interativo: boolean; faixa?: boolean }) {
+function ColunaTarefas({ coluna, interativo }: { coluna: Coluna; interativo: boolean }) {
   const { titulo, tarefas: tarefasDaColuna, escalonamento } = coluna;
   return (
     <div className="flex flex-col gap-3">
@@ -119,9 +111,13 @@ function ColunaTarefas({ coluna, interativo, faixa = false }: { coluna: Coluna; 
           Nenhuma pendência no momento.
         </div>
       ) : (
-        <div className={faixa ? "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
+        // flex-row + overflow-x-auto: contentor já pronto para receber múltiplas colunas de
+        // Kanban (uma por etapa) lado a lado, com scroll horizontal em vez de quebrar linha.
+        <div className="flex flex-row gap-3 overflow-x-auto pb-2">
           {tarefasDaColuna.map((t) => (
-            <TaskCard key={t.id} tarefa={t} somenteLeitura={!interativo} />
+            <div key={t.id} className="w-72 shrink-0">
+              <TaskCard tarefa={t} somenteLeitura={!interativo} />
+            </div>
           ))}
         </div>
       )}
