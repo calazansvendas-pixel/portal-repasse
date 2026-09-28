@@ -1,76 +1,25 @@
-import { normalize, resolvePracaPorCidade } from "@/lib/auth/roles";
-import type { LinhaPlanilha } from "./parseSheet";
-import type { NivelTarefa, Quadro, QuadroEscalonamento, SlaStatus } from "@/lib/types";
-import { ASSISTENTE_LABEL } from "@/lib/types";
-import { SLA_LABEL } from "@/lib/utils/sla";
-import { adicionarDias } from "@/lib/utils/prazos";
+import { normalize } from "@/lib/auth/roles";
+import type { Quadro, QuadroEscalonamento } from "@/lib/types";
 
 /**
- * Motor de regras hierárquico (Daily Delta): cada nível da operação recebe
- * tarefas geradas com um gatilho e um texto de ação próprios.
- *   - Nível operacional (assistentes): gerado por LINHA, roteado pela cidade.
- *   - Nível analítico/tático por linha (Risco Bancário / Erro de Processo):
- *     gerado por LINHA, mas nativo do quadro da Analista/Coordenador.
- *   - Nível analítico/tático agregado (Gargalo / Filtro Ruim): gerado
- *     cruzando várias linhas da mesma importação.
+ * Utilitários de etapa e escalonamento compartilhados pelo motor de auditoria
+ * (auditEngine.ts) e pelo Motor de Regras Dinâmicas (dynamicRuleEngine.ts).
+ *
+ * As regras de geração de tarefa em si (o que dispara, para quem, com qual texto) não vivem
+ * mais aqui: desde a migração para o Motor de Regras Dinâmicas, toda tarefa nasce de uma regra
+ * cadastrada em `regras_auditoria` (ver dynamicRuleEngine.ts). Este arquivo guarda só as
+ * classificações de etapa que continuam sendo lógica estrutural do motor (fim de esteira,
+ * mensagem de auditoria estrita da 0.80) e o cálculo de escalonamento simultâneo.
  */
-
-export interface EspecTarefaLinha {
-  chaveRegra: string; // `${numero}::${regra}` — identidade estável entre importações
-  nivel: NivelTarefa;
-  quadro: Quadro;
-  tipoPendencia: string;
-  descricao: string;
-}
 
 /** Etapa 0.01 (Inclusão da pasta) — a virada dela não depende das assistentes. */
 export function ehEtapaInclusao(etapa: string | null | undefined): boolean {
   return (etapa ?? "").trim().startsWith("0.01");
 }
 
-/** Um novo card de "Inércia inicial" só nasce no 3º dia após a última conclusão da pasta. */
-export const DIAS_COOLDOWN_INCLUSAO = 3;
-
-/** true se ainda estamos na janela de respiro: importação (yyyy-MM-dd) < conclusão + 3 dias (fuso de Brasília). */
-export function dentroDoCooldownInclusao(importacaoId: string, resolvidoEmISO: string): boolean {
-  const dataConclusao = new Date(resolvidoEmISO).toLocaleDateString("en-CA", {
-    timeZone: "America/Sao_Paulo",
-  });
-  const dias = (Date.parse(importacaoId) - Date.parse(dataConclusao)) / 86_400_000;
-  return dias < DIAS_COOLDOWN_INCLUSAO;
-}
-
-/**
- * Etapa 0.04 — régua de follow-up: até 4 ciclos por pasta. A cada conclusão a
- * próxima cobrança é liberada 10, 20 e 30 dias depois da baixa; após a 4ª, o ciclo encerra.
- */
-export const CICLOS_FOLLOW_UP = 4;
-const DIAS_REGUA_FOLLOW_UP = [10, 20, 30];
-
-export function ehEtapaFollowUp(etapa: string | null | undefined): boolean {
-  return (etapa ?? "").trim().startsWith("0.04");
-}
-
-/** Data (yyyy-MM-dd) em que o próximo follow-up é liberado após a N-ésima conclusão; null = ciclo encerrado. */
-export function calcularProximaCobranca(dataDaBaixa: string, ciclosConcluidos: number): string | null {
-  if (ciclosConcluidos >= CICLOS_FOLLOW_UP) return null;
-  return adicionarDias(dataDaBaixa, DIAS_REGUA_FOLLOW_UP[ciclosConcluidos - 1]);
-}
-
-/** Tarefa de acompanhamento da 0.04 para a Assistente da praça, com o ciclo em que o cliente está. */
-export function gerarEspecFollowUp(linha: LinhaPlanilha, praca: Quadro, ciclo: number): EspecTarefaLinha {
-  return {
-    chaveRegra: `${linha.numero}::follow_up_004`,
-    nivel: "operacional",
-    quadro: praca,
-    tipoPendencia: "Follow-up 0.04",
-    descricao: `Contato de acompanhamento [Ciclo ${ciclo}]: Informar o corretor sobre as pendências do cliente ${nomeCliente(linha)} na imobiliária ${nomeImobiliaria(linha)} e oferecer suporte.`,
-  };
-}
-
 /**
  * Etapa 0.80: a equipe tem poder de resolução — auditoria ESTRITA (sem confiança no clique;
- * só a mudança de etapa na planilha completa a tarefa) e roteamento inteligente pela observação.
+ * só a mudança de etapa na planilha completa a tarefa).
  */
 export function ehEtapa080(etapa: string | null | undefined): boolean {
   return (etapa ?? "").trim().startsWith("0.80");
@@ -78,65 +27,10 @@ export function ehEtapa080(etapa: string | null | undefined): boolean {
 
 export const MENSAGEM_FALHA_080 = "A tarefa para ser completa precisa ter a etapa modificada na planilha.";
 
-/** Pendências complexas (restrição, banco, crédito, assessoria) vão para a Analista; o resto, para a Assistente da praça. */
-const TERMOS_COMPLEXOS_080 = ["restricao", "restricoes", "banco", "credito", "assessoria"];
-
-export function gerarEspec080(linha: LinhaPlanilha, pracaAssistente: Quadro | null): EspecTarefaLinha | null {
-  const cliente = nomeCliente(linha);
-  const imobiliaria = nomeImobiliaria(linha);
-  const chaveRegra = `${linha.numero}::etapa_080`;
-
-  if (contemAlgumTermo(normalize(linha.observacao), TERMOS_COMPLEXOS_080)) {
-    return {
-      chaveRegra,
-      nivel: "analitico",
-      quadro: "analista",
-      tipoPendencia: "Pendência complexa (0.80)",
-      descricao: `Tratar a pendência complexa do cliente ${cliente} na imobiliária ${imobiliaria} (restrição, banco ou crédito) e destravar a pasta para a etapa avançar.`,
-    };
-  }
-
-  // Pendência de documentos básicos: precisa de uma praça para saber qual Assistente atende.
-  if (!pracaAssistente) return null;
-  return {
-    chaveRegra,
-    nivel: "operacional",
-    quadro: pracaAssistente,
-    tipoPendencia: "Pendência de documentos (0.80)",
-    descricao: `Ligar para a ${imobiliaria} e apoiar o corretor a regularizar a documentação do cliente ${cliente} para a pasta avançar da 0.80.`,
-  };
-}
-
-/** Etapa 0.99 (espera do Crédito) — não gera tarefa individual; vira gargalo agregado do Coordenador. */
-export function ehEtapaCredito(etapa: string | null | undefined): boolean {
-  return (etapa ?? "").trim().startsWith("0.99");
-}
-
 /** Fim de esteira: etapas 9.xx ou indicativo de venda imputada — a pasta é arquivada. */
 export function ehFimDeEsteira(etapa: string | null | undefined): boolean {
   const e = (etapa ?? "").trim();
   return /^9\./.test(e) || normalize(e).includes("imputad");
-}
-
-function nomeCliente(linha: LinhaPlanilha): string {
-  return linha.clienteNome.trim() || "cliente não identificado";
-}
-
-function nomeImobiliaria(linha: LinhaPlanilha): string {
-  return linha.responsavel.trim() || "imobiliária não informada";
-}
-
-export interface EspecTarefaAgregada {
-  chaveRegra: string; // `AGREGADO::${regra}::${chave}`
-  nivel: NivelTarefa;
-  quadro: Quadro;
-  cidade: string;
-  etapa: string;
-  imobiliaria: string;
-  tipoPendencia: string;
-  descricao: string;
-  numerosRelacionados: string[];
-  linhas: LinhaPlanilha[]; // as pastas do grupo (viram clientesEnvolvidos)
 }
 
 function contemAlgumTermo(observacaoNormalizada: string, termos: string[]): string | null {
@@ -147,236 +41,7 @@ function contemAlgumTermo(observacaoNormalizada: string, termos: string[]): stri
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Nível Operacional (Assistentes) — um card por pasta, roteado por cidade.
-// ---------------------------------------------------------------------------
-
 const TERMOS_QUALIFICACAO = ["apontamento", "restricao"];
-const TERMOS_DOCUMENTACAO: { termo: string; label: string }[] = [
-  { termo: "irpf", label: "IRPF pendente" },
-  { termo: "fgts", label: "FGTS pendente" },
-  { termo: "rg", label: "RG pendente" },
-  { termo: "certidao", label: "Certidão pendente" },
-  { termo: "estado civil", label: "Estado civil pendente" },
-];
-
-/**
- * Dicionário legado (mantido como fallback): cobre pendências que não se
- * encaixam nos 3 gatilhos operacionais explícitos, para não deixar nenhuma
- * observação sem tarefa gerada. Tom de consultoria/ajuda, não de cobrança.
- */
-const REGRAS_PENDENCIA_LEGADO: { padroes: string[]; tipoPendencia: string; acao: string }[] = [
-  { padroes: ["comprovante de renda", "comprovante renda"], tipoPendencia: "Comprovante de renda", acao: "auxiliar na obtenção do comprovante de renda atualizado" },
-  { padroes: ["comprovante de residencia", "comprovante residencia", "comprovante de endereco"], tipoPendencia: "Comprovante de residência", acao: "auxiliar na obtenção do comprovante de residência atualizado" },
-  { padroes: ["assinatura", "contrato nao assinado", "aguardando assinatura"], tipoPendencia: "Assinatura de contrato", acao: "apoiar a conclusão da assinatura do contrato" },
-  { padroes: ["vencido", "venceu", "vencida"], tipoPendencia: "Documento vencido", acao: "auxiliar na atualização do documento vencido" },
-  { padroes: ["banco", "financiamento"], tipoPendencia: "Pendência bancária/financiamento", acao: "acompanhar junto ao banco o andamento do financiamento" },
-  { padroes: ["pendente", "pendencia", "falta", "aguardando"], tipoPendencia: "Documentação pendente", acao: "levantar e apoiar a organização da documentação pendente" },
-];
-
-const SLA_ACAO_LABEL: Record<SlaStatus, string> = {
-  no_prazo: SLA_LABEL.no_prazo,
-  atencao: SLA_LABEL.atencao,
-  urgente: SLA_LABEL.urgente,
-  estourado: SLA_LABEL.estourado,
-};
-
-/** Gera a tarefa do quadro regional (assistente) para uma linha, se houver gatilho. */
-export function gerarEspecOperacional(
-  linha: LinhaPlanilha,
-  praca: Quadro,
-  slaStatus: SlaStatus
-): EspecTarefaLinha | null {
-  const obsNorm = normalize(linha.observacao);
-  const etapaNorm = linha.etapa.trim();
-  // 0.99: espera do Crédito — nenhuma tarefa individual para as assistentes.
-  if (ehEtapaCredito(etapaNorm)) return null;
-
-  const cliente = nomeCliente(linha);
-  const imobiliaria = nomeImobiliaria(linha);
-
-  // 1) Inércia inicial: nem começou a ser tratada e o prazo já estourou.
-  if (ehEtapaInclusao(etapaNorm) && slaStatus === "estourado") {
-    return {
-      chaveRegra: `${linha.numero}::inercia_inicial`,
-      nivel: "operacional",
-      quadro: praca,
-      tipoPendencia: "Inércia inicial",
-      descricao:
-        "Ligar para o corretor para oferecer ajuda com a documentação ou verificar se ele apenas esqueceu de avançar a etapa no sistema.",
-    };
-  }
-
-  // 2) Qualificação: apontamento/restrição no nome do cliente — mais urgente que doc. de rotina.
-  if (contemAlgumTermo(obsNorm, TERMOS_QUALIFICACAO)) {
-    return {
-      chaveRegra: `${linha.numero}::qualificacao`,
-      nivel: "operacional",
-      quadro: praca,
-      tipoPendencia: "Qualificação / restrição",
-      descricao: `Orientar a ${imobiliaria} sobre restrições do cliente ${cliente} e ajudar a buscar soluções.`,
-    };
-  }
-
-  // 3) Documentação de rotina (IRPF, FGTS, RG, certidão, estado civil).
-  for (const { termo, label } of TERMOS_DOCUMENTACAO) {
-    if (contemAlgumTermo(obsNorm, [termo])) {
-      return {
-        chaveRegra: `${linha.numero}::documentacao`,
-        nivel: "operacional",
-        quadro: praca,
-        tipoPendencia: label,
-        descricao: `Prestar consultoria à ${imobiliaria} sobre a documentação do cliente ${cliente}.`,
-      };
-    }
-  }
-
-  // 4) Fallback legado, para não perder cobertura de pendências fora dos 3 gatilhos acima.
-  for (const regra of REGRAS_PENDENCIA_LEGADO) {
-    if (regra.padroes.some((p) => obsNorm.includes(p))) {
-      return {
-        chaveRegra: `${linha.numero}::operacional`,
-        nivel: "operacional",
-        quadro: praca,
-        tipoPendencia: regra.tipoPendencia,
-        descricao: `Ligar para a ${imobiliaria} e ${regra.acao} do cliente ${cliente}. SLA: ${SLA_ACAO_LABEL[slaStatus]}`,
-      };
-    }
-  }
-
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Nível Analítico por linha (Andressa) — Risco Bancário
-// ---------------------------------------------------------------------------
-
-const TERMOS_RISCO_BANCARIO = ["greve", "bloqueado", "agencia"];
-
-export function gerarEspecRiscoBancario(linha: LinhaPlanilha): EspecTarefaLinha | null {
-  const obsNorm = normalize(linha.observacao);
-  if (!contemAlgumTermo(obsNorm, TERMOS_RISCO_BANCARIO)) return null;
-
-  const cliente = nomeCliente(linha);
-  return {
-    chaveRegra: `${linha.numero}::risco_bancario`,
-    nivel: "analitico",
-    quadro: "analista",
-    tipoPendencia: "Risco bancário",
-    descricao: `Intervenção Manual: Acionar Caixa para destravar a pasta do cliente ${cliente}.`,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Nível Tático por linha (Paulo) — Erro de Processo Básico
-// ---------------------------------------------------------------------------
-
-const PADROES_ERRO_PROCESSO = [/\bilegiv[ei]l/i, /\bcortes?\b/i, /mais de 10 anos/i, /nao renomeado/i];
-
-export function gerarEspecErroProcesso(linha: LinhaPlanilha): EspecTarefaLinha | null {
-  const obsNorm = normalize(linha.observacao);
-  if (!PADROES_ERRO_PROCESSO.some((re) => re.test(obsNorm))) return null;
-
-  const imobiliaria = nomeImobiliaria(linha);
-  return {
-    chaveRegra: `${linha.numero}::erro_processo`,
-    nivel: "tatico",
-    quadro: "coordenador",
-    tipoPendencia: "Erro de processo básico",
-    descricao: `Agendar visita de relacionamento com a ${imobiliaria} para um treinamento amigável sobre qualidade no envio de pastas.`,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Agregados (cruzam várias linhas da mesma importação)
-// ---------------------------------------------------------------------------
-
-const LIMITE_GARGALO = 4;
-const LIMITE_FILTRO_RUIM = 2;
-const TERMOS_FILTRO_RUIM = ["margem insuficiente", "alto endividamento"];
-
-/** 4+ pastas paradas na mesma etapa, na mesma cidade -> alerta de gargalo para a Analista. */
-export function detectarGargalos(linhas: LinhaPlanilha[]): EspecTarefaAgregada[] {
-  const grupos = new Map<string, LinhaPlanilha[]>();
-  for (const linha of linhas) {
-    if (ehEtapaCredito(linha.etapa)) continue; // 0.99 tem regra própria (Coordenador)
-    const chave = `${normalize(linha.cidade)}::${linha.etapa.trim()}`;
-    grupos.set(chave, [...(grupos.get(chave) ?? []), linha]);
-  }
-
-  const especs: EspecTarefaAgregada[] = [];
-  for (const grupo of grupos.values()) {
-    if (grupo.length < LIMITE_GARGALO) continue;
-    const { cidade, etapa } = grupo[0];
-    const assistenteResponsavel = resolvePracaPorCidade(cidade);
-    const nomeAssistente = assistenteResponsavel
-      ? ASSISTENTE_LABEL[assistenteResponsavel]
-      : "assistente responsável pela praça";
-    especs.push({
-      chaveRegra: `AGREGADO::gargalo::${normalize(cidade)}::${etapa.trim()}`,
-      nivel: "analitico",
-      quadro: "analista",
-      cidade,
-      etapa,
-      imobiliaria: "",
-      tipoPendencia: "Gargalo de etapa",
-      descricao: `Gargalo de ${grupo.length} pastas na etapa ${etapa} em ${cidade}. Alinhar plano de ação tático com a assistente ${nomeAssistente}.`,
-      numerosRelacionados: grupo.map((l) => l.numero),
-      linhas: grupo,
-    });
-  }
-  return especs;
-}
-
-/** Mais de 5 pastas na 0.99 -> UMA tarefa agregada de gargalo de Crédito para o Coordenador. */
-export const LIMITE_GARGALO_CREDITO = 5;
-
-export function detectarGargaloCredito(linhas: LinhaPlanilha[]): EspecTarefaAgregada[] {
-  const naCredito = linhas.filter((l) => ehEtapaCredito(l.etapa));
-  if (naCredito.length <= LIMITE_GARGALO_CREDITO) return [];
-  return [
-    {
-      chaveRegra: "AGREGADO::gargalo_credito::0.99",
-      nivel: "tatico",
-      quadro: "coordenador",
-      cidade: "",
-      etapa: naCredito[0].etapa,
-      imobiliaria: "",
-      tipoPendencia: "Gargalo de crédito",
-      descricao: "Ligar para o setor de Crédito e Assessoria: informar gargalo na 0.99 e verificar os clientes abaixo.",
-      numerosRelacionados: naCredito.map((l) => l.numero),
-      linhas: naCredito,
-    },
-  ];
-}
-
-/** 2+ pastas da mesma imobiliária com margem insuficiente/alto endividamento -> alinhar régua com o Coordenador. */
-export function detectarFiltroRuim(linhas: LinhaPlanilha[]): EspecTarefaAgregada[] {
-  const grupos = new Map<string, LinhaPlanilha[]>();
-  for (const linha of linhas) {
-    if (!contemAlgumTermo(normalize(linha.observacao), TERMOS_FILTRO_RUIM)) continue;
-    const chave = linha.responsavel.trim() || "Não informado";
-    grupos.set(chave, [...(grupos.get(chave) ?? []), linha]);
-  }
-
-  const especs: EspecTarefaAgregada[] = [];
-  for (const [imobiliaria, grupo] of grupos) {
-    if (grupo.length < LIMITE_FILTRO_RUIM) continue;
-    especs.push({
-      chaveRegra: `AGREGADO::filtro_ruim::${normalize(imobiliaria)}`,
-      nivel: "tatico",
-      quadro: "coordenador",
-      cidade: "",
-      etapa: "",
-      imobiliaria,
-      tipoPendencia: "Filtro de qualificação",
-      descricao: `Alinhar régua MCMV com a Imobiliária ${imobiliaria}.`,
-      numerosRelacionados: grupo.map((l) => l.numero),
-      linhas: grupo,
-    });
-  }
-  return especs;
-}
 
 /** Reaproveitado pelas métricas estratégicas da Gerência (Taxa de Vazamento de Funil). */
 export function contemQualificacaoRuim(observacao: string): boolean {
@@ -384,16 +49,10 @@ export function contemQualificacaoRuim(observacao: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Escalonamento simultâneo (SLA crítico -> Coordenador; falha de auditoria -> Analista)
+// Escalonamento simultâneo (falha de auditoria -> Analista)
 // ---------------------------------------------------------------------------
 
-/**
- * Escalonamento simultâneo é restrito à Analista, em falha de auditoria.
- * O Coordenador NUNCA recebe tarefas por SLA estourado/urgente — o quadro
- * dele só recebe as tarefas nativas dos seus gatilhos táticos ("Erro de
- * processo básico" e "Filtro de qualificação ruim"), geradas diretamente
- * com quadro "coordenador" em taskRouter.ts.
- */
+/** Escalonamento simultâneo é restrito à Analista, em falha de auditoria. */
 export function calcularEscalonamento(params: {
   quadro: Quadro;
   falhouAuditoriaAgora: boolean;
