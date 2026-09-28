@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Layers, Pencil, Trash2, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Pencil, Trash2, Undo2 } from "lucide-react";
 import type { Assistente, ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
@@ -338,6 +338,18 @@ export function TaskCard({
         {formatarDescricao(tarefa)}
       </p>
 
+      {/* Lista direta dos clientes envolvidos (agregados do Motor de Regras) — sem precisar abrir
+          modal ou sanfona para ver quem está no gargalo. */}
+      {isAgregado && !!tarefa.nomesRelacionados?.length && (
+        <ul className="space-y-0.5 text-sm text-gray-600 dark:text-white/60">
+          {tarefa.nomesRelacionados.map((nome, i) => (
+            <li key={i} className="truncate">
+              {nome}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {/* Sub-tarefas do gargalo: um check por cliente */}
       {temSubtarefas && expandido && (
         <ListaClientesEnvolvidos
@@ -381,14 +393,14 @@ export function TaskCard({
         )}
       </div>
 
-      {/* Rodapé: trajeto da pasta (stepper vertical) ou pastas relacionadas em agregados */}
+      {/* Rodapé: trajeto da pasta (stepper vertical) ou última planilha em agregados */}
       <div className="border-t border-border pt-3 dark:border-white/10">
         {isAgregado ? (
-          <span className="flex flex-wrap items-center gap-x-1 text-xs text-ink-muted">
-            <Layers size={12} />
-            {totalPastas} pastas relacionadas
-            {ultimaPlanilhaAgregado && <> · Última planilha importada: {formatDateBR(ultimaPlanilhaAgregado)}</>}
-          </span>
+          ultimaPlanilhaAgregado && (
+            <span className="text-xs text-ink-muted">
+              Última planilha importada: {formatDateBR(ultimaPlanilhaAgregado)}
+            </span>
+          )
         ) : isManual ? (
           <span className="text-xs text-ink-muted">Criada em {formatDateBR(tarefa.criadoEm)}</span>
         ) : (

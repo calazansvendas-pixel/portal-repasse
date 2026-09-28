@@ -79,6 +79,8 @@ interface DadosParaReconciliar {
   nivel: NivelTarefa;
   numero: string | null;
   numerosRelacionados?: string[];
+  // Nomes dos clientes de numerosRelacionados, na mesma ordem — só para exibição direta no card.
+  nomesRelacionados?: string[];
   clienteNome?: string | null;
   dataEntrada?: string | null;
   // Trajeto completo da pasta já acumulado na base (origem "linha" apenas —
@@ -301,6 +303,7 @@ export async function executarAuditoriaDiaria(params: {
           descricao: tarefaAtiva.data.descricaoEditada ? tarefaAtiva.data.descricao : dados.descricao,
           observacaoOriginal: dados.observacaoOriginal,
           numerosRelacionados: dados.numerosRelacionados ?? null,
+          nomesRelacionados: dados.nomesRelacionados ?? null,
           ...(dados.clientesEnvolvidos ? { clientesEnvolvidos: dados.clientesEnvolvidos } : {}),
           clienteNome: dados.clienteNome ?? null,
           dataEntrada: dados.dataEntrada ?? null,
@@ -324,6 +327,7 @@ export async function executarAuditoriaDiaria(params: {
         importacaoIdCriacao: importacaoId,
         numero: dados.numero,
         numerosRelacionados: dados.numerosRelacionados ?? null,
+        nomesRelacionados: dados.nomesRelacionados ?? null,
         clienteNome: dados.clienteNome ?? null,
         dataEntrada: dados.dataEntrada ?? null,
         cidade: dados.cidade,
@@ -490,6 +494,7 @@ export async function executarAuditoriaDiaria(params: {
       nivel: NIVEL_POR_QUADRO[dinamica.quadro],
       numero: null,
       numerosRelacionados: dinamica.numerosRelacionados ?? undefined,
+      nomesRelacionados: dinamica.nomesRelacionados ?? undefined,
       cidade: "",
       quadro: dinamica.quadro,
       imobiliaria: dinamica.imobiliaria,

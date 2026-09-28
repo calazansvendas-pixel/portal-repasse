@@ -29,6 +29,8 @@ export interface AvaliacaoDinamica {
   origem: "linha" | "agregado";
   quadro: Quadro;
   numerosRelacionados: string[] | null;
+  // Nomes dos clientes, na mesma ordem de numerosRelacionados — só para exibição direta no card.
+  nomesRelacionados?: string[] | null;
   imobiliaria: string;
   etapa: string;
   tipoPendencia: string;
@@ -251,12 +253,60 @@ function avaliarVencimentoLongo(regra: RegraAuditoria, linha: LinhaPlanilha, imp
 // Categorias avaliadas EM BLOCO (cruzam todas as linhas da importação de uma vez).
 // ---------------------------------------------------------------------------
 
+const PREFIXO_NUMERICO_NOME = /^(\d+\.\d+)/;
+
+/** Código de etapa de uma linha: "1.17 - Documentação incompleta" -> "1.17" (mesmo critério do Kanban). */
+function codigoEtapaLinha(etapa: string): string {
+  return etapa.trim().split(" - ")[0]?.trim() || etapa.trim();
+}
+
+/** Prefixo numérico do nome da regra, se houver — mesma convenção da ordenação em motor-regras/page.tsx. */
+function etapaAlvoDoNome(nomeRegra: string): string | null {
+  return nomeRegra.trim().match(PREFIXO_NUMERICO_NOME)?.[1] ?? null;
+}
+
+/** Nomes dos clientes de um grupo de pastas, na mesma ordem — para exibir direto no card, sem clicar. */
+function nomesDoGrupo(grupo: LinhaPlanilha[]): string[] {
+  return grupo.map((l) => l.clienteNome || `Pasta ${l.numero}`);
+}
+
 function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[]): AvaliacaoDinamica[] {
   const quadro = quadroParaAgregado(regra);
   const limite = regra.parametros.quantidade ?? 0;
   if (!quadro || !limite) return [];
   const dimensao = regra.parametros.dimensao ?? "etapa";
 
+  // Nome com prefixo numérico (ex.: "0.99 - Pasta completa") amarra a regra a UMA etapa
+  // específica — filtra estritamente por ela, nunca mistura pastas de outras etapas sob o
+  // rótulo desta regra (bug: uma regra da 0.99 varria a planilha inteira e gerava um card por
+  // etapa encontrada, inclusive 0.01, todos rotulados com o nome da regra da 0.99).
+  const etapaAlvo = dimensao === "etapa" ? etapaAlvoDoNome(regra.nomeRegra) : null;
+
+  if (etapaAlvo) {
+    const grupo = todasLinhas.filter((l) => !ehFimDeEsteira(l.etapa) && codigoEtapaLinha(l.etapa) === etapaAlvo);
+    // Sempre emite — mesmo com 0 pastas — para que reconciliarTarefa feche uma tarefa antiga se
+    // a contagem cair a zero; condicaoAtiva: false nunca CRIA uma tarefa nova (ver auditEngine.ts).
+    return [
+      {
+        chaveRegra: `DINAMICA::${regra.id}::${normalize(etapaAlvo)}`,
+        origem: "agregado",
+        quadro,
+        numerosRelacionados: grupo.map((l) => l.numero),
+        nomesRelacionados: nomesDoGrupo(grupo),
+        imobiliaria: "",
+        etapa: etapaAlvo,
+        tipoPendencia: regra.nomeRegra,
+        descricao: substituirVariaveis(regra.textoTarefa, {
+          etapa: etapaAlvo,
+          quantidade: String(grupo.length),
+        }),
+        condicaoAtiva: grupo.length >= limite,
+      },
+    ];
+  }
+
+  // Sem prefixo no nome: comportamento histórico — varre todas as etapas presentes na planilha e
+  // sinaliza gargalo em qualquer uma que bater o limite (a regra não é sobre uma etapa específica).
   const grupos = new Map<string, LinhaPlanilha[]>();
   for (const linha of todasLinhas) {
     if (ehFimDeEsteira(linha.etapa)) continue; // pasta já concluída não é gargalo
@@ -273,6 +323,7 @@ function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[
       origem: "agregado",
       quadro,
       numerosRelacionados: grupo.map((l) => l.numero),
+      nomesRelacionados: nomesDoGrupo(grupo),
       imobiliaria: dimensao === "imobiliaria" ? valor : "",
       etapa: dimensao === "etapa" ? valor : "",
       tipoPendencia: regra.nomeRegra,
@@ -356,6 +407,7 @@ function avaliarQualidadeReprovacao(regra: RegraAuditoria, todasLinhas: LinhaPla
       origem: "agregado",
       quadro,
       numerosRelacionados: grupo.map((l) => l.numero),
+      nomesRelacionados: nomesDoGrupo(grupo),
       imobiliaria,
       etapa: "",
       tipoPendencia: regra.nomeRegra,
@@ -386,6 +438,7 @@ function avaliarDuplicidade(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[])
       origem: "agregado",
       quadro,
       numerosRelacionados: numeros,
+      nomesRelacionados: nomesDoGrupo(grupo),
       imobiliaria: grupo[0].responsavel,
       etapa: "",
       tipoPendencia: regra.nomeRegra,
@@ -427,6 +480,7 @@ function avaliarAcoesPositivas(
       origem: "agregado",
       quadro,
       numerosRelacionados: grupo.map((l) => l.numero),
+      nomesRelacionados: nomesDoGrupo(grupo),
       imobiliaria,
       etapa: "",
       tipoPendencia: regra.nomeRegra,

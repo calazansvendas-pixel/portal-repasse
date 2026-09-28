@@ -144,6 +144,9 @@ export interface Tarefa {
   importacaoIdCriacao?: string;
   numero: string | null; // referência ao Registro (origem "linha"); null em agregados
   numerosRelacionados?: string[] | null; // pastas envolvidas (origem "agregado"); null em tarefas de linha
+  // Nomes dos clientes das pastas de numerosRelacionados, na mesma ordem — só para exibição
+  // direta no card (não é uma lista com check individual, que é clientesEnvolvidos).
+  nomesRelacionados?: string[] | null;
   clienteNome?: string | null; // "1º Proponente" — vazio em tarefas agregadas
   dataEntrada?: string | null; // ISO — "Data Inclusão"/"Data da venda", base da linha do tempo do card
   cidade: string;
