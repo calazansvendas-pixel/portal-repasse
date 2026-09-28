@@ -70,14 +70,28 @@ export function TaskBoard({
     [tarefas]
   );
   const [etapasSelecionadas, setEtapasSelecionadas] = useState<Set<string>>(new Set());
+  // Padrão: clicar numa etapa troca a seleção (só ela fica marcada); clicar de novo limpa.
+  // "Selecionar múltiplas" liga o modo cumulativo (marca/desmarca sem afetar as outras).
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
 
   function alternarEtapa(codigo: string) {
     setEtapasSelecionadas((atual) => {
+      if (!isMultiSelect) {
+        // Single-select: clicar na já marcada limpa; clicar em outra troca a seleção inteira.
+        return atual.has(codigo) && atual.size === 1 ? new Set() : new Set([codigo]);
+      }
       const novo = new Set(atual);
       if (novo.has(codigo)) novo.delete(codigo);
       else novo.add(codigo);
       return novo;
     });
+  }
+
+  function alternarModoMultiSelect(ativo: boolean) {
+    setIsMultiSelect(ativo);
+    // Trocar de modo com mais de uma etapa marcada não faz sentido em single-select — mantém só a
+    // seleção "colapsando" para a mais recente seria arbitrário, então zera para evitar confusão.
+    if (!ativo) setEtapasSelecionadas((atual) => (atual.size > 1 ? new Set() : atual));
   }
 
   if (loading) {
@@ -92,6 +106,8 @@ export function TaskBoard({
           selecionadas={etapasSelecionadas}
           onAlternar={alternarEtapa}
           onLimpar={() => setEtapasSelecionadas(new Set())}
+          isMultiSelect={isMultiSelect}
+          onAlternarMultiSelect={alternarModoMultiSelect}
         />
       )}
 
@@ -118,49 +134,67 @@ export function TaskBoard({
   );
 }
 
-/** Tags de seleção múltipla: nenhuma marcada = mostra tudo (comportamento padrão). */
+/**
+ * Tags de filtro de etapa. Padrão: seleção única (clicar troca; clicar na já marcada limpa).
+ * Com "Selecionar múltiplas" ligado, vira multi-seleção cumulativa. Nenhuma marcada = mostra tudo.
+ */
 function FiltroEtapas({
   etapas,
   selecionadas,
   onAlternar,
   onLimpar,
+  isMultiSelect,
+  onAlternarMultiSelect,
 }: {
   etapas: string[];
   selecionadas: Set<string>;
   onAlternar: (codigo: string) => void;
   onLimpar: () => void;
+  isMultiSelect: boolean;
+  onAlternarMultiSelect: (ativo: boolean) => void;
 }) {
   return (
-    <div className="surface-card flex flex-wrap items-center gap-2 p-3">
-      <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Filtrar etapas</span>
-      {etapas.map((codigo) => {
-        const ativo = selecionadas.has(codigo);
-        return (
+    <div className="surface-card flex flex-col gap-2 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Filtrar etapas</span>
+        {etapas.map((codigo) => {
+          const ativo = selecionadas.has(codigo);
+          return (
+            <button
+              key={codigo}
+              type="button"
+              onClick={() => onAlternar(codigo)}
+              aria-pressed={ativo}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                ativo
+                  ? "border-brand-primary bg-brand-primary text-white"
+                  : "border-border text-ink-secondary hover:bg-surface-soft dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+              )}
+            >
+              {codigo}
+            </button>
+          );
+        })}
+        {selecionadas.size > 0 && (
           <button
-            key={codigo}
             type="button"
-            onClick={() => onAlternar(codigo)}
-            aria-pressed={ativo}
-            className={cn(
-              "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-              ativo
-                ? "border-brand-primary bg-brand-primary text-white"
-                : "border-border text-ink-secondary hover:bg-surface-soft dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
-            )}
+            onClick={onLimpar}
+            className="ml-1 text-xs font-medium text-ink-muted underline-offset-2 hover:underline"
           >
-            {codigo}
+            Limpar filtro
           </button>
-        );
-      })}
-      {selecionadas.size > 0 && (
-        <button
-          type="button"
-          onClick={onLimpar}
-          className="ml-1 text-xs font-medium text-ink-muted underline-offset-2 hover:underline"
-        >
-          Limpar filtro
-        </button>
-      )}
+        )}
+      </div>
+      <label className="flex w-fit items-center gap-1.5 text-[11px] text-ink-muted">
+        <input
+          type="checkbox"
+          checked={isMultiSelect}
+          onChange={(e) => onAlternarMultiSelect(e.target.checked)}
+          className="h-3.5 w-3.5 accent-brand-primary"
+        />
+        Selecionar múltiplas
+      </label>
     </div>
   );
 }
@@ -183,11 +217,18 @@ function ColunaTarefas({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+      {/* Cabeçalho da swimlane: fundo sutil + borda inferior de ponta a ponta (largura total do
+          painel) para separar visualmente onde termina o bloco de uma pessoa e começa o de outra. */}
+      <div
+        className={cn(
+          "flex items-center justify-between rounded-t-md border-b-2 bg-surface-soft px-4 py-2.5 dark:bg-white/5",
+          escalonamento ? "border-status-danger" : "border-brand-primary"
+        )}
+      >
         <h2
           className={cn(
-            "text-sm font-bold uppercase tracking-wide",
-            escalonamento ? "text-status-danger" : "text-ink-secondary dark:text-white/60"
+            "text-base font-extrabold uppercase tracking-wide",
+            escalonamento ? "text-status-danger" : "text-ink-primary dark:text-white"
           )}
         >
           {titulo}
