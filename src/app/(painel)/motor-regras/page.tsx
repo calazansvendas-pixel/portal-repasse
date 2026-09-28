@@ -305,12 +305,33 @@ function valorOrdenacao(regra: RegraAuditoria): number | null {
   return valorEtapa(regra.parametros.etapa);
 }
 
-/** Número consolidado crescente primeiro (sem número nenhum vai para o fim); nome alfabético como desempate. */
+/** Hierarquia de execução: Assistente é quem primeiro toca a pasta, Gerência é quem só configura. */
+const PESO_CARGO: Record<string, number> = {
+  assistente: 1,
+  analista: 2,
+  coordenador: 3,
+  gerencia: 4,
+};
+
+function pesoCargo(cargoDestino: string): number {
+  return PESO_CARGO[cargoDestino] ?? 5;
+}
+
+/**
+ * Três níveis, nesta ordem: (1) número consolidado crescente — sem número nenhum vai para o fim;
+ * (2) cargo de destino, na hierarquia Assistente -> Analista -> Coordenador -> Gerente, agrupando
+ * quem executa dentro da mesma etapa; (3) nome alfabético como desempate final.
+ */
 function compararRegras(a: RegraAuditoria, b: RegraAuditoria): number {
   const valorA = valorOrdenacao(a);
   const valorB = valorOrdenacao(b);
   if (valorA !== null && valorB !== null && valorA !== valorB) return valorA - valorB;
   if (valorA === null && valorB !== null) return 1;
   if (valorA !== null && valorB === null) return -1;
+
+  const cargoA = pesoCargo(a.cargoDestino);
+  const cargoB = pesoCargo(b.cargoDestino);
+  if (cargoA !== cargoB) return cargoA - cargoB;
+
   return a.nomeRegra.localeCompare(b.nomeRegra, "pt-BR");
 }
