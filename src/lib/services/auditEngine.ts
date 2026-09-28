@@ -23,7 +23,12 @@ import {
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
-import { avaliarRegrasAgregadasDinamicas, avaliarSlaEstagnacaoParaLinha, buscarRegrasAtivas } from "./dynamicRuleEngine";
+import {
+  avaliarRegrasAgregadasDinamicas,
+  avaliarRegrasDeTarefas,
+  avaliarRegrasPorLinha,
+  buscarRegrasAtivas,
+} from "./dynamicRuleEngine";
 import { NIVEL_POR_QUADRO } from "@/lib/server/tarefasManuais";
 import type { ClienteEnvolvido, EtapaHistorico, Importacao, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
 
@@ -577,7 +582,7 @@ export async function executarAuditoriaDiaria(params: {
     for (const [chave, t] of tarefasPorChave) {
       const ehDaPasta = t.data.numero === linha.numero;
       // Regra dinâmica (DINAMICA::) nunca entra nesta limpeza: ela tem o próprio ciclo de vida
-      // (avaliarSlaEstagnacaoParaLinha, abaixo), mesmo quando nasce com nivel "operacional".
+      // (avaliarRegrasPorLinha, abaixo), mesmo quando nasce com nivel "operacional".
       const ehDaRegraOperacional =
         (t.data.nivel === "operacional" && !chave.startsWith("DINAMICA::")) || chave.endsWith("::etapa_080");
       if (!ehDaPasta || !ehDaRegraOperacional || chave === chaveOperacionalDesejada) continue;
@@ -657,8 +662,9 @@ export async function executarAuditoriaDiaria(params: {
       condicaoAtiva: specErro !== null,
     });
 
-    // Motor de Regras Dinâmicas — "SLA e Estagnação" (por pasta, precisa do histórico do dia).
-    for (const dinamica of avaliarSlaEstagnacaoParaLinha(regrasDinamicasAtivas, linha, historicoPasta)) {
+    // Motor de Regras Dinâmicas — categorias por pasta: SLA/Estagnação, Análise Textual,
+    // Regressão e Conformidade (vencimento longo).
+    for (const dinamica of avaliarRegrasPorLinha(regrasDinamicasAtivas, linha, historicoPasta, antigo, importacaoId)) {
       reconciliarTarefa({
         ...camposComuns,
         chaveRegra: dinamica.chaveRegra,
@@ -692,10 +698,12 @@ export async function executarAuditoriaDiaria(params: {
     ...paramsAgregados,
   });
 
-  // --- Passo 3: Motor de Regras Dinâmicas — categorias agregadas ("Volume e Gargalos",
-  // "Ociosidade de Imobiliária"). Fecha sozinha quando a contagem/ociosidade cai abaixo do
-  // limiar, a não ser que a regra tenha `exigeAcaoHumana` (ver chaveExigeAcaoHumana acima).
-  for (const dinamica of avaliarRegrasAgregadasDinamicas(regrasDinamicasAtivas, linhasEmEsteira, registrosAntigos, importacaoId)) {
+  // --- Passo 3: Motor de Regras Dinâmicas — categorias agregadas (Volume/Gargalos, Ociosidade,
+  // Qualidade/Reprovação, Conformidade/duplicidade, Ações Positivas). Passa `linhas` (não
+  // `linhasEmEsteira`): Ações Positivas e Conformidade precisam enxergar pastas que acabaram de
+  // chegar ao fim de esteira; Volume/Gargalos filtra isso sozinho, internamente. Fecha sozinha
+  // quando a contagem cai, a não ser que a regra tenha `exigeAcaoHumana` (chaveExigeAcaoHumana).
+  for (const dinamica of avaliarRegrasAgregadasDinamicas(regrasDinamicasAtivas, linhas, registrosAntigos, importacaoId)) {
     reconciliarTarefa({
       chaveRegra: dinamica.chaveRegra,
       origem: dinamica.origem,
@@ -712,6 +720,51 @@ export async function executarAuditoriaDiaria(params: {
       descricao: dinamica.descricao,
       observacaoOriginal: "",
       condicaoAtiva: dinamica.condicaoAtiva,
+      avancoDetectado: true,
+    });
+  }
+
+  // --- Passo 4: Motor de Regras Dinâmicas — "SLA Interno" (observa as próprias tarefas do
+  // sistema, não a planilha). Fecha o alerta quando a tarefa-alvo deixa de estar entre as
+  // atualmente estagnadas (foi resolvida, ou parou de bater com os critérios da regra).
+  const chavesSlaInternoAtuais = new Set<string>();
+  for (const dinamica of avaliarRegrasDeTarefas(regrasDinamicasAtivas, tarefasPorChave, importacaoId)) {
+    chavesSlaInternoAtuais.add(dinamica.chaveRegra);
+    reconciliarTarefa({
+      chaveRegra: dinamica.chaveRegra,
+      origem: dinamica.origem,
+      nivel: NIVEL_POR_QUADRO[dinamica.quadro],
+      numero: null,
+      cidade: "",
+      quadro: dinamica.quadro,
+      imobiliaria: "",
+      etapa: "",
+      prazoEtapa: null,
+      slaStatus: "no_prazo",
+      tipoPendencia: dinamica.tipoPendencia,
+      descricao: dinamica.descricao,
+      observacaoOriginal: "",
+      condicaoAtiva: dinamica.condicaoAtiva,
+      avancoDetectado: true,
+    });
+  }
+  for (const [chave, t] of tarefasPorChave) {
+    if (!chave.includes("::sla_interno::") || chavesSlaInternoAtuais.has(chave)) continue;
+    reconciliarTarefa({
+      chaveRegra: chave,
+      origem: "agregado",
+      nivel: t.data.nivel,
+      numero: null,
+      cidade: "",
+      quadro: t.data.praca,
+      imobiliaria: "",
+      etapa: "",
+      prazoEtapa: null,
+      slaStatus: "no_prazo",
+      tipoPendencia: t.data.tipoPendencia,
+      descricao: t.data.descricao,
+      observacaoOriginal: "",
+      condicaoAtiva: false,
       avancoDetectado: true,
     });
   }

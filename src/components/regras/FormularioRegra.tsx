@@ -9,6 +9,7 @@ import {
   type CategoriaGatilho,
   type NovaRegraAuditoria,
   type ParametrosRegra,
+  type RegraAuditoria,
 } from "@/lib/types/regrasAuditoria";
 import { Modal } from "@/components/ui/Modal";
 
@@ -39,13 +40,30 @@ const RASCUNHO_INICIAL: NovaRegraAuditoria = {
 };
 
 export function FormularioRegra({
+  regraExistente,
   onSalvar,
   onCancelar,
 }: {
+  /** Presente = edição (pré-preenche o formulário com os dados dela); ausente = criação. */
+  regraExistente?: RegraAuditoria | null;
   onSalvar: (regra: NovaRegraAuditoria) => Promise<void>;
   onCancelar: () => void;
 }) {
-  const [regra, setRegra] = useState<NovaRegraAuditoria>(RASCUNHO_INICIAL);
+  const editando = !!regraExistente;
+  // Remonta os campos de parâmetros de acordo com a categoria já salva na regra.
+  const [regra, setRegra] = useState<NovaRegraAuditoria>(
+    regraExistente
+      ? {
+          nomeRegra: regraExistente.nomeRegra,
+          cargoDestino: regraExistente.cargoDestino,
+          categoriaGatilho: regraExistente.categoriaGatilho,
+          parametros: { ...regraExistente.parametros },
+          textoTarefa: regraExistente.textoTarefa,
+          exigeAcaoHumana: regraExistente.exigeAcaoHumana,
+          ativo: regraExistente.ativo,
+        }
+      : RASCUNHO_INICIAL
+  );
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -74,7 +92,7 @@ export function FormularioRegra({
   }
 
   return (
-    <Modal titulo="Criar Nova Regra" onClose={onCancelar}>
+    <Modal titulo={editando ? "Editar Regra" : "Criar Nova Regra"} onClose={onCancelar}>
       <div className="space-y-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Nome da regra</span>
@@ -226,7 +244,7 @@ export function FormularioRegra({
           Cancelar
         </button>
         <button type="button" className="btn-primary h-11 sm:h-10" onClick={salvar} disabled={!podeSalvar}>
-          Salvar Regra
+          {editando ? "Salvar Alterações" : "Salvar Regra"}
         </button>
       </div>
     </Modal>

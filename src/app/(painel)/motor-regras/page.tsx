@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { podeConfigurarRegrasAuditoria } from "@/lib/auth/roles";
 import { useRegrasAuditoria } from "@/lib/hooks/useRegrasAuditoria";
 import {
   alternarRegraAtiva,
+  atualizarRegraAuditoria,
   criarRegraAuditoria,
   excluirRegraAuditoria,
 } from "@/lib/services/regrasAuditoriaService";
@@ -25,6 +26,8 @@ export default function MotorDeRegrasPage() {
   const podeVer = !!profile && podeConfigurarRegrasAuditoria(profile.role);
   const { regras, loading, erro } = useRegrasAuditoria(podeVer);
   const [modalAberto, setModalAberto] = useState(false);
+  // null com o modal aberto = criando uma regra nova; preenchido = editando esta regra.
+  const [regraEditando, setRegraEditando] = useState<RegraAuditoria | null>(null);
 
   if (!profile) return null;
   if (!podeVer) {
@@ -36,10 +39,29 @@ export default function MotorDeRegrasPage() {
     );
   }
 
-  async function salvarRegra(nova: NovaRegraAuditoria) {
-    if (!firebaseUser) return;
-    await criarRegraAuditoria(nova, firebaseUser.uid);
+  function abrirCriacao() {
+    setRegraEditando(null);
+    setModalAberto(true);
+  }
+
+  function abrirEdicao(regra: RegraAuditoria) {
+    setRegraEditando(regra);
+    setModalAberto(true);
+  }
+
+  function fecharModal() {
     setModalAberto(false);
+    setRegraEditando(null);
+  }
+
+  async function salvarRegra(dados: NovaRegraAuditoria) {
+    if (regraEditando) {
+      await atualizarRegraAuditoria(regraEditando.id, dados);
+    } else {
+      if (!firebaseUser) return;
+      await criarRegraAuditoria(dados, firebaseUser.uid);
+    }
+    fecharModal();
   }
 
   async function excluir(id: string, nome: string) {
@@ -56,10 +78,9 @@ export default function MotorDeRegrasPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="max-w-2xl text-sm text-ink-secondary dark:text-white/60">
           Matriz de Responsabilidades: configure aqui os gatilhos que geram tarefas automaticamente, sem precisar de
-          um desenvolvedor. Esta é a interface de cadastro — o motor de auditoria ainda não aplica estas regras às
-          importações (próxima etapa).
+          um desenvolvedor. As importações já aplicam estas regras às pastas.
         </p>
-        <button type="button" className="btn-primary shrink-0" onClick={() => setModalAberto(true)}>
+        <button type="button" className="btn-primary shrink-0" onClick={abrirCriacao}>
           <Plus size={16} />
           Criar Nova Regra
         </button>
@@ -80,14 +101,28 @@ export default function MotorDeRegrasPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          <SecaoRegras titulo={`Ativas (${ativas.length})`} regras={ativas} onAlternar={alternarRegraAtiva} onExcluir={excluir} />
+          <SecaoRegras
+            titulo={`Ativas (${ativas.length})`}
+            regras={ativas}
+            onAlternar={alternarRegraAtiva}
+            onEditar={abrirEdicao}
+            onExcluir={excluir}
+          />
           {inativas.length > 0 && (
-            <SecaoRegras titulo={`Inativas (${inativas.length})`} regras={inativas} onAlternar={alternarRegraAtiva} onExcluir={excluir} />
+            <SecaoRegras
+              titulo={`Inativas (${inativas.length})`}
+              regras={inativas}
+              onAlternar={alternarRegraAtiva}
+              onEditar={abrirEdicao}
+              onExcluir={excluir}
+            />
           )}
         </div>
       )}
 
-      {modalAberto && <FormularioRegra onSalvar={salvarRegra} onCancelar={() => setModalAberto(false)} />}
+      {modalAberto && (
+        <FormularioRegra regraExistente={regraEditando} onSalvar={salvarRegra} onCancelar={fecharModal} />
+      )}
     </div>
   );
 }
@@ -96,11 +131,13 @@ function SecaoRegras({
   titulo,
   regras,
   onAlternar,
+  onEditar,
   onExcluir,
 }: {
   titulo: string;
   regras: RegraAuditoria[];
   onAlternar: (id: string, ativo: boolean) => Promise<void>;
+  onEditar: (regra: RegraAuditoria) => void;
   onExcluir: (id: string, nome: string) => Promise<void>;
 }) {
   if (regras.length === 0) return null;
@@ -109,7 +146,7 @@ function SecaoRegras({
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{titulo}</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {regras.map((r) => (
-          <CardRegra key={r.id} regra={r} onAlternar={onAlternar} onExcluir={onExcluir} />
+          <CardRegra key={r.id} regra={r} onAlternar={onAlternar} onEditar={onEditar} onExcluir={onExcluir} />
         ))}
       </div>
     </section>
@@ -119,10 +156,12 @@ function SecaoRegras({
 function CardRegra({
   regra,
   onAlternar,
+  onEditar,
   onExcluir,
 }: {
   regra: RegraAuditoria;
   onAlternar: (id: string, ativo: boolean) => Promise<void>;
+  onEditar: (regra: RegraAuditoria) => void;
   onExcluir: (id: string, nome: string) => Promise<void>;
 }) {
   return (
@@ -132,14 +171,24 @@ function CardRegra({
           <p className="truncate text-sm font-semibold text-ink-primary dark:text-white">{regra.nomeRegra}</p>
           <p className="text-xs text-ink-muted">{CATEGORIA_GATILHO_LABEL[regra.categoriaGatilho]}</p>
         </div>
-        {regra.exigeAcaoHumana && (
-          <span
-            title="Exige ação humana: a importação nunca fecha esta tarefa sozinha"
-            className="shrink-0 rounded-full bg-status-warning/10 p-1.5 text-status-warning"
+        <div className="flex shrink-0 items-center gap-1">
+          {regra.exigeAcaoHumana && (
+            <span
+              title="Exige ação humana: a importação nunca fecha esta tarefa sozinha"
+              className="rounded-full bg-status-warning/10 p-1.5 text-status-warning"
+            >
+              <ShieldCheck size={14} />
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onEditar(regra)}
+            title="Editar regra"
+            className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-soft hover:text-ink-primary dark:hover:bg-white/10 dark:hover:text-white"
           >
-            <ShieldCheck size={14} />
-          </span>
-        )}
+            <Pencil size={14} />
+          </button>
+        </div>
       </div>
 
       <p className="whitespace-pre-line break-words text-xs leading-relaxed text-ink-secondary dark:text-white/70">
