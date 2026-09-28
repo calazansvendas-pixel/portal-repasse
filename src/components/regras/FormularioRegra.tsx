@@ -41,16 +41,21 @@ const RASCUNHO_INICIAL: NovaRegraAuditoria = {
 
 export function FormularioRegra({
   regraExistente,
+  rascunhoInicial,
   onSalvar,
   onCancelar,
 }: {
-  /** Presente = edição (pré-preenche o formulário com os dados dela); ausente = criação. */
+  /** Presente = edição (pré-preenche e o botão atualiza a mesma regra); ausente = criação. */
   regraExistente?: RegraAuditoria | null;
+  /** Pré-preenchimento de uma duplicação: mesmos dados de outra regra, mas ainda é uma CRIAÇÃO
+   * (regraExistente fica null nesse caso — quem decide insert vs update é a página, pelo id). */
+  rascunhoInicial?: NovaRegraAuditoria | null;
   onSalvar: (regra: NovaRegraAuditoria) => Promise<void>;
   onCancelar: () => void;
 }) {
   const editando = !!regraExistente;
-  // Remonta os campos de parâmetros de acordo com a categoria já salva na regra.
+  // Remonta os campos de parâmetros de acordo com a categoria já salva na regra (ou no rascunho
+  // de duplicação, que já vem no formato NovaRegraAuditoria).
   const [regra, setRegra] = useState<NovaRegraAuditoria>(
     regraExistente
       ? {
@@ -62,7 +67,7 @@ export function FormularioRegra({
           exigeAcaoHumana: regraExistente.exigeAcaoHumana,
           ativo: regraExistente.ativo,
         }
-      : RASCUNHO_INICIAL
+      : (rascunhoInicial ?? RASCUNHO_INICIAL)
   );
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);

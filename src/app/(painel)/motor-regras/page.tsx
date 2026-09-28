@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, Copy, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { podeConfigurarRegrasAuditoria } from "@/lib/auth/roles";
 import { useRegrasAuditoria } from "@/lib/hooks/useRegrasAuditoria";
@@ -28,6 +28,9 @@ export default function MotorDeRegrasPage() {
   const [modalAberto, setModalAberto] = useState(false);
   // null com o modal aberto = criando uma regra nova; preenchido = editando esta regra.
   const [regraEditando, setRegraEditando] = useState<RegraAuditoria | null>(null);
+  // Rascunho pré-preenchido para duplicação: regraEditando fica null (é sempre um INSERT), só o
+  // formulário nasce com os campos da regra de origem.
+  const [rascunhoDuplicando, setRascunhoDuplicando] = useState<NovaRegraAuditoria | null>(null);
 
   if (!profile) return null;
   if (!podeVer) {
@@ -41,17 +44,36 @@ export default function MotorDeRegrasPage() {
 
   function abrirCriacao() {
     setRegraEditando(null);
+    setRascunhoDuplicando(null);
     setModalAberto(true);
   }
 
   function abrirEdicao(regra: RegraAuditoria) {
     setRegraEditando(regra);
+    setRascunhoDuplicando(null);
+    setModalAberto(true);
+  }
+
+  function duplicarRegra(regra: RegraAuditoria) {
+    // regraEditando fica null de propósito: salvarRegra() trata isto como criação (insert), não
+    // update — mesmo com todos os campos vindos da regra original.
+    setRegraEditando(null);
+    setRascunhoDuplicando({
+      nomeRegra: `${regra.nomeRegra} (Cópia)`,
+      cargoDestino: regra.cargoDestino,
+      categoriaGatilho: regra.categoriaGatilho,
+      parametros: { ...regra.parametros },
+      textoTarefa: regra.textoTarefa,
+      exigeAcaoHumana: regra.exigeAcaoHumana,
+      ativo: regra.ativo,
+    });
     setModalAberto(true);
   }
 
   function fecharModal() {
     setModalAberto(false);
     setRegraEditando(null);
+    setRascunhoDuplicando(null);
   }
 
   async function salvarRegra(dados: NovaRegraAuditoria) {
@@ -107,6 +129,7 @@ export default function MotorDeRegrasPage() {
             regras={ativas}
             onAlternar={alternarRegraAtiva}
             onEditar={abrirEdicao}
+            onDuplicar={duplicarRegra}
             onExcluir={excluir}
           />
           {inativas.length > 0 && (
@@ -115,6 +138,7 @@ export default function MotorDeRegrasPage() {
               regras={inativas}
               onAlternar={alternarRegraAtiva}
               onEditar={abrirEdicao}
+              onDuplicar={duplicarRegra}
               onExcluir={excluir}
             />
           )}
@@ -122,7 +146,12 @@ export default function MotorDeRegrasPage() {
       )}
 
       {modalAberto && (
-        <FormularioRegra regraExistente={regraEditando} onSalvar={salvarRegra} onCancelar={fecharModal} />
+        <FormularioRegra
+          regraExistente={regraEditando}
+          rascunhoInicial={rascunhoDuplicando}
+          onSalvar={salvarRegra}
+          onCancelar={fecharModal}
+        />
       )}
     </div>
   );
@@ -133,12 +162,14 @@ function SecaoRegras({
   regras,
   onAlternar,
   onEditar,
+  onDuplicar,
   onExcluir,
 }: {
   titulo: string;
   regras: RegraAuditoria[];
   onAlternar: (id: string, ativo: boolean) => Promise<void>;
   onEditar: (regra: RegraAuditoria) => void;
+  onDuplicar: (regra: RegraAuditoria) => void;
   onExcluir: (id: string, nome: string) => Promise<void>;
 }) {
   if (regras.length === 0) return null;
@@ -147,7 +178,14 @@ function SecaoRegras({
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{titulo}</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {regras.map((r) => (
-          <CardRegra key={r.id} regra={r} onAlternar={onAlternar} onEditar={onEditar} onExcluir={onExcluir} />
+          <CardRegra
+            key={r.id}
+            regra={r}
+            onAlternar={onAlternar}
+            onEditar={onEditar}
+            onDuplicar={onDuplicar}
+            onExcluir={onExcluir}
+          />
         ))}
       </div>
     </section>
@@ -158,11 +196,13 @@ function CardRegra({
   regra,
   onAlternar,
   onEditar,
+  onDuplicar,
   onExcluir,
 }: {
   regra: RegraAuditoria;
   onAlternar: (id: string, ativo: boolean) => Promise<void>;
   onEditar: (regra: RegraAuditoria) => void;
+  onDuplicar: (regra: RegraAuditoria) => void;
   onExcluir: (id: string, nome: string) => Promise<void>;
 }) {
   return (
@@ -181,6 +221,14 @@ function CardRegra({
               <ShieldCheck size={14} />
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => onDuplicar(regra)}
+            title="Duplicar regra"
+            className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-soft hover:text-ink-primary dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            <Copy size={14} />
+          </button>
           <button
             type="button"
             onClick={() => onEditar(regra)}
