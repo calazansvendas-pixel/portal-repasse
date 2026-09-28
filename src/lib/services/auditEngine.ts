@@ -1,6 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { LinhaPlanilha } from "./parseSheet";
-import { calcularEscalonamento, ehEtapa080, ehEtapaInclusao, ehFimDeEsteira, MENSAGEM_FALHA_080 } from "./taskRouter";
+import { ehFimDeEsteira } from "./taskRouter";
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
@@ -101,15 +101,9 @@ interface DadosParaReconciliar {
   tipoPendencia: string;
   descricao: string;
   observacaoOriginal: string;
-  // Pasta em fim de esteira (9.xx): tarefas abertas são encerradas com sucesso.
-  fimDeEsteira?: boolean;
   // A regra ainda dispara nesta importação (linha ainda tem o gatilho, ou o
   // agregado ainda atinge o limiar)?
   condicaoAtiva: boolean;
-  // Sinal de progresso: para tarefas de linha, "a etapa da pasta avançou";
-  // para agregados, sempre true (não há uma única etapa para comparar — o
-  // critério de sucesso vira simplesmente "o agregado deixou de disparar").
-  avancoDetectado: boolean;
 }
 
 /**
@@ -119,10 +113,10 @@ interface DadosParaReconciliar {
  * a importação. Sem nenhuma regra ativa, a importação não cria nenhuma tarefa nova — toda a
  * geração de tarefa vem só daí, nada é mais gerado por lógica fixa no código:
  *  - cria a tarefa quando o gatilho passa a valer e não havia tarefa ativa;
- *  - valida ('validated_done') tarefas marcadas como resolvidas quando o
- *    sinal de progresso confirma e o gatilho não dispara mais;
- *  - devolve ao quadro com tag de "Falha de Auditoria" quando a marcação foi
- *    "fake done" (escalando também para o quadro da Analista);
+ *  - valida ('validated_done') QUALQUER tarefa marcada como resolvida — o clique de quem
+ *    concluiu vale sempre; a importação nunca reabre uma tarefa concluída nem gera "Falha de
+ *    Auditoria" (decisão de produto: menos ruído no Kanban, confia-se no usuário; se a pendência
+ *    persistir, quem cobra é o SLA/estagnação normal, não uma reabertura automática);
  *  - atualiza o snapshot de cada pasta e grava o histórico do dia.
  */
 export async function executarAuditoriaDiaria(params: {
@@ -209,73 +203,17 @@ export async function executarAuditoriaDiaria(params: {
     const tarefaAtiva = tarefasPorChave.get(dados.chaveRegra);
 
     if (tarefaAtiva?.data.status === "pending_validation") {
+      // Decisão de produto: o clique de quem marcou a tarefa como resolvida vale sempre — a
+      // importação NUNCA reabre uma tarefa concluída nem gera "Falha de Auditoria", mesmo que a
+      // pasta continue aparecendo na mesma etapa na planilha seguinte. As regras normais de
+      // SLA/estagnação (dias parados) é que voltam a atuar naturalmente se a pendência persistir.
       const tarefaRef = db.collection("tarefas").doc(tarefaAtiva.id);
-      // Exceção de confiança: a virada da etapa 0.01 não depende das
-      // assistentes, então o check delas vale mesmo se a etapa não avançou —
-      // nunca gera Falha de Auditoria para tarefas operacionais da 0.01.
-      const confiancaEtapaInclusao =
-        dados.nivel === "operacional" &&
-        ehEtapaInclusao(tarefaAtiva.data.etapaNoMomentoResolucao ?? tarefaAtiva.data.etapa);
-      // Mesma confiança no clique para o gargalo de Crédito (0.99): quem aguarda
-      // é o setor de Crédito, não o Coordenador — a baixa vale mesmo com as pastas na 0.99.
-      const confiancaCredito = dados.chaveRegra.startsWith("AGREGADO::gargalo_credito::");
-      // E na 0.04 (follow-up): a virada também não depende da equipe interna.
-      const ehFollowUp = dados.chaveRegra.endsWith("::follow_up_004");
-      // Ação humana (visita/treinamento): a planilha não audita evento do mundo real — o clique
-      // de quem concluiu é a única confirmação que existe, então a baixa vale sempre.
-      const sucesso =
-        chaveExigeAcaoHumana(dados.chaveRegra) ||
-        confiancaEtapaInclusao ||
-        confiancaCredito ||
-        ehFollowUp ||
-        dados.fimDeEsteira === true ||
-        (dados.avancoDetectado && !dados.condicaoAtiva);
-
-      if (sucesso) {
-        update(tarefaRef, {
-          status: "validated_done",
-          atualizadoEm: agora,
-          historicoEtapas: dados.historicoPasta ?? tarefaAtiva.data.historicoEtapas ?? [],
-        });
-        resumo.tarefasValidadas++;
-      } else {
-        // "Fake done": marcada como resolvida, mas o gatilho continua valendo.
-        update(tarefaRef, {
-          status: "audit_failed",
-          atualizadoEm: agora,
-          historicoEtapas: dados.historicoPasta ?? tarefaAtiva.data.historicoEtapas ?? [],
-          // Falha em tarefa agregada: as sub-tarefas voltam a ficar sem check para refazer.
-          ...(tarefaAtiva.data.clientesEnvolvidos?.length
-            ? { clientesEnvolvidos: (dados.clientesEnvolvidos ?? tarefaAtiva.data.clientesEnvolvidos).map((c) => ({ ...c, concluido: false })) }
-            : {}),
-          falhaAuditoriaMotivo:
-            dados.origem === "linha" && ehEtapa080(dados.etapa)
-              ? MENSAGEM_FALHA_080
-              : dados.avancoDetectado
-                ? "Avançou, mas a mesma pendência foi identificada novamente."
-                : "Continua na mesma situação da última importação.",
-          falhaAuditoriaEm: agora,
-          escalonadoPara: calcularEscalonamento({
-            quadro: dados.quadro,
-            falhouAuditoriaAgora: true,
-          }),
-        });
-        const notifRef = db.collection("notificacoes").doc();
-        set(
-          notifRef,
-          {
-            tipo: "falha_auditoria",
-            tarefaId: tarefaAtiva.id,
-            numero: dados.numero ?? "",
-            mensagem: `Falha de auditoria em "${dados.tipoPendencia}"${dados.numero ? ` (pasta ${dados.numero})` : ""}: marcada como resolvida, mas a pendência persiste.`,
-            destinatariosRoles: ["gerencia", "analista"],
-            criadoEm: agora,
-            lida: false,
-          },
-          false
-        );
-        resumo.falhasAuditoria++;
-      }
+      update(tarefaRef, {
+        status: "validated_done",
+        atualizadoEm: agora,
+        historicoEtapas: dados.historicoPasta ?? tarefaAtiva.data.historicoEtapas ?? [],
+      });
+      resumo.tarefasValidadas++;
       return;
     }
 
@@ -309,10 +247,9 @@ export async function executarAuditoriaDiaria(params: {
           dataEntrada: dados.dataEntrada ?? null,
           historicoEtapas: dados.historicoPasta ?? tarefaAtiva.data.historicoEtapas ?? [],
           atualizadoEm: agora,
-          escalonadoPara: calcularEscalonamento({
-            quadro: dados.quadro,
-            falhouAuditoriaAgora: tarefaAtiva.data.status === "audit_failed",
-          }),
+          // Escalonamento por falha de auditoria foi removido (ver reconciliarTarefa acima) —
+          // uma tarefa "audit_failed" legada some do escalonamento assim que reconciliada de novo.
+          escalonadoPara: [],
         });
       }
       return;
@@ -348,10 +285,7 @@ export async function executarAuditoriaDiaria(params: {
         observacaoNoMomentoResolucao: null,
         falhaAuditoriaMotivo: null,
         falhaAuditoriaEm: null,
-        escalonadoPara: calcularEscalonamento({
-          quadro: dados.quadro,
-          falhouAuditoriaAgora: false,
-        }),
+        escalonadoPara: [],
         historicoEtapas: dados.historicoPasta ?? [],
         clientesEnvolvidos: dados.clientesEnvolvidos ?? [],
         cicloFollowUp: dados.cicloFollowUp ?? null,
@@ -375,7 +309,6 @@ export async function executarAuditoriaDiaria(params: {
     const antigo = registrosAntigos.get(linha.numero) ?? null;
     const slaStatus = calcularSlaStatus(linha.prazoEtapa);
     if (!resolvePracaPorCidade(linha.cidade)) resumo.semPraca.push(linha.numero);
-    const etapaAvancou = antigo ? antigo.etapa !== linha.etapa : false;
 
     const registroRef = db.collection("registros").doc(linha.numero);
     const snapshotRef = registroRef.collection("snapshots").doc(importacaoId);
@@ -446,7 +379,6 @@ export async function executarAuditoriaDiaria(params: {
       prazoEtapa: linha.prazoEtapa,
       slaStatus,
       observacaoOriginal: linha.observacao,
-      avancoDetectado: etapaAvancou,
     };
 
     // Fim de esteira: encerra qualquer tarefa aberta da pasta e não gera novas.
@@ -461,7 +393,6 @@ export async function executarAuditoriaDiaria(params: {
           tipoPendencia: t.data.tipoPendencia,
           descricao: t.data.descricao,
           condicaoAtiva: false,
-          fimDeEsteira: true,
         });
       }
       continue;
@@ -505,7 +436,6 @@ export async function executarAuditoriaDiaria(params: {
       descricao: dinamica.descricao,
       observacaoOriginal: "",
       condicaoAtiva: dinamica.condicaoAtiva,
-      avancoDetectado: true,
     });
   }
 
@@ -530,7 +460,6 @@ export async function executarAuditoriaDiaria(params: {
       descricao: dinamica.descricao,
       observacaoOriginal: "",
       condicaoAtiva: dinamica.condicaoAtiva,
-      avancoDetectado: true,
     });
   }
   for (const [chave, t] of tarefasPorChave) {
@@ -550,7 +479,6 @@ export async function executarAuditoriaDiaria(params: {
       descricao: t.data.descricao,
       observacaoOriginal: "",
       condicaoAtiva: false,
-      avancoDetectado: true,
     });
   }
 
