@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Pencil, Trash2, Undo2 } from "lucide-react";
-import type { Assistente, ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
+import type { ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -15,7 +15,7 @@ import {
   reverterTarefa,
 } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { meuQuadroInterativo } from "@/lib/auth/roles";
+import { meuQuadroInterativo, resolvePracaPorCidade } from "@/lib/auth/roles";
 import { formatDateBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
@@ -34,21 +34,20 @@ function primeiroNome(rotulo: string): string {
 /**
  * Segunda passada de substituição de variáveis no texto da tarefa. `{analista}` e `{assistente}`
  * o Motor de Regras não resolve sozinho no servidor (dependem de quem ocupa o cargo hoje, não da
- * planilha); aqui viram o nome real via os rótulos já existentes no app. `{cliente}`/
- * `{imobiliaria}` já chegam substituídos pelo motor em tarefas de linha — a troca aqui é só uma
- * rede de segurança (normalmente um no-op). Em tarefas agregadas (Volume/Gargalos) não há um
- * cliente/imobiliária único, então essas duas ficam de fora: o texto permanece coeso e o
+ * planilha); aqui viram o nome real via os rótulos já existentes no app. `{assistente}` é
+ * resolvido pela CIDADE da pasta (`resolvePracaPorCidade`), não pelo `praca` da própria tarefa —
+ * um card que vive no quadro da Analista/Coordenador (ex.: "Entender com a {assistente}...") ainda
+ * precisa apontar o nome de quem realmente cuida daquela praça, não um texto genérico.
+ * `{cliente}`/`{imobiliaria}` já chegam substituídos pelo motor em tarefas de linha — a troca aqui
+ * é só uma rede de segurança (normalmente um no-op). Em tarefas agregadas (Volume/Gargalos) não há
+ * um cliente/imobiliária único, então essas duas ficam de fora: o texto permanece coeso e o
  * detalhamento mora na lista de pastas relacionadas.
  */
 function formatarDescricao(tarefa: Tarefa): string {
+  const pracaDaPasta = resolvePracaPorCidade(tarefa.cidade);
   let texto = tarefa.descricao
     .replaceAll("{analista}", primeiroNome(QUADRO_LABEL.analista))
-    .replaceAll(
-      "{assistente}",
-      PRACAS_ASSISTENTES.includes(tarefa.praca)
-        ? primeiroNome(ASSISTENTE_LABEL[tarefa.praca as Assistente])
-        : "a assistente responsável"
-    );
+    .replaceAll("{assistente}", pracaDaPasta ? primeiroNome(ASSISTENTE_LABEL[pracaDaPasta]) : "a assistente responsável");
 
   if (tarefa.origem !== "agregado") {
     texto = texto
