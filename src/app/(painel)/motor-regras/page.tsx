@@ -69,8 +69,9 @@ export default function MotorDeRegrasPage() {
     await excluirRegraAuditoria(id);
   }
 
-  const ativas = regras.filter((r) => r.ativo);
-  const inativas = regras.filter((r) => !r.ativo);
+  const regrasOrdenadas = [...regras].sort(compararRegras);
+  const ativas = regrasOrdenadas.filter((r) => r.ativo);
+  const inativas = regrasOrdenadas.filter((r) => !r.ativo);
 
   return (
     <div className="flex flex-col gap-5">
@@ -228,4 +229,40 @@ function CardRegra({
       </div>
     </div>
   );
+}
+
+const PREFIXO_NUMERICO_NOME = /^(\d+\.\d+)/;
+
+/** `parametros.etapa` como número (ex.: "0.80" -> 0.8); null quando a regra não tem etapa. */
+function valorEtapa(etapa: string | undefined): number | null {
+  const bruto = etapa?.trim();
+  if (!bruto) return null;
+  const n = Number.parseFloat(bruto);
+  return Number.isNaN(n) ? null : n;
+}
+
+/**
+ * Valor numérico de ordenação de uma regra: prioriza o prefixo do NOME (ex.: "0.99 - Gargalo..."
+ * -> 0.99), porque é o que a Gerência realmente usa como convenção — inclusive em categorias
+ * agregadas (Volume/Gargalos) que não preenchem `parametros.etapa` da mesma forma que SLA. Só cai
+ * para `parametros.etapa` quando o nome não tem esse prefixo. null = sem número em lugar nenhum
+ * (ex.: "Duplicidade de pasta"), vai para o final.
+ */
+function valorOrdenacao(regra: RegraAuditoria): number | null {
+  const doNome = regra.nomeRegra.trim().match(PREFIXO_NUMERICO_NOME)?.[1];
+  if (doNome !== undefined) {
+    const n = Number.parseFloat(doNome);
+    if (!Number.isNaN(n)) return n;
+  }
+  return valorEtapa(regra.parametros.etapa);
+}
+
+/** Número consolidado crescente primeiro (sem número nenhum vai para o fim); nome alfabético como desempate. */
+function compararRegras(a: RegraAuditoria, b: RegraAuditoria): number {
+  const valorA = valorOrdenacao(a);
+  const valorB = valorOrdenacao(b);
+  if (valorA !== null && valorB !== null && valorA !== valorB) return valorA - valorB;
+  if (valorA === null && valorB !== null) return 1;
+  if (valorA !== null && valorB === null) return -1;
+  return a.nomeRegra.localeCompare(b.nomeRegra, "pt-BR");
 }
