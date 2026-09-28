@@ -226,8 +226,8 @@ function avaliarRegressao(regra: RegraAuditoria, linha: LinhaPlanilha, antigo: R
 
 function avaliarVencimentoLongo(regra: RegraAuditoria, linha: LinhaPlanilha, importacaoId: string): AvaliacaoDinamica | null {
   const quadro = quadroParaLinha(regra, linha.cidade);
-  const diasLimite = regra.parametros.dias ?? 0;
-  if (!quadro || !diasLimite || !linha.prazoEtapa) return null;
+  if (!quadro || regra.parametros.dias === undefined || !linha.prazoEtapa) return null;
+  const diasLimite = regra.parametros.dias;
 
   const diasAteVencer = diasEntre(linha.prazoEtapa, importacaoId);
   return {
@@ -295,8 +295,8 @@ function avaliarOciosidadeImobiliaria(
   importacaoId: string
 ): AvaliacaoDinamica[] {
   const quadro = quadroParaAgregado(regra);
-  const diasLimite = regra.parametros.dias ?? 0;
-  if (!quadro || !diasLimite) return [];
+  if (!quadro || regra.parametros.dias === undefined) return [];
+  const diasLimite = regra.parametros.dias;
 
   // Data da pasta mais recente de cada imobiliária, olhando só o que este sistema já registrou
   // (nunca uma base antiga: `criadoEm` só existe a partir do dia em que a pasta entrou aqui).
@@ -447,8 +447,8 @@ function avaliarSlaInterno(
   importacaoId: string
 ): AvaliacaoDinamica[] {
   const quadro = quadroParaAgregado(regra);
-  const diasLimite = regra.parametros.dias ?? 0;
-  if (!quadro || !diasLimite) return [];
+  if (!quadro || regra.parametros.dias === undefined) return [];
+  const diasLimite = regra.parametros.dias;
 
   const especs: AvaliacaoDinamica[] = [];
   for (const { id, data } of tarefasPorChave.values()) {
