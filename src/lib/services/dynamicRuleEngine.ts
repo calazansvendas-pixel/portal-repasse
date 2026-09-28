@@ -139,10 +139,14 @@ function avaliarSlaEstagnacao(
   historicoPasta: EtapaHistorico[]
 ): AvaliacaoDinamica | null {
   const quadro = quadroParaLinha(regra, linha.cidade);
-  const diasLimite = regra.parametros.dias ?? 0;
-  if (!quadro || !diasLimite) return null;
+  // `dias: 0` é um gatilho válido (ação imediata ao entrar na etapa) — só falta configuração
+  // quando o campo nem foi preenchido (undefined), nunca quando o valor é zero.
+  if (!quadro || regra.parametros.dias === undefined) return null;
+  const diasLimite = regra.parametros.dias;
+  // A planilha traz a etapa com sufixo descritivo (ex.: "1.17 - Documentação incompleta"); a
+  // regra cadastra só o código (ex.: "1.17"). Basta o código bater no início da etapa da linha.
   const etapaAlvo = regra.parametros.etapa?.trim();
-  if (etapaAlvo && linha.etapa.trim() !== etapaAlvo) return null;
+  if (etapaAlvo && !linha.etapa.trim().toUpperCase().startsWith(etapaAlvo.toUpperCase())) return null;
 
   const diasParada = diasConsecutivosNaEtapa(historicoPasta, linha.etapa);
   return {
