@@ -69,6 +69,14 @@ export function TaskBoard({
     () => [...new Set(tarefas.map((t) => codigoEtapa(t.etapa)))].sort(compararCodigosEtapa),
     [tarefas]
   );
+  // Indicador verde na tag: existe alguma tarefa "a fazer" (não marcada como feita) naquela
+  // etapa. `tarefas` já chega aqui filtrada pela pessoa/status escolhidos lá em cima no painel
+  // (useTarefasPorQuadros + aplicarFiltros), então o indicador reflete sozinho o mesmo recorte —
+  // filtrar pela Eliane só acende as etapas em que ELA tem pendência.
+  const etapasComPendencia = useMemo(
+    () => new Set(tarefas.filter((t) => t.status !== "pending_validation").map((t) => codigoEtapa(t.etapa))),
+    [tarefas]
+  );
   const [etapasSelecionadas, setEtapasSelecionadas] = useState<Set<string>>(new Set());
   // Padrão: clicar numa etapa troca a seleção (só ela fica marcada); clicar de novo limpa.
   // "Selecionar múltiplas" liga o modo cumulativo (marca/desmarca sem afetar as outras).
@@ -104,6 +112,7 @@ export function TaskBoard({
         <FiltroEtapas
           etapas={etapasDisponiveis}
           selecionadas={etapasSelecionadas}
+          etapasComPendencia={etapasComPendencia}
           onAlternar={alternarEtapa}
           onLimpar={() => setEtapasSelecionadas(new Set())}
           isMultiSelect={isMultiSelect}
@@ -141,6 +150,7 @@ export function TaskBoard({
 function FiltroEtapas({
   etapas,
   selecionadas,
+  etapasComPendencia,
   onAlternar,
   onLimpar,
   isMultiSelect,
@@ -148,6 +158,8 @@ function FiltroEtapas({
 }: {
   etapas: string[];
   selecionadas: Set<string>;
+  /** Etapas com ao menos uma tarefa "a fazer" (não marcada como feita) no recorte atual. */
+  etapasComPendencia: Set<string>;
   onAlternar: (codigo: string) => void;
   onLimpar: () => void;
   isMultiSelect: boolean;
@@ -159,6 +171,7 @@ function FiltroEtapas({
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Filtrar etapas</span>
         {etapas.map((codigo) => {
           const ativo = selecionadas.has(codigo);
+          const temPendencia = etapasComPendencia.has(codigo);
           return (
             <button
               key={codigo}
@@ -166,12 +179,22 @@ function FiltroEtapas({
               onClick={() => onAlternar(codigo)}
               aria-pressed={ativo}
               className={cn(
-                "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
                 ativo
                   ? "border-brand-primary bg-brand-primary text-white"
                   : "border-border text-ink-secondary hover:bg-surface-soft dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
               )}
             >
+              {temPendencia && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    ativo ? "bg-white" : "bg-status-success"
+                  )}
+                  title="Há tarefas a fazer nesta etapa"
+                />
+              )}
               {codigo}
             </button>
           );
