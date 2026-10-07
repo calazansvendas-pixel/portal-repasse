@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/lib/auth/AuthContext";
 import { podeVerDossieCliente, resolvePracaPorCidade } from "@/lib/auth/roles";
 import { useDossieCliente } from "@/lib/hooks/useDossieCliente";
+import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { Topbar } from "@/components/layout/Topbar";
 import { montarLinhaDoTempo } from "@/lib/utils/dossieTimeline";
 import type { EventoDossie, TipoEventoDossie } from "@/lib/utils/dossieTimeline";
@@ -38,6 +39,7 @@ export default function DossieClientePage() {
   const { profile } = useAuth();
   const podeVer = !!profile && podeVerDossieCliente(profile.role);
   const { candidatos, dossie, loading, erro, buscar, abrir, limpar } = useDossieCliente();
+  const { overrides: pracaOverrides } = useMapeamentoPracas();
   const [termo, setTermo] = useState("");
 
   if (!profile) return null;
@@ -57,7 +59,7 @@ export default function DossieClientePage() {
   }
 
   const eventos = dossie ? montarLinhaDoTempo(dossie.registro, dossie.tarefas) : [];
-  const praca = dossie ? resolvePracaPorCidade(dossie.registro.cidade) : null;
+  const praca = dossie ? resolvePracaPorCidade(dossie.registro.cidade, pracaOverrides) : null;
 
   return (
     <div className="flex flex-col gap-5">

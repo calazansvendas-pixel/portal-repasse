@@ -71,6 +71,14 @@ service cloud.firestore {
       allow read, write: if souGerencia();
     }
 
+    // --- configuracoes: ajustes operacionais (ex.: mapeamento de praças). Leitura para
+    // qualquer usuário ativo — os cards/Dossiê de qualquer papel precisam resolver o
+    // responsável da cidade; escrita (a configuração em si) só Gerência. ---
+    match /configuracoes/{docId} {
+      allow read: if logado() && perfilAtivo();
+      allow write: if souGerencia();
+    }
+
     // --- tarefas: o campo "praca" guarda o Quadro (regional OU "coordenador"/"analista"
     // nativo). Cada um só marca/desmarca o checkbox no PRÓPRIO quadro — assistente na sua
     // praça, Coordenador em "coordenador", Analista em "analista". Gerência só observa. ---

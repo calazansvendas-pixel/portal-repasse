@@ -15,7 +15,8 @@ import {
   reverterTarefa,
 } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { meuQuadroInterativo, resolvePracaPorCidade } from "@/lib/auth/roles";
+import { meuQuadroInterativo, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
+import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { formatDateBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
@@ -43,8 +44,8 @@ function primeiroNome(rotulo: string): string {
  * um cliente/imobiliária único, então essas duas ficam de fora: o texto permanece coeso e o
  * detalhamento mora na lista de pastas relacionadas.
  */
-function formatarDescricao(tarefa: Tarefa): string {
-  const pracaDaPasta = resolvePracaPorCidade(tarefa.cidade);
+function formatarDescricao(tarefa: Tarefa, overrides?: PracaOverrides | null): string {
+  const pracaDaPasta = resolvePracaPorCidade(tarefa.cidade, overrides);
   let texto = tarefa.descricao
     .replaceAll("{analista}", primeiroNome(QUADRO_LABEL.analista))
     .replaceAll("{assistente}", pracaDaPasta ? primeiroNome(ASSISTENTE_LABEL[pracaDaPasta]) : "a assistente responsável");
@@ -93,6 +94,7 @@ export function TaskCard({
   className?: string;
 }) {
   const { firebaseUser, profile } = useAuth();
+  const { overrides: pracaOverrides } = useMapeamentoPracas();
   const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | null>(null);
   // Número do cliente cujo check completa a tarefa agregada (pede a nota opcional antes de gravar).
   const [clientePendente, setClientePendente] = useState<string | null>(null);
@@ -200,7 +202,7 @@ export function TaskCard({
 
   if (aguardandoValidacao) {
     const nome = isManual
-      ? formatarDescricao(tarefa)
+      ? formatarDescricao(tarefa, pracaOverrides)
       : isAgregado
         ? tituloAgregado
         : tarefa.clienteNome || tarefa.imobiliaria || tarefa.tipoPendencia;
@@ -338,7 +340,7 @@ export function TaskCard({
 
       {/* Corpo 1: ação de consultoria/ajuda */}
       <p className="whitespace-pre-line break-words text-sm font-medium leading-snug text-ink-primary dark:text-white">
-        {formatarDescricao(tarefa)}
+        {formatarDescricao(tarefa, pracaOverrides)}
       </p>
 
       {/* Lista direta dos clientes envolvidos (agregados do Motor de Regras) — sem precisar abrir

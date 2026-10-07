@@ -1,5 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { normalize, resolvePracaPorCidade } from "@/lib/auth/roles";
+import { normalize, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
 import { ehFimDeEsteira } from "./taskRouter";
 import type { LinhaPlanilha } from "./parseSheet";
 import type { CategoriaGatilho, RegraAuditoria } from "@/lib/types/regrasAuditoria";
@@ -47,6 +47,9 @@ export interface ContextoAvaliacao {
   registrosAntigos?: Map<string, Registro>;
   tarefasPorChave?: Map<string, { id: string; data: Tarefa }>;
   importacaoId: string;
+  // Substituições explícitas do vínculo padrão de praça (Gerência) — só afeta cargoDestino
+  // "assistente", nas categorias por linha (as agregadas nunca resolvem "assistente" com segurança).
+  pracaOverrides?: PracaOverrides | null;
 }
 
 /** Lê só as regras com `ativo === true` — as desligadas não custam nenhum processamento. */
@@ -77,9 +80,9 @@ function diasEntre(dataMaisRecenteISO: string, dataMaisAntigaISO: string): numbe
 /** cargoDestino -> Quadro só quando dá para rotear com confiança para uma única coluna do painel.
  * Destino "pessoa" fixa o quadro do colaborador escolhido e NUNCA passa pela praça da imobiliária
  * — nem na variante de linha, nem na agregada. */
-function quadroParaLinha(regra: RegraAuditoria, cidade: string): Quadro | null {
+function quadroParaLinha(regra: RegraAuditoria, cidade: string, overrides?: PracaOverrides | null): Quadro | null {
   if (regra.destinoTipo === "pessoa") return regra.pessoaQuadro ?? null;
-  if (regra.cargoDestino === "assistente") return resolvePracaPorCidade(cidade);
+  if (regra.cargoDestino === "assistente") return resolvePracaPorCidade(cidade, overrides);
   if (regra.cargoDestino === "coordenador" || regra.cargoDestino === "analista") return regra.cargoDestino;
   return null; // "gerencia": sem quadro próprio no painel.
 }
@@ -98,14 +101,16 @@ export function avaliarRegra(regra: RegraAuditoria, ctx: ContextoAvaliacao): Ava
   const categoria: CategoriaGatilho = regra.categoriaGatilho;
   switch (categoria) {
     case "sla_estagnacao":
-      return ctx.linha && ctx.historicoPasta ? soArray(avaliarSlaEstagnacao(regra, ctx.linha, ctx.historicoPasta)) : [];
+      return ctx.linha && ctx.historicoPasta
+        ? soArray(avaliarSlaEstagnacao(regra, ctx.linha, ctx.historicoPasta, ctx.pracaOverrides))
+        : [];
     case "analise_textual":
-      return ctx.linha ? soArray(avaliarAnaliseTextual(regra, ctx.linha)) : [];
+      return ctx.linha ? soArray(avaliarAnaliseTextual(regra, ctx.linha, ctx.pracaOverrides)) : [];
     case "regressao":
-      return ctx.linha ? soArray(avaliarRegressao(regra, ctx.linha, ctx.antigo ?? null)) : [];
+      return ctx.linha ? soArray(avaliarRegressao(regra, ctx.linha, ctx.antigo ?? null, ctx.pracaOverrides)) : [];
     case "conformidade":
       if (regra.parametros.subtipoConformidade === "vencimento_longo") {
-        return ctx.linha ? soArray(avaliarVencimentoLongo(regra, ctx.linha, ctx.importacaoId)) : [];
+        return ctx.linha ? soArray(avaliarVencimentoLongo(regra, ctx.linha, ctx.importacaoId, ctx.pracaOverrides)) : [];
       }
       return ctx.todasLinhas ? avaliarDuplicidade(regra, ctx.todasLinhas) : [];
     case "volume_gargalo":
@@ -142,9 +147,10 @@ function soArray<T>(item: T | null): T[] {
 function avaliarSlaEstagnacao(
   regra: RegraAuditoria,
   linha: LinhaPlanilha,
-  historicoPasta: EtapaHistorico[]
+  historicoPasta: EtapaHistorico[],
+  overrides?: PracaOverrides | null
 ): AvaliacaoDinamica | null {
-  const quadro = quadroParaLinha(regra, linha.cidade);
+  const quadro = quadroParaLinha(regra, linha.cidade, overrides);
   // `dias: 0` é um gatilho válido (ação imediata ao entrar na etapa) — só falta configuração
   // quando o campo nem foi preenchido (undefined), nunca quando o valor é zero.
   if (!quadro || regra.parametros.dias === undefined) return null;
@@ -179,8 +185,12 @@ function avaliarSlaEstagnacao(
   };
 }
 
-function avaliarAnaliseTextual(regra: RegraAuditoria, linha: LinhaPlanilha): AvaliacaoDinamica | null {
-  const quadro = quadroParaLinha(regra, linha.cidade);
+function avaliarAnaliseTextual(
+  regra: RegraAuditoria,
+  linha: LinhaPlanilha,
+  overrides?: PracaOverrides | null
+): AvaliacaoDinamica | null {
+  const quadro = quadroParaLinha(regra, linha.cidade, overrides);
   const palavraChave = regra.parametros.palavraChave?.trim();
   if (!quadro || !palavraChave) return null;
 
@@ -208,8 +218,13 @@ function valorNumericoDaEtapa(etapa: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-function avaliarRegressao(regra: RegraAuditoria, linha: LinhaPlanilha, antigo: Registro | null): AvaliacaoDinamica | null {
-  const quadro = quadroParaLinha(regra, linha.cidade);
+function avaliarRegressao(
+  regra: RegraAuditoria,
+  linha: LinhaPlanilha,
+  antigo: Registro | null,
+  overrides?: PracaOverrides | null
+): AvaliacaoDinamica | null {
+  const quadro = quadroParaLinha(regra, linha.cidade, overrides);
   if (!quadro || !antigo) return null;
 
   const etapaAntiga = valorNumericoDaEtapa(antigo.etapa);
@@ -243,8 +258,13 @@ function avaliarRegressao(regra: RegraAuditoria, linha: LinhaPlanilha, antigo: R
   };
 }
 
-function avaliarVencimentoLongo(regra: RegraAuditoria, linha: LinhaPlanilha, importacaoId: string): AvaliacaoDinamica | null {
-  const quadro = quadroParaLinha(regra, linha.cidade);
+function avaliarVencimentoLongo(
+  regra: RegraAuditoria,
+  linha: LinhaPlanilha,
+  importacaoId: string,
+  overrides?: PracaOverrides | null
+): AvaliacaoDinamica | null {
+  const quadro = quadroParaLinha(regra, linha.cidade, overrides);
   if (!quadro || regra.parametros.dias === undefined || !linha.prazoEtapa) return null;
   const diasLimite = regra.parametros.dias;
 
@@ -561,9 +581,10 @@ export function avaliarRegrasPorLinha(
   linha: LinhaPlanilha,
   historicoPasta: EtapaHistorico[],
   antigo: Registro | null,
-  importacaoId: string
+  importacaoId: string,
+  pracaOverrides?: PracaOverrides | null
 ): AvaliacaoDinamica[] {
-  const ctx: ContextoAvaliacao = { linha, historicoPasta, antigo, importacaoId };
+  const ctx: ContextoAvaliacao = { linha, historicoPasta, antigo, importacaoId, pracaOverrides };
   return regras.flatMap((r) => avaliarRegra(r, ctx));
 }
 

@@ -1,17 +1,8 @@
 import type { Assistente, Quadro, QuadroEscalonamento, Role, UserProfile } from "@/lib/types";
 
-/**
- * Mapa fixo de praças -> lista de trechos de "Cidade do empreendimento" que
- * pertencem àquela praça. A checagem é feita por inclusão normalizada
- * (minúsculas, sem acento), então "Bairro de Fátima" bate com "fatima".
- */
-export const CITY_ASSIGNMENTS: Record<Assistente, string[]> = {
-  laiza: ["serra"],
-  eliane: ["vila velha"],
-  catarina: ["fatima", "camburi"],
-};
-
-/** Cidades oferecidas no filtro de /tarefas (chave = trecho normalizado, como em CITY_ASSIGNMENTS). */
+/** Cidades oferecidas no filtro de /tarefas e mapeamento padrão de praça: a checagem é feita por
+ * inclusão normalizada (minúsculas, sem acento), então "Bairro de Fátima" bate com "fatima". A
+ * Gerência pode substituir esse padrão por cidade — ver PracaOverrides/resolvePracaPorCidade. */
 export const CIDADES_FILTRO: { chave: string; label: string; praca: Assistente }[] = [
   { chave: "serra", label: "Serra", praca: "laiza" },
   { chave: "vila velha", label: "Vila Velha", praca: "eliane" },
@@ -27,12 +18,17 @@ export function normalize(value: string): string {
     .trim();
 }
 
-/** Dada a "Cidade do empreendimento" de uma linha da planilha, resolve a praça responsável. */
-export function resolvePracaPorCidade(cidade: string): Assistente | null {
+/** Substituição explícita do vínculo padrão de uma praça (chave de CIDADES_FILTRO -> assistente).
+ * Ausente/undefined numa chave = "Automático": mantém o mapeamento padrão daquela cidade. */
+export type PracaOverrides = Partial<Record<string, Assistente>>;
+
+/** Dada a "Cidade do empreendimento" de uma linha da planilha, resolve a praça responsável —
+ * primeiro por um override explícito (configurável pela Gerência), senão pelo mapeamento padrão. */
+export function resolvePracaPorCidade(cidade: string, overrides?: PracaOverrides | null): Assistente | null {
   const alvo = normalize(cidade);
-  for (const [praca, trechos] of Object.entries(CITY_ASSIGNMENTS) as [Assistente, string[]][]) {
-    if (trechos.some((trecho) => alvo.includes(trecho))) {
-      return praca;
+  for (const entrada of CIDADES_FILTRO) {
+    if (alvo.includes(entrada.chave)) {
+      return overrides?.[entrada.chave] ?? entrada.praca;
     }
   }
   return null;

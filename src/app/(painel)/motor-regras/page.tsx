@@ -13,6 +13,7 @@ import {
 } from "@/lib/services/regrasAuditoriaService";
 import { Topbar } from "@/components/layout/Topbar";
 import { FormularioRegra } from "@/components/regras/FormularioRegra";
+import { MapeamentoPracas } from "@/components/regras/MapeamentoPracas";
 import {
   CARGO_DESTINO_LABEL,
   CATEGORIA_GATILHO_LABEL,
@@ -114,6 +115,8 @@ export default function MotorDeRegrasPage() {
           Criar Nova Regra
         </button>
       </div>
+
+      <MapeamentoPracas />
 
       {erro && (
         <div className="flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger">

@@ -1,7 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { LinhaPlanilha } from "./parseSheet";
 import { ehFimDeEsteira } from "./taskRouter";
-import { resolvePracaPorCidade } from "@/lib/auth/roles";
+import { resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
 import {
@@ -153,6 +153,12 @@ export async function executarAuditoriaDiaria(params: {
   // ÚNICA fonte de geração de tarefa nesta importação (ver Passo 1, 2 e 3 abaixo). Sem regra
   // ativa nenhuma, a lista vem vazia e nenhuma tarefa nova nasce.
   const regrasDinamicasAtivas = await buscarRegrasAtivas(db);
+
+  // Mapeamento de praças: substituições explícitas que a Gerência configurou (ex.: Serra sempre
+  // para a Eliane). Lido UMA VEZ para a importação inteira — nunca por linha, pra não multiplicar
+  // leituras ao Firestore num laço que já passa por milhares de pastas.
+  const mapeamentoSnap = await db.collection("configuracoes").doc("mapeamentoPracas").get();
+  const pracaOverrides = (mapeamentoSnap.data()?.overrides as PracaOverrides | undefined) ?? null;
 
   const resumo: ResumoImportacao = {
     importacaoId,
@@ -308,7 +314,7 @@ export async function executarAuditoriaDiaria(params: {
   for (const linha of linhas) {
     const antigo = registrosAntigos.get(linha.numero) ?? null;
     const slaStatus = calcularSlaStatus(linha.prazoEtapa);
-    if (!resolvePracaPorCidade(linha.cidade)) resumo.semPraca.push(linha.numero);
+    if (!resolvePracaPorCidade(linha.cidade, pracaOverrides)) resumo.semPraca.push(linha.numero);
 
     const registroRef = db.collection("registros").doc(linha.numero);
     const snapshotRef = registroRef.collection("snapshots").doc(importacaoId);
@@ -400,7 +406,7 @@ export async function executarAuditoriaDiaria(params: {
 
     // Motor de Regras Dinâmicas — categorias por pasta: SLA/Estagnação, Análise Textual,
     // Regressão e Conformidade (vencimento longo).
-    for (const dinamica of avaliarRegrasPorLinha(regrasDinamicasAtivas, linha, historicoPasta, antigo, importacaoId)) {
+    for (const dinamica of avaliarRegrasPorLinha(regrasDinamicasAtivas, linha, historicoPasta, antigo, importacaoId, pracaOverrides)) {
       reconciliarTarefa({
         ...camposComuns,
         chaveRegra: dinamica.chaveRegra,
