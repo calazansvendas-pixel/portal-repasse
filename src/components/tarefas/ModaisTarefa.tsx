@@ -2,11 +2,108 @@
 
 import { useState, type ReactNode } from "react";
 import { Undo2 } from "lucide-react";
-import type { ClienteEnvolvido, Tarefa } from "@/lib/types";
+import type { Assistente, ClienteEnvolvido, Quadro, Role, Tarefa } from "@/lib/types";
 import { formatDateTimeBR } from "@/lib/utils/dates";
 import { Modal } from "@/components/ui/Modal";
+import type { DestinoResponsavelCustomizado } from "@/lib/services/tarefasService";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
 import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, notasDe } from "./partesCard";
+
+export interface ColaboradorSelecionavel {
+  uid: string;
+  nome: string;
+  role: Role;
+  praca?: Assistente;
+}
+
+const AUTOMATICO = "automatico";
+
+/** Quadro/coluna do colaborador — null (Gerência) não entra na lista, pois não tem coluna no painel. */
+function quadroDoColaborador(c: ColaboradorSelecionavel): Quadro | null {
+  if (c.role === "assistente") return c.praca ?? null;
+  if (c.role === "coordenador") return "coordenador";
+  if (c.role === "analista") return "analista";
+  return null;
+}
+
+const CARGO_LABEL: Record<Role, string> = {
+  assistente: "Assistente",
+  analista: "Analista",
+  coordenador: "Coordenação",
+  gerencia: "Gerência",
+};
+
+/**
+ * Override manual de responsável no cartão (Gerência): "Automático" segue o Mapeamento de Praças
+ * global / a regra que gerou a tarefa; escolher um colaborador fixa esta tarefa nele, ignorando a
+ * cidade — prevalece sobre tudo até alguém voltar para "Automático".
+ */
+export function AlterarResponsavelModal({
+  tarefa,
+  colaboradores,
+  onConfirmar,
+  onCancelar,
+}: {
+  tarefa: Tarefa;
+  colaboradores: ColaboradorSelecionavel[];
+  onConfirmar: (destino: DestinoResponsavelCustomizado | null) => Promise<void>;
+  onCancelar: () => void;
+}) {
+  const selecionaveis = colaboradores.filter((c) => quadroDoColaborador(c) !== null);
+  const [selecionado, setSelecionado] = useState(tarefa.responsavelCustomizadoId ?? AUTOMATICO);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function confirmar() {
+    setEnviando(true);
+    setErro(null);
+    try {
+      if (selecionado === AUTOMATICO) {
+        await onConfirmar(null);
+        return;
+      }
+      const colaborador = selecionaveis.find((c) => c.uid === selecionado);
+      const quadro = colaborador && quadroDoColaborador(colaborador);
+      if (!colaborador || !quadro) return;
+      await onConfirmar({ uid: colaborador.uid, nome: colaborador.nome, quadro });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao alterar o responsável.");
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Modal titulo="Alterar responsável" onClose={onCancelar}>
+      <div className="space-y-3">
+        <p className="text-xs text-ink-secondary dark:text-white/70">
+          &quot;Automático&quot; segue o Mapeamento de Praças (/motor-regras) pela cidade da pasta. Escolher um
+          colaborador fixa esta tarefa nele — prevalece sobre o mapeamento global até alguém voltar para
+          &quot;Automático&quot;.
+        </p>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Responsável</span>
+          <select className="input-field" value={selecionado} onChange={(e) => setSelecionado(e.target.value)}>
+            <option value={AUTOMATICO}>Automático (Padrão)</option>
+            {selecionaveis.map((c) => (
+              <option key={c.uid} value={c.uid}>
+                {c.nome} ({CARGO_LABEL[c.role]})
+              </option>
+            ))}
+          </select>
+        </label>
+        {erro && <p className="text-xs text-status-danger">{erro}</p>}
+      </div>
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onCancelar} disabled={enviando}>
+          Cancelar
+        </button>
+        <button type="button" className="btn-primary h-11 sm:h-10" onClick={confirmar} disabled={enviando}>
+          Confirmar
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 export function NotaConclusaoModal({
   onConfirmar,

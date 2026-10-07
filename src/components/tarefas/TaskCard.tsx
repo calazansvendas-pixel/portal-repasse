@@ -3,23 +3,26 @@
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Pencil, Trash2, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Pencil, Trash2, UserCog, Undo2 } from "lucide-react";
 import type { ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
 import {
   alternarClienteEnvolvido,
+  definirResponsavelCustomizado,
   excluirTarefa,
   marcarFeitaPelaGerencia,
   marcarTarefaResolvida,
   reverterTarefa,
+  type DestinoResponsavelCustomizado,
 } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { meuQuadroInterativo, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
 import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
+import { useColaboradores } from "@/lib/hooks/useColaboradores";
 import { formatDateBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
-import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
+import { AlterarResponsavelModal, ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
 import { NovaTarefaModal } from "./NovaTarefaModal";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
@@ -95,7 +98,8 @@ export function TaskCard({
 }) {
   const { firebaseUser, profile } = useAuth();
   const { overrides: pracaOverrides } = useMapeamentoPracas();
-  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | null>(null);
+  const { colaboradores } = useColaboradores(profile?.role === "gerencia");
+  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | "responsavel" | null>(null);
   // Número do cliente cujo check completa a tarefa agregada (pede a nota opcional antes de gravar).
   const [clientePendente, setClientePendente] = useState<string | null>(null);
   const [expandido, setExpandido] = useState(false);
@@ -134,6 +138,11 @@ export function TaskCard({
 
   const itensMenu: ItemMenu[] = [];
   if (podeEditarExcluir) itensMenu.push({ rotulo: "Editar", icone: Pencil, onClick: () => setModal("editar") });
+  // Reassociar o cartão a outro responsável (ou devolver ao "Automático") — não se aplica a um
+  // cliente individual dentro de um gargalo: a praça é da tarefa agregada inteira, não do cliente.
+  if (ehGerencia && !gargalo) {
+    itensMenu.push({ rotulo: "Alterar responsável", icone: UserCog, onClick: () => setModal("responsavel") });
+  }
   if (gargalo) {
     // God Mode no cliente do gargalo: marca/desmarca só o check dele. Excluir fica de fora — um cliente
     // só sai do gargalo pelo check; excluir o gargalo inteiro é no menu do card do gargalo.
@@ -191,6 +200,11 @@ export function TaskCard({
 
   async function reverter() {
     await reverterTarefa(tarefa);
+    setModal(null);
+  }
+
+  async function alterarResponsavel(destino: DestinoResponsavelCustomizado | null) {
+    await definirResponsavelCustomizado(tarefa, destino, profile?.nome ?? null);
     setModal(null);
   }
 
@@ -265,6 +279,14 @@ export function TaskCard({
         )}
         {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
         {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
+        {modal === "responsavel" && (
+          <AlterarResponsavelModal
+            tarefa={tarefa}
+            colaboradores={colaboradores}
+            onConfirmar={alterarResponsavel}
+            onCancelar={() => setModal(null)}
+          />
+        )}
       </>
     );
   }
@@ -450,6 +472,14 @@ export function TaskCard({
       {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
       {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
       {modal === "nota" && <NotaConclusaoModal onConfirmar={gargalo ? marcarClienteDoGargalo : confirmarConclusao} onCancelar={() => setModal(null)} />}
+      {modal === "responsavel" && (
+        <AlterarResponsavelModal
+          tarefa={tarefa}
+          colaboradores={colaboradores}
+          onConfirmar={alterarResponsavel}
+          onCancelar={() => setModal(null)}
+        />
+      )}
       {clientePendente && (
         <NotaConclusaoModal onConfirmar={confirmarClientePendente} onCancelar={() => setClientePendente(null)} />
       )}

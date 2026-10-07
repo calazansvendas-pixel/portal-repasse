@@ -184,6 +184,13 @@ export interface Tarefa {
   observacaoNoMomentoResolucao?: string | null;
   falhaAuditoriaMotivo?: string | null;
   falhaAuditoriaEm?: string | null;
+  // Override manual deste CARTÃO (Gerência, via menu da tarefa) — prevalece sobre o Mapeamento de
+  // Praças global e sobre a resolução padrão por cidade/regra. Ausente/null = "Automático": segue
+  // a hierarquia normal (ver resolvePracaPorCidade/reconciliarTarefa). Definido, trava `praca` nesse
+  // valor e sobrevive a importações futuras (reconciliarTarefa nunca reroteia por cima dele).
+  pracaCustomizada?: Quadro | null;
+  responsavelCustomizadoId?: string | null;
+  responsavelCustomizadoNome?: string | null;
   // Quadros extras onde este mesmo card também deve aparecer simultaneamente
   // (recalculado a cada importação — ver auditEngine.ts).
   escalonadoPara: QuadroEscalonamento[];

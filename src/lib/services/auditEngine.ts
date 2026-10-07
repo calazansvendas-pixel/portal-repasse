@@ -235,6 +235,9 @@ export async function executarAuditoriaDiaria(params: {
         update(tarefaRef, { status: "validated_done", atualizadoEm: agora });
         resumo.tarefasValidadas++;
       } else {
+        // Cartão com responsável fixado manualmente (Gerência): a importação NUNCA reroteia por
+        // cima desse override, nem quando a regra normalmente trocaria de praça/nível.
+        const temOverrideManual = !!tarefaAtiva.data.pracaCustomizada;
         update(tarefaRef, {
           cidade: dados.cidade,
           etapa: dados.etapa,
@@ -242,7 +245,7 @@ export async function executarAuditoriaDiaria(params: {
           slaStatus: dados.slaStatus,
           imobiliaria: dados.imobiliaria,
           tipoPendencia: dados.tipoPendencia,
-          ...(dados.reroteavel ? { praca: dados.quadro, nivel: dados.nivel } : {}),
+          ...(dados.reroteavel && !temOverrideManual ? { praca: dados.quadro, nivel: dados.nivel } : {}),
           // Se a Gerência reescreveu o texto, a importação não o sobrescreve.
           descricao: tarefaAtiva.data.descricaoEditada ? tarefaAtiva.data.descricao : dados.descricao,
           observacaoOriginal: dados.observacaoOriginal,
@@ -291,6 +294,9 @@ export async function executarAuditoriaDiaria(params: {
         observacaoNoMomentoResolucao: null,
         falhaAuditoriaMotivo: null,
         falhaAuditoriaEm: null,
+        pracaCustomizada: null,
+        responsavelCustomizadoId: null,
+        responsavelCustomizadoNome: null,
         escalonadoPara: [],
         historicoEtapas: dados.historicoPasta ?? [],
         clientesEnvolvidos: dados.clientesEnvolvidos ?? [],

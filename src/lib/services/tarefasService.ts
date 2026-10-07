@@ -4,6 +4,13 @@ import { arrayUnion, doc, runTransaction, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import type { ClienteEnvolvido, NotaResolucao, Quadro, Role, Tarefa } from "@/lib/types";
 
+/** Destino de um override manual de responsável — null = voltar para "Automático". */
+export interface DestinoResponsavelCustomizado {
+  uid: string;
+  nome: string;
+  quadro: Quadro;
+}
+
 /** Rótulo usado só na mensagem padrão de conclusão — "pela Coordenação"/"pela Gerência" leem
  * melhor que os rótulos de menu (ROLE_LABEL). */
 const CARGO_MENSAGEM: Record<Role, string> = {
@@ -170,6 +177,36 @@ export async function marcarFeitaPelaGerencia(tarefa: Tarefa, uid: string, autor
       { texto, data: agora, autor: autor ?? null }
     ),
     ...comClientes(tarefa, true),
+  });
+}
+
+/**
+ * Override manual de responsável no CARTÃO (Gerência): prevalece sobre o Mapeamento de Praças
+ * global e sobre a resolução padrão por cidade/regra (ver resolvePracaPorCidade/auditEngine.ts).
+ * Define → trava `praca` nesse quadro imediatamente (o card já troca de coluna) e sobrevive a
+ * importações futuras. Volta para "Automático" (destino null) → limpa o override; a importação
+ * seguinte realinha `praca` pelo mapeamento/regra padrão, assim como qualquer outra mudança de
+ * roteamento configurada neste app.
+ */
+export async function definirResponsavelCustomizado(
+  tarefa: Tarefa,
+  destino: DestinoResponsavelCustomizado | null,
+  autor: string | null
+) {
+  const agora = new Date().toISOString();
+  const texto = destino
+    ? `Responsável alterado manualmente para ${destino.nome} por ${autor ?? "Gerência"}.`
+    : "Responsável voltado para Automático (mapeamento padrão de praça).";
+  await updateDoc(doc(db, "tarefas", tarefa.id), {
+    pracaCustomizada: destino?.quadro ?? null,
+    responsavelCustomizadoId: destino?.uid ?? null,
+    responsavelCustomizadoNome: destino?.nome ?? null,
+    ...(destino ? { praca: destino.quadro } : {}),
+    atualizadoEm: agora,
+    historicoNotas: arrayUnion(
+      ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
+      { texto, data: agora, autor: autor ?? null }
+    ),
   });
 }
 
