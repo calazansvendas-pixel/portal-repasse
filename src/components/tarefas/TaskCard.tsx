@@ -84,10 +84,13 @@ export function TaskCard({
   tarefa,
   somenteLeitura = false,
   gargalo,
+  className,
 }: {
   tarefa: Tarefa;
   somenteLeitura?: boolean;
   gargalo?: { pai: Tarefa; numero: string };
+  /** Ex.: "h-full" quando o card vive numa grelha e precisa acompanhar a altura da linha. */
+  className?: string;
 }) {
   const { firebaseUser, profile } = useAuth();
   const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | null>(null);
@@ -152,7 +155,7 @@ export function TaskCard({
 
   async function confirmarConclusao(nota: string) {
     if (!firebaseUser) return;
-    await marcarTarefaResolvida(tarefa, firebaseUser.uid, nota, profile?.nome);
+    await marcarTarefaResolvida(tarefa, firebaseUser.uid, nota, profile?.nome, profile?.role);
     setModal(null);
   }
 
@@ -160,7 +163,7 @@ export function TaskCard({
   // desmarcar só volta o check — a nota gravada fica.
   async function marcarClienteDoGargalo(nota: string) {
     if (!firebaseUser || !gargalo) return;
-    await alternarClienteEnvolvido(gargalo.pai.id, gargalo.numero, firebaseUser.uid, nota, profile?.nome);
+    await alternarClienteEnvolvido(gargalo.pai.id, gargalo.numero, firebaseUser.uid, nota, profile?.nome, profile?.role);
     setModal(null);
   }
 
@@ -180,7 +183,7 @@ export function TaskCard({
 
   async function confirmarClientePendente(nota: string) {
     if (!firebaseUser || !clientePendente) return;
-    await alternarClienteEnvolvido(tarefa.id, clientePendente, firebaseUser.uid, nota, profile?.nome);
+    await alternarClienteEnvolvido(tarefa.id, clientePendente, firebaseUser.uid, nota, profile?.nome, profile?.role);
     setClientePendente(null);
   }
 
@@ -203,7 +206,7 @@ export function TaskCard({
         : tarefa.clienteNome || tarefa.imobiliaria || tarefa.tipoPendencia;
     return (
       <>
-        <div className="surface-card space-y-3 break-words p-4">
+        <div className={cn("surface-card flex h-full flex-col gap-3 break-words p-4", className)}>
           <div
             role="button"
             tabIndex={0}
@@ -267,8 +270,9 @@ export function TaskCard({
   return (
     <div
       className={cn(
-        "surface-card min-w-0 space-y-3 break-words p-4",
-        falhaAuditoria && "border-status-danger/50 bg-status-danger/5"
+        "surface-card flex h-full min-w-0 flex-col gap-3 break-words p-4",
+        falhaAuditoria && "border-status-danger/50 bg-status-danger/5",
+        className
       )}
     >
       {falhaAuditoria && (
@@ -392,8 +396,10 @@ export function TaskCard({
         )}
       </div>
 
-      {/* Rodapé: trajeto da pasta (stepper vertical) ou última planilha em agregados */}
-      <div className="border-t border-border pt-3 dark:border-white/10">
+      {/* Rodapé: trajeto da pasta (stepper vertical) ou última planilha em agregados. mt-auto
+          crava o rodapé (e o botão de ação, logo abaixo) na base do card quando a grelha estica
+          esta linha para acompanhar o card mais alto. */}
+      <div className="mt-auto border-t border-border pt-3 dark:border-white/10">
         {isAgregado ? (
           ultimaPlanilhaAgregado && (
             <span className="text-xs text-ink-muted">

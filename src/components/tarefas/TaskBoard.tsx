@@ -277,20 +277,23 @@ function ColunaTarefas({
           Nenhuma tarefa nas etapas selecionadas.
         </div>
       ) : (
-        // flex-row + overflow-x-auto: uma coluna de Kanban por etapa, lado a lado, com scroll
-        // horizontal. Puramente organizacional — a etapa vem do motor, sem drag-and-drop.
-        <div className="flex flex-row gap-4 overflow-x-auto pb-2">
-          {grupos.map((grupo) => (
-            <div key={grupo.etapa} className="flex w-72 shrink-0 flex-col gap-3">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+        // Cada etapa é uma seção própria, empilhada verticalmente (sem scroll horizontal); dentro
+        // dela os cards formam uma grelha de até 3 colunas, com a mesma altura na mesma linha.
+        <div className="flex flex-col">
+          {grupos.map((grupo, i) => (
+            <div
+              key={grupo.etapa}
+              className={cn("flex flex-col gap-3 py-4", i > 0 && "border-t border-border dark:border-white/10")}
+            >
+              <div className="flex items-baseline justify-between px-1">
+                <span className="text-xs font-bold uppercase tracking-wide text-ink-secondary dark:text-white/70">
                   Etapa {grupo.etapa}
                 </span>
                 <span className="text-[11px] text-ink-muted">{grupo.tarefas.length}</span>
               </div>
-              <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {grupo.tarefas.map((t) => (
-                  <TaskCard key={t.id} tarefa={t} somenteLeitura={!interativo} />
+                  <TaskCard key={t.id} tarefa={t} somenteLeitura={!interativo} className="h-full" />
                 ))}
               </div>
             </div>

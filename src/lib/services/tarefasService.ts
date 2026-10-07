@@ -2,10 +2,26 @@
 
 import { arrayUnion, doc, runTransaction, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import type { ClienteEnvolvido, NotaResolucao, Quadro, Tarefa } from "@/lib/types";
+import type { ClienteEnvolvido, NotaResolucao, Quadro, Role, Tarefa } from "@/lib/types";
 
-/** Texto do registro automático do God Mode (não é uma justificativa escrita pelo colaborador). */
-const NOTA_GERENCIA = "Marcada como feita pela Gerência.";
+/** Rótulo usado só na mensagem padrão de conclusão — "pela Coordenação"/"pela Gerência" leem
+ * melhor que os rótulos de menu (ROLE_LABEL). */
+const CARGO_MENSAGEM: Record<Role, string> = {
+  assistente: "Assistente",
+  analista: "Analista",
+  coordenador: "Coordenação",
+  gerencia: "Gerência",
+};
+
+/**
+ * Todo mundo que marca uma tarefa como feita — Assistente, Analista, Coordenador ou Gerência —
+ * deixa um registro no histórico, mesmo sem escrever nada: a nota digitada vence quando existe;
+ * sem nota, entra esta mensagem padrão, para o card "O que foi feito" nunca ficar vazio.
+ */
+function mensagemPadraoOuNota(nota: string, cargo: Role | null | undefined): string {
+  if (nota) return nota;
+  return cargo ? `Marcada como feita pela ${CARGO_MENSAGEM[cargo]}.` : "Marcada como feita.";
+}
 
 /** A nota "O que foi feito" é OPCIONAL: aceita vazio/undefined sem bloquear a conclusão. */
 function normalizarNota(nota: string | undefined): string {
@@ -18,14 +34,21 @@ function semente(historico: NotaResolucao[] | undefined, notaLegada: string | nu
 }
 
 /**
- * Assistente marca a tarefa como resolvida. A nota "O que foi feito" é OPCIONAL: se vier vazia,
- * a conclusão acontece do mesmo jeito e nada é adicionado ao histórico de tentativas (que
- * continua imutável quando preenchido — cada nova tentativa acumula, nada é sobrescrito). Isso NÃO
- * fecha a tarefa definitivamente: ela vai para "pending_validation" até a próxima importação de
- * planilha confirmar (ou não) o avanço da etapa — ver auditEngine.ts.
+ * Assistente, Analista ou Coordenador marca a tarefa como resolvida. A nota "O que foi feito" é
+ * OPCIONAL: se vier vazia, entra a mensagem padrão ("Marcada como feita pela Assistente.", etc.) —
+ * assim o card "O que foi feito" nunca fica vazio, não importa quem concluiu. Isso NÃO fecha a
+ * tarefa definitivamente: ela vai para "pending_validation" até a próxima importação de planilha
+ * confirmar (ou não) o avanço da etapa — ver auditEngine.ts.
  */
-export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: string, autor?: string | null) {
-  const texto = normalizarNota(nota);
+export async function marcarTarefaResolvida(
+  tarefa: Tarefa,
+  uid: string,
+  nota: string,
+  autor?: string | null,
+  cargo?: Role | null
+) {
+  const notaDigitada = normalizarNota(nota);
+  const texto = mensagemPadraoOuNota(notaDigitada, cargo);
   const agora = new Date().toISOString();
   await updateDoc(doc(db, "tarefas", tarefa.id), {
     status: "pending_validation",
@@ -33,15 +56,11 @@ export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: s
     resolvidoEm: agora,
     etapaNoMomentoResolucao: tarefa.etapa,
     observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
-    notaResolucao: texto || tarefa.notaResolucao || null,
-    ...(texto
-      ? {
-          historicoNotas: arrayUnion(
-            ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
-            { texto, data: agora, autor: autor ?? null }
-          ),
-        }
-      : {}),
+    notaResolucao: notaDigitada || tarefa.notaResolucao || null,
+    historicoNotas: arrayUnion(
+      ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
+      { texto, data: agora, autor: autor ?? null }
+    ),
   });
 }
 
@@ -49,19 +68,21 @@ export async function marcarTarefaResolvida(tarefa: Tarefa, uid: string, nota: s
  * Marca/desmarca UM cliente dentro de uma tarefa agregada (gargalo). A tarefa
  * mãe só entra em "pending_validation" quando todos os clientes estão
  * marcados; desmarcar qualquer um a devolve para "pendente".
- * Concluir com `nota` (modal do cliente) ACUMULA a tentativa no histórico do cliente quando o
- * texto vem preenchido; vazia ou ausente, conclui do mesmo jeito sem tocar no histórico.
- * Sem `nota` (check rápido da lista) nada do histórico muda; desmarcar NUNCA apaga notas.
+ * Concluir com `nota` (modal do cliente) sempre grava uma entrada no histórico do cliente — a nota
+ * digitada quando existe, ou a mensagem padrão de conclusão quando fica em branco (mesma
+ * padronização de marcarTarefaResolvida). Sem `nota` (check rápido da lista, fora do modal) nada
+ * do histórico muda; desmarcar NUNCA apaga notas.
  */
 export async function alternarClienteEnvolvido(
   tarefaId: string,
   numero: string,
   uid: string,
   nota?: string,
-  autor?: string | null
+  autor?: string | null,
+  cargo?: Role | null
 ) {
   const ref = doc(db, "tarefas", tarefaId);
-  const texto = nota === undefined ? undefined : normalizarNota(nota);
+  const texto = nota === undefined ? undefined : mensagemPadraoOuNota(normalizarNota(nota), cargo);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const tarefa = snap.data() as Tarefa | undefined;
@@ -73,7 +94,6 @@ export async function alternarClienteEnvolvido(
       if (c.numero !== numero) return c;
       const concluido = !c.concluido;
       if (!concluido || texto === undefined) return { ...c, concluido };
-      if (!texto) return { ...c, concluido }; // conclusão sem nota: nada entra no histórico
       notaDoClique = texto;
       return {
         ...c,
@@ -137,16 +157,17 @@ export async function reverterTarefa(tarefa: Tarefa) {
 /** God Mode (Gerência): marca a tarefa como feita, com todos os clientes concluídos nas agregadas. */
 export async function marcarFeitaPelaGerencia(tarefa: Tarefa, uid: string, autor?: string | null) {
   const agora = new Date().toISOString();
+  const texto = mensagemPadraoOuNota("", "gerencia");
   await updateDoc(doc(db, "tarefas", tarefa.id), {
     status: "pending_validation",
     resolvidoPor: uid,
     resolvidoEm: agora,
     etapaNoMomentoResolucao: tarefa.etapa,
     observacaoNoMomentoResolucao: tarefa.observacaoOriginal,
-    notaResolucao: NOTA_GERENCIA,
+    notaResolucao: texto,
     historicoNotas: arrayUnion(
       ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
-      { texto: NOTA_GERENCIA, data: agora, autor: autor ?? null }
+      { texto, data: agora, autor: autor ?? null }
     ),
     ...comClientes(tarefa, true),
   });
