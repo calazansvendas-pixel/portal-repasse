@@ -142,3 +142,8 @@ export function podeVerTodosOsQuadros(role: Role): boolean {
 export function podeConfigurarRegrasAuditoria(role: Role): boolean {
   return role === "gerencia";
 }
+
+/** Dossiê do Cliente (linha do tempo de auditoria de uma pasta): mesma visibilidade da Auditoria de Planilha. */
+export function podeVerDossieCliente(role: Role): boolean {
+  return role === "gerencia" || role === "coordenador" || role === "analista";
+}

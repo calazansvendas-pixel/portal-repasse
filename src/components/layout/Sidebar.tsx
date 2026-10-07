@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { BarChart3, Building2, ChevronLeft, ChevronRight, LayoutDashboard, UploadCloud, Workflow } from "lucide-react";
+import { BarChart3, Building2, ChevronLeft, ChevronRight, LayoutDashboard, Search, UploadCloud, Workflow } from "lucide-react";
 import type { UserProfile } from "@/lib/types";
 import { ROLE_LABEL, ASSISTENTE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
@@ -22,6 +22,7 @@ function navItemsPara(profile: UserProfile): NavItem[] {
 
   if (profile.role === "gerencia" || profile.role === "coordenador" || profile.role === "analista") {
     items.push({ href: "/auditoria", label: "Auditoria de Planilha", icon: UploadCloud });
+    items.push({ href: "/auditoria/cliente", label: "Dossiê do Cliente", icon: Search });
     items.push({ href: "/analytics", label: "Analytics", icon: BarChart3 });
   }
   if (profile.role === "gerencia" || profile.role === "coordenador") {
@@ -96,7 +97,10 @@ export function Sidebar({ profile }: { profile: UserProfile }) {
 
       <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0">
         {items.map((item) => {
-          const ativo = pathname === item.href || pathname.startsWith(item.href + "/");
+          // "startsWith" destacaria "/auditoria" junto com "/auditoria/cliente" ao mesmo tempo —
+          // só vale para quem não tem uma rota-filha própria na lista.
+          const temFilhoNaLista = items.some((outro) => outro !== item && outro.href.startsWith(item.href + "/"));
+          const ativo = pathname === item.href || (!temFilhoNaLista && pathname.startsWith(item.href + "/"));
           const Icon = item.icon;
           return (
             <Link
