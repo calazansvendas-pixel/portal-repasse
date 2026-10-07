@@ -22,7 +22,7 @@ import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { useColaboradores } from "@/lib/hooks/useColaboradores";
 import { formatDateBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
-import { AlterarResponsavelModal, ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
+import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
 import { NovaTarefaModal } from "./NovaTarefaModal";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
@@ -99,7 +99,7 @@ export function TaskCard({
   const { firebaseUser, profile } = useAuth();
   const { overrides: pracaOverrides } = useMapeamentoPracas();
   const { colaboradores } = useColaboradores(profile?.role === "gerencia");
-  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | "responsavel" | null>(null);
+  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | null>(null);
   // Número do cliente cujo check completa a tarefa agregada (pede a nota opcional antes de gravar).
   const [clientePendente, setClientePendente] = useState<string | null>(null);
   const [expandido, setExpandido] = useState(false);
@@ -141,7 +141,7 @@ export function TaskCard({
   // Reassociar o cartão a outro responsável (ou devolver ao "Automático") — não se aplica a um
   // cliente individual dentro de um gargalo: a praça é da tarefa agregada inteira, não do cliente.
   if (ehGerencia && !gargalo) {
-    itensMenu.push({ rotulo: "Alterar responsável", icone: UserCog, onClick: () => setModal("responsavel") });
+    itensMenu.push({ rotulo: "Ver detalhes / Responsável", icone: UserCog, onClick: () => setModal("detalhes") });
   }
   if (gargalo) {
     // God Mode no cliente do gargalo: marca/desmarca só o check dele. Excluir fica de fora — um cliente
@@ -275,18 +275,14 @@ export function TaskCard({
             podeReverter={podeReverter}
             onReverter={reverter}
             onFechar={() => setModal(null)}
+            podeAlterarResponsavel={ehGerencia}
+            colaboradores={colaboradores}
+            pracaOverrides={pracaOverrides}
+            onAlterarResponsavel={alterarResponsavel}
           />
         )}
         {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
         {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
-        {modal === "responsavel" && (
-          <AlterarResponsavelModal
-            tarefa={tarefa}
-            colaboradores={colaboradores}
-            onConfirmar={alterarResponsavel}
-            onCancelar={() => setModal(null)}
-          />
-        )}
       </>
     );
   }
@@ -351,7 +347,13 @@ export function TaskCard({
             <p className="text-sm font-semibold leading-snug text-ink-primary dark:text-white">{tituloAgregado}</p>
           )
         ) : (
-          <div className="min-w-0">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setModal("detalhes")}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setModal("detalhes")}
+            className="-mx-1.5 -my-1.5 min-w-0 cursor-pointer rounded-md px-1.5 py-1.5 transition-colors hover:bg-surface-soft dark:hover:bg-white/5"
+          >
             <p className="break-words text-sm font-semibold leading-snug text-ink-primary dark:text-white">
               {tarefa.clienteNome || "Cliente não identificado"}
             </p>
@@ -469,17 +471,24 @@ export function TaskCard({
         )}
       </div>
 
+      {modal === "detalhes" && (
+        <DetalhesTarefaModal
+          tarefa={tarefa}
+          renderDetalheCliente={(c, fechar) => (
+            <CardClienteGargalo pai={tarefa} cliente={c} somenteLeitura onFechar={fechar} />
+          )}
+          podeReverter={podeReverter}
+          onReverter={reverter}
+          onFechar={() => setModal(null)}
+          podeAlterarResponsavel={ehGerencia}
+          colaboradores={colaboradores}
+          pracaOverrides={pracaOverrides}
+          onAlterarResponsavel={alterarResponsavel}
+        />
+      )}
       {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
       {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
       {modal === "nota" && <NotaConclusaoModal onConfirmar={gargalo ? marcarClienteDoGargalo : confirmarConclusao} onCancelar={() => setModal(null)} />}
-      {modal === "responsavel" && (
-        <AlterarResponsavelModal
-          tarefa={tarefa}
-          colaboradores={colaboradores}
-          onConfirmar={alterarResponsavel}
-          onCancelar={() => setModal(null)}
-        />
-      )}
       {clientePendente && (
         <NotaConclusaoModal onConfirmar={confirmarClientePendente} onCancelar={() => setClientePendente(null)} />
       )}

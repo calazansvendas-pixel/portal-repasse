@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, Copy, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { podeConfigurarRegrasAuditoria } from "@/lib/auth/roles";
+import { podeConfigurarRegrasAuditoria, PRACAS_FILTRO_UI } from "@/lib/auth/roles";
 import { useRegrasAuditoria } from "@/lib/hooks/useRegrasAuditoria";
 import {
   alternarRegraAtiva,
@@ -68,6 +68,7 @@ export default function MotorDeRegrasPage() {
       pessoaId: regra.pessoaId ?? null,
       pessoaNome: regra.pessoaNome ?? null,
       pessoaQuadro: regra.pessoaQuadro ?? null,
+      filtroPraca: regra.filtroPraca ?? null,
       categoriaGatilho: regra.categoriaGatilho,
       parametros: { ...regra.parametros },
       textoTarefa: regra.textoTarefa,
@@ -262,6 +263,14 @@ function CardRegra({
               : CARGO_DESTINO_LABEL[regra.cargoDestino]}
           </span>
         </span>
+        {regra.filtroPraca && (
+          <span>
+            Praça:{" "}
+            <span className="font-medium text-ink-secondary dark:text-white/70">
+              {PRACAS_FILTRO_UI.find((p) => p.praca === regra.filtroPraca)?.label ?? regra.filtroPraca}
+            </span>
+          </span>
+        )}
         {regra.parametros.dias !== undefined && <span>Dias: {regra.parametros.dias}</span>}
         {regra.parametros.quantidade !== undefined && <span>Quantidade: {regra.parametros.quantidade}</span>}
         {regra.parametros.etapa && <span>Etapa: {regra.parametros.etapa}</span>}

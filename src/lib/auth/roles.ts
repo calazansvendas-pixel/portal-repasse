@@ -34,6 +34,21 @@ export function resolvePracaPorCidade(cidade: string, overrides?: PracaOverrides
   return null;
 }
 
+/** Agrupamento geográfico para a UI (Motor de Regras e o cartão): Fátima e Camburi aparecem como
+ * UMA opção, já que as duas pertencem à mesma praça (Catarina) — mesmo grupo, rótulo único. */
+export const PRACAS_FILTRO_UI: { praca: Assistente; label: string }[] = [
+  { praca: "laiza", label: "Serra" },
+  { praca: "eliane", label: "Vila Velha" },
+  { praca: "catarina", label: "Fátima/Camburi" },
+];
+
+/** A cidade pertence ao grupo geográfico daquela praça — geografia pura, nunca olha overrides (o
+ * Mapeamento de Praças decide QUEM cobre o grupo; isto só decide A QUAL grupo a cidade pertence). */
+export function cidadePertenceAPraca(cidade: string, praca: Assistente): boolean {
+  const alvo = normalize(cidade);
+  return CIDADES_FILTRO.filter((c) => c.praca === praca).some((c) => alvo.includes(c.chave));
+}
+
 /** Quais praças (quadros de tarefas) o usuário pode enxergar. */
 export function pracasVisiveis(profile: UserProfile): Assistente[] {
   const todas: Assistente[] = ["laiza", "eliane", "catarina"];

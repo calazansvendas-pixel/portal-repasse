@@ -1,4 +1,4 @@
-import type { Quadro, Role } from "@/lib/types";
+import type { Assistente, Quadro, Role } from "@/lib/types";
 
 /**
  * Motor de Regras Dinâmicas (No-Code): permite à Gerência configurar, pela interface,
@@ -78,6 +78,10 @@ export interface RegraAuditoria {
   /** Quadro/coluna do colaborador fixo, calculado no momento do cadastro (null só para Gerência,
    * que não tem coluna própria no painel — mesma limitação de cargoDestino "gerencia"). */
   pessoaQuadro?: Quadro | null;
+  /** Filtro geográfico: ausente/null = "Todas as Praças" (padrão, avalia qualquer cidade). Definido,
+   * a regra só avalia pastas daquele grupo (Serra/Vila Velha/Fátima+Camburi) — independente do
+   * destino configurado acima, que pode ou não coincidir com essa mesma praça. */
+  filtroPraca?: Assistente | null;
   categoriaGatilho: CategoriaGatilho;
   parametros: ParametrosRegra;
   /** Texto da tarefa exibido no card; aceita variáveis como {cliente}, {imobiliaria}, {etapa}. */

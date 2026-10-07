@@ -1,5 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { normalize, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
+import { cidadePertenceAPraca, normalize, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
 import { ehFimDeEsteira } from "./taskRouter";
 import type { LinhaPlanilha } from "./parseSheet";
 import type { CategoriaGatilho, RegraAuditoria } from "@/lib/types/regrasAuditoria";
@@ -97,7 +97,20 @@ function quadroParaAgregado(regra: RegraAuditoria): Quadro | null {
 // Roteador único (o "switch/case" pedido) — uma regra de cada vez.
 // ---------------------------------------------------------------------------
 
-export function avaliarRegra(regra: RegraAuditoria, ctx: ContextoAvaliacao): AvaliacaoDinamica[] {
+export function avaliarRegra(regra: RegraAuditoria, ctxOriginal: ContextoAvaliacao): AvaliacaoDinamica[] {
+  // Filtro de Cidade/Praça: ausente/null = "Todas as Praças" (avalia qualquer cidade). Definido, a
+  // regra só olha pastas daquele grupo geográfico — pula a linha isolada, ou filtra o lote inteiro
+  // das categorias agregadas (nenhuma das duas formas corre risco de "tarefa órfã": a cidade de uma
+  // pasta não muda de importação para importação, então uma pasta fora do grupo nunca teve, nem vai
+  // ter, uma tarefa desta regra para "esquecer de fechar").
+  if (regra.filtroPraca && ctxOriginal.linha && !cidadePertenceAPraca(ctxOriginal.linha.cidade, regra.filtroPraca)) {
+    return [];
+  }
+  const ctx: ContextoAvaliacao =
+    regra.filtroPraca && ctxOriginal.todasLinhas
+      ? { ...ctxOriginal, todasLinhas: ctxOriginal.todasLinhas.filter((l) => cidadePertenceAPraca(l.cidade, regra.filtroPraca!)) }
+      : ctxOriginal;
+
   const categoria: CategoriaGatilho = regra.categoriaGatilho;
   switch (categoria) {
     case "sla_estagnacao":

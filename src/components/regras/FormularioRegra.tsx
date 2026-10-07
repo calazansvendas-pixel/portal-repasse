@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Quadro, Role } from "@/lib/types";
+import type { Assistente, Quadro, Role } from "@/lib/types";
 import {
   CARGO_DESTINO_LABEL,
   CATEGORIA_GATILHO_DESCRICAO,
@@ -14,6 +14,9 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import { useColaboradores } from "@/lib/hooks/useColaboradores";
 import type { Colaborador } from "@/app/api/colaboradores/route";
+import { PRACAS_FILTRO_UI } from "@/lib/auth/roles";
+
+const TODAS_AS_PRACAS = "";
 
 const CARGOS: Role[] = ["assistente", "analista", "coordenador", "gerencia"];
 const CATEGORIAS = Object.keys(CATEGORIA_GATILHO_LABEL) as CategoriaGatilho[];
@@ -55,6 +58,7 @@ const RASCUNHO_INICIAL: NovaRegraAuditoria = {
   pessoaId: null,
   pessoaNome: null,
   pessoaQuadro: null,
+  filtroPraca: null,
   categoriaGatilho: "sla_estagnacao",
   parametros: {},
   textoTarefa: "",
@@ -88,6 +92,7 @@ export function FormularioRegra({
           pessoaId: regraExistente.pessoaId ?? null,
           pessoaNome: regraExistente.pessoaNome ?? null,
           pessoaQuadro: regraExistente.pessoaQuadro ?? null,
+          filtroPraca: regraExistente.filtroPraca ?? null,
           categoriaGatilho: regraExistente.categoriaGatilho,
           parametros: { ...regraExistente.parametros },
           textoTarefa: regraExistente.textoTarefa,
@@ -203,6 +208,26 @@ export function FormularioRegra({
                 Destino fixo: sempre {regra.pessoaNome}, mesmo que a praça da imobiliária indique outra pessoa.
               </span>
             )}
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Cidade / Praça</span>
+            <select
+              className="input-field"
+              value={regra.filtroPraca ?? TODAS_AS_PRACAS}
+              onChange={(e) => setRegra((r) => ({ ...r, filtroPraca: (e.target.value || null) as Assistente | null }))}
+            >
+              <option value={TODAS_AS_PRACAS}>Todas as Praças (Padrão)</option>
+              {PRACAS_FILTRO_UI.map((p) => (
+                <option key={p.praca} value={p.praca}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-ink-muted">
+              Restringe a regra a pastas desse grupo geográfico — independente do Destino escolhido acima (ex.:
+              Praça: Serra, Destino: Eliane).
+            </span>
           </label>
         </div>
 

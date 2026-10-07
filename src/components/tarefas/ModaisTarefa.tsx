@@ -5,6 +5,7 @@ import { Undo2 } from "lucide-react";
 import type { Assistente, ClienteEnvolvido, Quadro, Role, Tarefa } from "@/lib/types";
 import { formatDateTimeBR } from "@/lib/utils/dates";
 import { Modal } from "@/components/ui/Modal";
+import { PRACAS_FILTRO_UI, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
 import type { DestinoResponsavelCustomizado } from "@/lib/services/tarefasService";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
 import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, notasDe } from "./partesCard";
@@ -34,56 +35,94 @@ const CARGO_LABEL: Record<Role, string> = {
 };
 
 /**
- * Override manual de responsável no cartão (Gerência): "Automático" segue o Mapeamento de Praças
- * global / a regra que gerou a tarefa; escolher um colaborador fixa esta tarefa nele, ignorando a
- * cidade — prevalece sobre tudo até alguém voltar para "Automático".
+ * Override manual de responsável, visível dentro do modal de detalhes (Gerência) — não mais
+ * escondido só no menu de 3 pontos. "Praça/Cidade" escolhe o grupo geográfico e resolve o
+ * colaborador que cobre esse grupo HOJE (via Mapeamento de Praças); "Responsável" fixa uma pessoa
+ * diretamente, ignorando a cidade. As duas opções terminam no mesmo override — a diferença é só o
+ * caminho para chegar lá. "Automático" nos dois volta a tarefa para a hierarquia normal.
  */
-export function AlterarResponsavelModal({
+function SecaoResponsavel({
   tarefa,
   colaboradores,
-  onConfirmar,
-  onCancelar,
+  pracaOverrides,
+  onAlterar,
 }: {
   tarefa: Tarefa;
   colaboradores: ColaboradorSelecionavel[];
-  onConfirmar: (destino: DestinoResponsavelCustomizado | null) => Promise<void>;
-  onCancelar: () => void;
+  pracaOverrides?: PracaOverrides | null;
+  onAlterar: (destino: DestinoResponsavelCustomizado | null) => Promise<void>;
 }) {
   const selecionaveis = colaboradores.filter((c) => quadroDoColaborador(c) !== null);
-  const [selecionado, setSelecionado] = useState(tarefa.responsavelCustomizadoId ?? AUTOMATICO);
-  const [enviando, setEnviando] = useState(false);
+
+  // Praça só pode ser inferida de volta a partir do responsável atual quando ele é mesmo um dos 3
+  // assistentes regionais — Coordenação/Analista nunca têm uma "praça/cidade" própria.
+  const colaboradorAtual = selecionaveis.find((c) => c.uid === tarefa.responsavelCustomizadoId);
+  const pracaInicial =
+    colaboradorAtual?.role === "assistente" ? PRACAS_FILTRO_UI.find((p) => p.praca === colaboradorAtual.praca)?.praca ?? AUTOMATICO : AUTOMATICO;
+
+  const [praca, setPraca] = useState<string>(pracaInicial);
+  const [responsavel, setResponsavel] = useState(tarefa.responsavelCustomizadoId ?? AUTOMATICO);
+  const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  async function confirmar() {
-    setEnviando(true);
+  function escolherPraca(valor: string) {
+    setPraca(valor);
+    if (valor === AUTOMATICO) {
+      setResponsavel(AUTOMATICO);
+      return;
+    }
+    // Resolve quem cobre esse grupo HOJE (Mapeamento de Praças global) e já reflete no campo
+    // Responsável — ambos os campos descrevem o MESMO override, só por caminhos diferentes.
+    const grupo = PRACAS_FILTRO_UI.find((p) => p.praca === valor);
+    const assistenteResolvido = grupo ? resolvePracaPorCidade(grupo.label, pracaOverrides) : null;
+    const colaborador = selecionaveis.find((c) => c.role === "assistente" && c.praca === assistenteResolvido);
+    setResponsavel(colaborador?.uid ?? AUTOMATICO);
+  }
+
+  function escolherResponsavel(valor: string) {
+    setResponsavel(valor);
+    setPraca(AUTOMATICO); // escolha direta de pessoa não passa mais pela praça
+  }
+
+  const alterado = responsavel !== (tarefa.responsavelCustomizadoId ?? AUTOMATICO);
+
+  async function salvar() {
+    setSalvando(true);
     setErro(null);
     try {
-      if (selecionado === AUTOMATICO) {
-        await onConfirmar(null);
+      if (responsavel === AUTOMATICO) {
+        await onAlterar(null);
         return;
       }
-      const colaborador = selecionaveis.find((c) => c.uid === selecionado);
+      const colaborador = selecionaveis.find((c) => c.uid === responsavel);
       const quadro = colaborador && quadroDoColaborador(colaborador);
       if (!colaborador || !quadro) return;
-      await onConfirmar({ uid: colaborador.uid, nome: colaborador.nome, quadro });
+      await onAlterar({ uid: colaborador.uid, nome: colaborador.nome, quadro });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Falha ao alterar o responsável.");
-      setEnviando(false);
+    } finally {
+      setSalvando(false);
     }
   }
 
   return (
-    <Modal titulo="Alterar responsável" onClose={onCancelar}>
-      <div className="space-y-3">
-        <p className="text-xs text-ink-secondary dark:text-white/70">
-          &quot;Automático&quot; segue o Mapeamento de Praças (/motor-regras) pela cidade da pasta. Escolher um
-          colaborador fixa esta tarefa nele — prevalece sobre o mapeamento global até alguém voltar para
-          &quot;Automático&quot;.
-        </p>
+    <Secao titulo="Responsável">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Responsável</span>
-          <select className="input-field" value={selecionado} onChange={(e) => setSelecionado(e.target.value)}>
-            <option value={AUTOMATICO}>Automático (Padrão)</option>
+          <span className="text-[11px] text-ink-secondary dark:text-white/70">Praça / Cidade</span>
+          <select className="input-field" value={praca} onChange={(e) => escolherPraca(e.target.value)}>
+            <option value={AUTOMATICO}>Automático</option>
+            {PRACAS_FILTRO_UI.map((p) => (
+              <option key={p.praca} value={p.praca}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[11px] text-ink-secondary dark:text-white/70">Responsável</span>
+          <select className="input-field" value={responsavel} onChange={(e) => escolherResponsavel(e.target.value)}>
+            <option value={AUTOMATICO}>Automático</option>
             {selecionaveis.map((c) => (
               <option key={c.uid} value={c.uid}>
                 {c.nome} ({CARGO_LABEL[c.role]})
@@ -91,17 +130,23 @@ export function AlterarResponsavelModal({
             ))}
           </select>
         </label>
-        {erro && <p className="text-xs text-status-danger">{erro}</p>}
       </div>
-      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onCancelar} disabled={enviando}>
-          Cancelar
+      <p className="mt-1.5 text-[11px] text-ink-muted">
+        &quot;Automático&quot; segue o Mapeamento de Praças (/motor-regras) pela cidade da pasta. Escolher uma praça
+        ou um responsável fixa esta tarefa nele, até voltar para &quot;Automático&quot;.
+      </p>
+      {erro && <p className="mt-1 text-xs text-status-danger">{erro}</p>}
+      {alterado && (
+        <button
+          type="button"
+          className="btn-primary mt-3 h-10 px-4 text-xs"
+          onClick={salvar}
+          disabled={salvando}
+        >
+          {salvando ? "Salvando…" : "Salvar responsável"}
         </button>
-        <button type="button" className="btn-primary h-11 sm:h-10" onClick={confirmar} disabled={enviando}>
-          Confirmar
-        </button>
-      </div>
-    </Modal>
+      )}
+    </Secao>
   );
 }
 
@@ -204,12 +249,21 @@ export function DetalhesTarefaModal({
   podeReverter,
   onReverter,
   onFechar,
+  podeAlterarResponsavel,
+  colaboradores,
+  pracaOverrides,
+  onAlterarResponsavel,
 }: {
   tarefa: Tarefa;
   renderDetalheCliente: (cliente: ClienteEnvolvido, fechar: () => void) => ReactNode;
   podeReverter: boolean;
   onReverter: () => Promise<void>;
   onFechar: () => void;
+  /** Gerência: mostra a seção "Responsável" (Praça/Cidade + pessoa) logo no topo do modal. */
+  podeAlterarResponsavel?: boolean;
+  colaboradores?: ColaboradorSelecionavel[];
+  pracaOverrides?: PracaOverrides | null;
+  onAlterarResponsavel?: (destino: DestinoResponsavelCustomizado | null) => Promise<void>;
 }) {
   const [revertendo, setRevertendo] = useState(false);
   const isManual = tarefa.origem === "manual";
@@ -264,6 +318,15 @@ export function DetalhesTarefaModal({
                 : tarefa.imobiliaria || "Imobiliária não informada"}
           </p>
         </div>
+
+        {podeAlterarResponsavel && colaboradores && onAlterarResponsavel && (
+          <SecaoResponsavel
+            tarefa={tarefa}
+            colaboradores={colaboradores}
+            pracaOverrides={pracaOverrides}
+            onAlterar={onAlterarResponsavel}
+          />
+        )}
 
         {isManual ? (
           <Secao titulo="Descrição">
