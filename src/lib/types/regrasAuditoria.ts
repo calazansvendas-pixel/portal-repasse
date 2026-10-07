@@ -1,4 +1,4 @@
-import type { Role } from "@/lib/types";
+import type { Quadro, Role } from "@/lib/types";
 
 /**
  * Motor de Regras Dinâmicas (No-Code): permite à Gerência configurar, pela interface,
@@ -59,11 +59,25 @@ export interface ParametrosRegra {
   subtipoConformidade?: "duplicidade" | "vencimento_longo";
 }
 
+/** "cargo" (padrão/legado): resolve pela praça da imobiliária, como sempre. "pessoa": fixa um
+ * colaborador específico, ignorando a praça — ex.: sempre a Eliane, mesmo numa pasta da Laiza. */
+export type DestinoTipo = "cargo" | "pessoa";
+
 export interface RegraAuditoria {
   id: string;
   nomeRegra: string;
-  /** Para quem a tarefa gerada por esta regra vai (mesmos 4 cargos do sistema). */
+  /** Para quem a tarefa gerada por esta regra vai. Em destinoTipo "pessoa", é o cargo REAL do
+   * colaborador fixado (mantém os rótulos/nível hierárquico funcionando sem checar destinoTipo). */
   cargoDestino: Role;
+  /** Ausente/"cargo" = comportamento legado (resolve pela praça). "pessoa" = destino fixo abaixo. */
+  destinoTipo?: DestinoTipo;
+  /** uid do colaborador fixo, só quando destinoTipo === "pessoa". */
+  pessoaId?: string | null;
+  /** Nome do colaborador fixo, para exibir sem precisar relookup. */
+  pessoaNome?: string | null;
+  /** Quadro/coluna do colaborador fixo, calculado no momento do cadastro (null só para Gerência,
+   * que não tem coluna própria no painel — mesma limitação de cargoDestino "gerencia"). */
+  pessoaQuadro?: Quadro | null;
   categoriaGatilho: CategoriaGatilho;
   parametros: ParametrosRegra;
   /** Texto da tarefa exibido no card; aceita variáveis como {cliente}, {imobiliaria}, {etapa}. */

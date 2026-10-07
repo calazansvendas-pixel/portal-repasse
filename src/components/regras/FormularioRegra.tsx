@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Role } from "@/lib/types";
+import type { Quadro, Role } from "@/lib/types";
 import {
   CARGO_DESTINO_LABEL,
   CATEGORIA_GATILHO_DESCRICAO,
@@ -12,9 +12,28 @@ import {
   type RegraAuditoria,
 } from "@/lib/types/regrasAuditoria";
 import { Modal } from "@/components/ui/Modal";
+import { useColaboradores } from "@/lib/hooks/useColaboradores";
+import type { Colaborador } from "@/app/api/colaboradores/route";
 
 const CARGOS: Role[] = ["assistente", "analista", "coordenador", "gerencia"];
 const CATEGORIAS = Object.keys(CATEGORIA_GATILHO_LABEL) as CategoriaGatilho[];
+
+/** Rótulo do cargo ao lado do nome do colaborador — mesma nomenclatura usada no Dossiê do Cliente. */
+const CARGO_LABEL_PESSOA: Record<Role, string> = {
+  assistente: "Assistente",
+  analista: "Analista",
+  coordenador: "Coordenação",
+  gerencia: "Gerência",
+};
+
+/** Quadro/coluna do colaborador — igual ao que já existe hoje para os 5 destinos fixos do painel.
+ * Assistente sem praça cadastrada não tem como virar um destino fixo confiável. */
+function quadroDoColaborador(c: Colaborador): Quadro | null {
+  if (c.role === "assistente") return c.praca ?? null;
+  if (c.role === "coordenador") return "coordenador";
+  if (c.role === "analista") return "analista";
+  return null; // gerencia: sem coluna própria no painel (mesma limitação do cargo genérico).
+}
 
 /** Quais campos genéricos de parâmetro cada categoria pede na tela (cascata). */
 const CAMPOS_POR_CATEGORIA: Record<CategoriaGatilho, ("dias" | "quantidade" | "etapa" | "palavraChave" | "dimensao" | "subtipoConformidade")[]> = {
@@ -32,6 +51,10 @@ const CAMPOS_POR_CATEGORIA: Record<CategoriaGatilho, ("dias" | "quantidade" | "e
 const RASCUNHO_INICIAL: NovaRegraAuditoria = {
   nomeRegra: "",
   cargoDestino: "assistente",
+  destinoTipo: "cargo",
+  pessoaId: null,
+  pessoaNome: null,
+  pessoaQuadro: null,
   categoriaGatilho: "sla_estagnacao",
   parametros: {},
   textoTarefa: "",
@@ -61,6 +84,10 @@ export function FormularioRegra({
       ? {
           nomeRegra: regraExistente.nomeRegra,
           cargoDestino: regraExistente.cargoDestino,
+          destinoTipo: regraExistente.destinoTipo ?? "cargo",
+          pessoaId: regraExistente.pessoaId ?? null,
+          pessoaNome: regraExistente.pessoaNome ?? null,
+          pessoaQuadro: regraExistente.pessoaQuadro ?? null,
           categoriaGatilho: regraExistente.categoriaGatilho,
           parametros: { ...regraExistente.parametros },
           textoTarefa: regraExistente.textoTarefa,
@@ -71,6 +98,30 @@ export function FormularioRegra({
   );
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const { colaboradores } = useColaboradores(true);
+  const colaboradoresComQuadro = colaboradores.filter((c) => c.role !== "assistente" || !!c.praca);
+
+  const destinoValor =
+    regra.destinoTipo === "pessoa" && regra.pessoaId ? `pessoa:${regra.pessoaId}` : `cargo:${regra.cargoDestino}`;
+
+  function escolherDestino(valor: string) {
+    if (valor.startsWith("pessoa:")) {
+      const uid = valor.slice("pessoa:".length);
+      const colaborador = colaboradoresComQuadro.find((c) => c.uid === uid);
+      if (!colaborador) return;
+      setRegra((r) => ({
+        ...r,
+        destinoTipo: "pessoa",
+        cargoDestino: colaborador.role,
+        pessoaId: colaborador.uid,
+        pessoaNome: colaborador.nome,
+        pessoaQuadro: quadroDoColaborador(colaborador),
+      }));
+    } else {
+      const cargo = valor.slice("cargo:".length) as Role;
+      setRegra((r) => ({ ...r, destinoTipo: "cargo", cargoDestino: cargo, pessoaId: null, pessoaNome: null, pessoaQuadro: null }));
+    }
+  }
 
   const camposParametro = CAMPOS_POR_CATEGORIA[regra.categoriaGatilho];
   const podeSalvar = regra.nomeRegra.trim().length > 0 && regra.textoTarefa.trim().length > 0 && !enviando;
@@ -128,18 +179,30 @@ export function FormularioRegra({
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Cargo de destino</span>
-            <select
-              className="input-field"
-              value={regra.cargoDestino}
-              onChange={(e) => setRegra((r) => ({ ...r, cargoDestino: e.target.value as Role }))}
-            >
-              {CARGOS.map((c) => (
-                <option key={c} value={c}>
-                  {CARGO_DESTINO_LABEL[c]}
-                </option>
-              ))}
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Destino</span>
+            <select className="input-field" value={destinoValor} onChange={(e) => escolherDestino(e.target.value)}>
+              <optgroup label="Cargos (distribuição por praça)">
+                {CARGOS.map((c) => (
+                  <option key={c} value={`cargo:${c}`}>
+                    {CARGO_DESTINO_LABEL[c]}
+                  </option>
+                ))}
+              </optgroup>
+              {colaboradoresComQuadro.length > 0 && (
+                <optgroup label="Colaboradores específicos">
+                  {colaboradoresComQuadro.map((c) => (
+                    <option key={c.uid} value={`pessoa:${c.uid}`}>
+                      {c.nome} ({CARGO_LABEL_PESSOA[c.role]})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+            {regra.destinoTipo === "pessoa" && (
+              <span className="text-[11px] text-ink-muted">
+                Destino fixo: sempre {regra.pessoaNome}, mesmo que a praça da imobiliária indique outra pessoa.
+              </span>
+            )}
           </label>
         </div>
 

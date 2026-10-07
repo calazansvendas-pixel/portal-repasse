@@ -74,14 +74,18 @@ function diasEntre(dataMaisRecenteISO: string, dataMaisAntigaISO: string): numbe
   return Math.floor((Date.parse(dataMaisRecenteISO.slice(0, 10)) - Date.parse(dataMaisAntigaISO.slice(0, 10))) / 86_400_000);
 }
 
-/** cargoDestino -> Quadro só quando dá para rotear com confiança para uma única coluna do painel. */
+/** cargoDestino -> Quadro só quando dá para rotear com confiança para uma única coluna do painel.
+ * Destino "pessoa" fixa o quadro do colaborador escolhido e NUNCA passa pela praça da imobiliária
+ * — nem na variante de linha, nem na agregada. */
 function quadroParaLinha(regra: RegraAuditoria, cidade: string): Quadro | null {
+  if (regra.destinoTipo === "pessoa") return regra.pessoaQuadro ?? null;
   if (regra.cargoDestino === "assistente") return resolvePracaPorCidade(cidade);
   if (regra.cargoDestino === "coordenador" || regra.cargoDestino === "analista") return regra.cargoDestino;
   return null; // "gerencia": sem quadro próprio no painel.
 }
 
 function quadroParaAgregado(regra: RegraAuditoria): Quadro | null {
+  if (regra.destinoTipo === "pessoa") return regra.pessoaQuadro ?? null;
   if (regra.cargoDestino === "coordenador" || regra.cargoDestino === "analista") return regra.cargoDestino;
   return null; // "assistente"/"gerencia": agregado não aponta uma única praça com segurança.
 }
@@ -148,7 +152,13 @@ function avaliarSlaEstagnacao(
   // A planilha traz a etapa com sufixo descritivo (ex.: "1.17 - Documentação incompleta"); a
   // regra cadastra só o código (ex.: "1.17"). Basta o código bater no início da etapa da linha.
   const etapaAlvo = regra.parametros.etapa?.trim();
-  if (etapaAlvo && !linha.etapa.trim().toUpperCase().startsWith(etapaAlvo.toUpperCase())) return null;
+  // A pasta pode ter avançado (ou regredido) para outra etapa desde a última importação — a
+  // regra desta etapa deixa de valer, mas ISSO PRECISA virar um `condicaoAtiva: false` explícito
+  // (não um `return null`/"não avalio"): sem isso, uma tarefa que esta regra tinha aberto (ou que
+  // alguém marcou como resolvida, aguardando validação) nunca é reconciliada de novo, porque o
+  // motor simplesmente para de chamar esta regra para esta pasta — o card fica congelado na etapa
+  // antiga para sempre, mesmo a pasta já estando em outro lugar.
+  const etapaBate = !etapaAlvo || linha.etapa.trim().toUpperCase().startsWith(etapaAlvo.toUpperCase());
 
   const diasParada = diasConsecutivosNaEtapa(historicoPasta, linha.etapa);
   return {
@@ -165,7 +175,7 @@ function avaliarSlaEstagnacao(
       etapa: linha.etapa,
       dias: String(diasParada),
     }),
-    condicaoAtiva: diasParada >= diasLimite,
+    condicaoAtiva: etapaBate && diasParada >= diasLimite,
   };
 }
 
@@ -204,7 +214,14 @@ function avaliarRegressao(regra: RegraAuditoria, linha: LinhaPlanilha, antigo: R
 
   const etapaAntiga = valorNumericoDaEtapa(antigo.etapa);
   const etapaNova = valorNumericoDaEtapa(linha.etapa);
-  const regrediu = etapaAntiga !== null && etapaNova !== null && etapaNova < etapaAntiga;
+  const regrediuNumericamente = etapaAntiga !== null && etapaNova !== null && etapaNova < etapaAntiga;
+
+  // A regra é específica de uma etapa-alvo (ex.: "9.01 - Cancelamento"): sem este filtro, QUALQUER
+  // regressão numérica disparava TODAS as regras de regressão cadastradas (uma por etapa-alvo),
+  // rotulando a pasta como tendo caído em etapas onde ela nunca esteve de fato.
+  const etapaAlvo = regra.parametros.etapa?.trim();
+  const etapaBate = !etapaAlvo || linha.etapa.trim().toUpperCase().startsWith(etapaAlvo.toUpperCase());
+  const regrediu = regrediuNumericamente && etapaBate;
 
   return {
     chaveRegra: `DINAMICA::${regra.id}::${linha.numero}`,

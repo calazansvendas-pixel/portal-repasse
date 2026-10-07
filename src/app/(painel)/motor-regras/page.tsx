@@ -63,6 +63,10 @@ export default function MotorDeRegrasPage() {
       // decide se quer renomear.
       nomeRegra: regra.nomeRegra,
       cargoDestino: regra.cargoDestino,
+      destinoTipo: regra.destinoTipo ?? "cargo",
+      pessoaId: regra.pessoaId ?? null,
+      pessoaNome: regra.pessoaNome ?? null,
+      pessoaQuadro: regra.pessoaQuadro ?? null,
       categoriaGatilho: regra.categoriaGatilho,
       parametros: { ...regra.parametros },
       textoTarefa: regra.textoTarefa,
@@ -248,7 +252,12 @@ function CardRegra({
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
         <span>
-          Destino: <span className="font-medium text-ink-secondary dark:text-white/70">{CARGO_DESTINO_LABEL[regra.cargoDestino]}</span>
+          Destino:{" "}
+          <span className="font-medium text-ink-secondary dark:text-white/70">
+            {regra.destinoTipo === "pessoa" && regra.pessoaNome
+              ? `${regra.pessoaNome} (${CARGO_DESTINO_LABEL[regra.cargoDestino]})`
+              : CARGO_DESTINO_LABEL[regra.cargoDestino]}
+          </span>
         </span>
         {regra.parametros.dias !== undefined && <span>Dias: {regra.parametros.dias}</span>}
         {regra.parametros.quantidade !== undefined && <span>Quantidade: {regra.parametros.quantidade}</span>}
