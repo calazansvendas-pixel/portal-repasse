@@ -4,10 +4,10 @@ import type { Assistente, Quadro, QuadroEscalonamento, Role, UserProfile } from 
  * inclusão normalizada (minúsculas, sem acento), então "Bairro de Fátima" bate com "fatima". A
  * Gerência pode substituir esse padrão por cidade — ver PracaOverrides/resolvePracaPorCidade. */
 export const CIDADES_FILTRO: { chave: string; label: string; praca: Assistente }[] = [
-  { chave: "serra", label: "Serra", praca: "laiza" },
+  { chave: "serra", label: "Serra", praca: "layza" },
   { chave: "vila velha", label: "Vila Velha", praca: "eliane" },
-  { chave: "fatima", label: "Fátima", praca: "catarina" },
-  { chave: "camburi", label: "Camburi", praca: "catarina" },
+  { chave: "fatima", label: "Fátima", praca: "catharina" },
+  { chave: "camburi", label: "Camburi", praca: "catharina" },
 ];
 
 export function normalize(value: string): string {
@@ -37,9 +37,9 @@ export function resolvePracaPorCidade(cidade: string, overrides?: PracaOverrides
 /** Agrupamento geográfico para a UI (Motor de Regras e o cartão): Fátima e Camburi aparecem como
  * UMA opção, já que as duas pertencem à mesma praça (Catharina) — mesmo grupo, rótulo único. */
 export const PRACAS_FILTRO_UI: { praca: Assistente; label: string }[] = [
-  { praca: "laiza", label: "Serra" },
+  { praca: "layza", label: "Serra" },
   { praca: "eliane", label: "Vila Velha" },
-  { praca: "catarina", label: "Fátima/Camburi" },
+  { praca: "catharina", label: "Fátima/Camburi" },
 ];
 
 /** A cidade pertence ao grupo geográfico daquela praça — geografia pura, nunca olha overrides (o
@@ -51,7 +51,7 @@ export function cidadePertenceAPraca(cidade: string, praca: Assistente): boolean
 
 /** Quais praças (quadros de tarefas) o usuário pode enxergar. */
 export function pracasVisiveis(profile: UserProfile): Assistente[] {
-  const todas: Assistente[] = ["laiza", "eliane", "catarina"];
+  const todas: Assistente[] = ["layza", "eliane", "catharina"];
   switch (profile.role) {
     case "gerencia":
     case "coordenador":
@@ -85,11 +85,11 @@ export function quadrosEscalonamentoVisiveis(profile: UserProfile): QuadroEscalo
 export function destinatariosPermitidos(role: Role): Quadro[] {
   switch (role) {
     case "gerencia":
-      return ["coordenador", "analista", "laiza", "eliane", "catarina"];
+      return ["coordenador", "analista", "layza", "eliane", "catharina"];
     case "coordenador":
-      return ["analista", "laiza", "eliane", "catarina"];
+      return ["analista", "layza", "eliane", "catharina"];
     case "analista":
-      return ["laiza", "eliane", "catarina"];
+      return ["layza", "eliane", "catharina"];
     default:
       return [];
   }

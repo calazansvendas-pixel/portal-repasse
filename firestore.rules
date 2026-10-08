@@ -109,7 +109,7 @@ service cloud.firestore {
              'observacaoNoMomentoResolucao', 'notaResolucao', 'historicoNotas', 'clientesEnvolvidos']
           )) || // a nota "O que foi feito" é opcional: concluir não exige texto
         (papelGestor() &&
-          resource.data.praca in ['laiza', 'eliane', 'catarina'] &&
+          resource.data.praca in ['layza', 'eliane', 'catharina'] &&
           resource.data.status in ['pending_validation', 'validated_done'] &&
           request.resource.data.status == 'pendente' &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(

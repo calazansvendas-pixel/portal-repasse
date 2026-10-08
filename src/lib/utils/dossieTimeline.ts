@@ -21,17 +21,17 @@ const BADGE_CONCLUIDA_CLASSES = SLA_BADGE_CLASSES.no_prazo;
 
 /** Cargo do quadro-destino — nunca exibido sozinho: sempre acompanhado do nome real abaixo. */
 const DESTINO_CARGO: Record<Quadro, string> = {
-  laiza: "Assistente",
+  layza: "Assistente",
   eliane: "Assistente",
-  catarina: "Assistente",
+  catharina: "Assistente",
   coordenador: "Coordenação",
   analista: "Analista",
 };
 // Nome real da pessoa por trás do quadro (+ praça/cidade, para os assistentes regionais).
 const DESTINO_NOME: Record<Quadro, string> = {
-  laiza: "Layza (Serra)",
+  layza: "Layza (Serra)",
   eliane: "Eliane (Vila Velha)",
-  catarina: "Catharina (Fátima e Camburi)",
+  catharina: "Catharina (Fátima e Camburi)",
   coordenador: "Paulo",
   analista: "Andressa",
 };

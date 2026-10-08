@@ -2,7 +2,7 @@
 
 export type Role = "gerencia" | "coordenador" | "analista" | "assistente";
 
-export type Assistente = "laiza" | "eliane" | "catarina";
+export type Assistente = "layza" | "eliane" | "catharina";
 
 /** Quadro de escalonamento: além do quadro principal da tarefa, ela pode
  * aparecer simultaneamente no quadro do Coordenador (SLA urgente/estourado)
@@ -219,15 +219,15 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const ASSISTENTE_LABEL: Record<Assistente, string> = {
-  laiza: "Layza (Serra)",
+  layza: "Layza (Serra)",
   eliane: "Eliane (Vila Velha)",
-  catarina: "Catharina (Fátima e Camburi)",
+  catharina: "Catharina (Fátima e Camburi)",
 };
 
 export const QUADRO_LABEL: Record<Quadro, string> = {
-  laiza: "Layza (Serra)",
+  layza: "Layza (Serra)",
   eliane: "Eliane (Vila Velha)",
-  catarina: "Catharina (Fátima e Camburi)",
+  catharina: "Catharina (Fátima e Camburi)",
   coordenador: "Paulo (Coordenador)",
   analista: "Andressa (Analista)",
 };

@@ -7,9 +7,9 @@ import type { NivelTarefa, Quadro, Role } from "@/lib/types";
 export const LIMITE_DESCRICAO = 1000;
 
 export const NIVEL_POR_QUADRO: Record<Quadro, NivelTarefa> = {
-  laiza: "operacional",
+  layza: "operacional",
   eliane: "operacional",
-  catarina: "operacional",
+  catharina: "operacional",
   analista: "analitico",
   coordenador: "tatico",
 };

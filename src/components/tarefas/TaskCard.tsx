@@ -28,7 +28,7 @@ import { NovaTarefaModal } from "./NovaTarefaModal";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
 import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha, notasDe } from "./partesCard";
 
-const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
+const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["layza", "eliane", "catharina"];
 
 /** Primeiro nome a partir de um rótulo como "Andressa (Analista)" ou "Layza (Serra)". */
 function primeiroNome(rotulo: string): string {

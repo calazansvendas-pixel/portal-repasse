@@ -9,7 +9,7 @@ import { salvarMapeamentoPracas } from "@/lib/services/mapeamentoPracasService";
 import { ASSISTENTE_LABEL } from "@/lib/types";
 import type { Assistente } from "@/lib/types";
 
-const ASSISTENTES: Assistente[] = ["laiza", "eliane", "catarina"];
+const ASSISTENTES: Assistente[] = ["layza", "eliane", "catharina"];
 const AUTOMATICO = "";
 
 /**

@@ -36,9 +36,9 @@ const USUARIOS = [
   { nome: "Calazans", email: "calazans@morar.com.br", senha: SENHA_TEMPORARIA, role: "gerencia" },
   { nome: "Paulo", email: "paulo@morar.com.br", senha: SENHA_TEMPORARIA, role: "coordenador" },
   { nome: "Andressa", email: "andressa@morar.com.br", senha: SENHA_TEMPORARIA, role: "analista" },
-  { nome: "Layza", email: "laiza@morar.com.br", senha: SENHA_TEMPORARIA, role: "assistente", praca: "laiza" },
+  { nome: "Layza", email: "layza@morar.com.br", senha: SENHA_TEMPORARIA, role: "assistente", praca: "layza" },
   { nome: "Eliane", email: "eliane@morar.com.br", senha: SENHA_TEMPORARIA, role: "assistente", praca: "eliane" },
-  { nome: "Catharina", email: "catarina@morar.com.br", senha: SENHA_TEMPORARIA, role: "assistente", praca: "catarina" },
+  { nome: "Catharina", email: "catharina@morar.com.br", senha: SENHA_TEMPORARIA, role: "assistente", praca: "catharina" },
 ];
 
 for (const u of USUARIOS) {
