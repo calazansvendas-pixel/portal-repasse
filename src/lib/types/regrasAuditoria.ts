@@ -60,7 +60,7 @@ export interface ParametrosRegra {
 }
 
 /** "cargo" (padrão/legado): resolve pela praça da imobiliária, como sempre. "pessoa": fixa um
- * colaborador específico, ignorando a praça — ex.: sempre a Eliane, mesmo numa pasta da Laiza. */
+ * colaborador específico, ignorando a praça — ex.: sempre a Eliane, mesmo numa pasta da Layza. */
 export type DestinoTipo = "cargo" | "pessoa";
 
 export interface RegraAuditoria {

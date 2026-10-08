@@ -30,7 +30,7 @@ import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha, 
 
 const PRACAS_ASSISTENTES: Tarefa["praca"][] = ["laiza", "eliane", "catarina"];
 
-/** Primeiro nome a partir de um rótulo como "Andressa (Analista)" ou "Laiza (Serra)". */
+/** Primeiro nome a partir de um rótulo como "Andressa (Analista)" ou "Layza (Serra)". */
 function primeiroNome(rotulo: string): string {
   return rotulo.split(" (")[0]?.trim() || rotulo;
 }

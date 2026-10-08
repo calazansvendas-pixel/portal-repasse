@@ -86,7 +86,7 @@ depois).
 | `gerencia` | Calazans | Tudo — painel gerencial, relatórios, analytics e tarefas de todo mundo |
 | `coordenador` | Paulo Fianco | Toda a operação, relatórios gerais, insights de imobiliárias, tarefas da Analista e das Assistentes |
 | `analista` | Andressa | Seu painel analítico (gargalos da esteira) + tarefas de todas as Assistentes |
-| `assistente` | Laiza (Serra), Eliane (Vila Velha), Catarina (Fátima/Camburi) | Apenas seu próprio quadro de tarefas, filtrado pela cidade do empreendimento |
+| `assistente` | Layza (Serra), Eliane (Vila Velha), Catharina (Fátima/Camburi) | Apenas seu próprio quadro de tarefas, filtrado pela cidade do empreendimento |
 
 A lógica de visibilidade fica centralizada em `src/lib/auth/roles.ts` — é o
 primeiro lugar a olhar se for preciso ajustar quem vê o quê.

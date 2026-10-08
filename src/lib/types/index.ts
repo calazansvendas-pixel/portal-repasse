@@ -219,15 +219,15 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const ASSISTENTE_LABEL: Record<Assistente, string> = {
-  laiza: "Laiza (Serra)",
+  laiza: "Layza (Serra)",
   eliane: "Eliane (Vila Velha)",
-  catarina: "Catarina (Fátima e Camburi)",
+  catarina: "Catharina (Fátima e Camburi)",
 };
 
 export const QUADRO_LABEL: Record<Quadro, string> = {
-  laiza: "Laiza (Serra)",
+  laiza: "Layza (Serra)",
   eliane: "Eliane (Vila Velha)",
-  catarina: "Catarina (Fátima e Camburi)",
+  catarina: "Catharina (Fátima e Camburi)",
   coordenador: "Paulo (Coordenador)",
   analista: "Andressa (Analista)",
 };

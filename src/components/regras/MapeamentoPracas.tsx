@@ -14,7 +14,7 @@ const AUTOMATICO = "";
 
 /**
  * Permite à Gerência substituir, por cidade, o vínculo padrão de praça (ex.: Serra deixa de ir
- * automaticamente para a Laiza e passa a ir sempre para a Eliane) — sem editar código. "Automático"
+ * automaticamente para a Layza e passa a ir sempre para a Eliane) — sem editar código. "Automático"
  * mantém o mapeamento padrão (CIDADES_FILTRO); a mudança vale a partir da PRÓXIMA importação.
  */
 export function MapeamentoPracas() {

@@ -29,9 +29,9 @@ const DESTINO_CARGO: Record<Quadro, string> = {
 };
 // Nome real da pessoa por trás do quadro (+ praça/cidade, para os assistentes regionais).
 const DESTINO_NOME: Record<Quadro, string> = {
-  laiza: "Laiza (Serra)",
+  laiza: "Layza (Serra)",
   eliane: "Eliane (Vila Velha)",
-  catarina: "Catarina (Fátima e Camburi)",
+  catarina: "Catharina (Fátima e Camburi)",
   coordenador: "Paulo",
   analista: "Andressa",
 };

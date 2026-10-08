@@ -35,7 +35,7 @@ export function resolvePracaPorCidade(cidade: string, overrides?: PracaOverrides
 }
 
 /** Agrupamento geográfico para a UI (Motor de Regras e o cartão): Fátima e Camburi aparecem como
- * UMA opção, já que as duas pertencem à mesma praça (Catarina) — mesmo grupo, rótulo único. */
+ * UMA opção, já que as duas pertencem à mesma praça (Catharina) — mesmo grupo, rótulo único. */
 export const PRACAS_FILTRO_UI: { praca: Assistente; label: string }[] = [
   { praca: "laiza", label: "Serra" },
   { praca: "eliane", label: "Vila Velha" },
