@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { Assistente, Quadro, QuadroEscalonamento, Role, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
+import { lembreteVencido } from "@/lib/utils/dates";
 import { slaExibido } from "@/lib/utils/sla";
 import { TaskCard } from "./TaskCard";
 
@@ -76,7 +77,12 @@ export function TaskBoard({
   const etapasComPendencia = useMemo(
     () =>
       new Set(
-        tarefas.filter((t) => t.status !== "pending_validation" && t.status !== "validated_done").map((t) => codigoEtapa(t.etapa))
+        tarefas
+          .filter((t) => {
+            const concluida = t.status === "pending_validation" || t.status === "validated_done";
+            return !concluida || lembreteVencido(t.lembreteAtivo, t.lembreteData);
+          })
+          .map((t) => codigoEtapa(t.etapa))
       ),
     [tarefas]
   );

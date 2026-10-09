@@ -4,8 +4,16 @@ import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { CIDADES_FILTRO, normalize } from "@/lib/auth/roles";
+import { lembreteVencido } from "@/lib/utils/dates";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import type { Assistente, QuadroEscalonamento, Tarefa } from "@/lib/types";
+
+/** Concluída "de verdade" para fins de filtro — um lembrete vencido reabre a tarefa mesmo que o
+ * status ainda diga pending_validation/validated_done (ver TaskCard.tsx, mesmo critério). */
+function efetivamenteConcluida(t: Tarefa): boolean {
+  const concluida = t.status === "pending_validation" || t.status === "validated_done";
+  return concluida && !lembreteVencido(t.lembreteAtivo, t.lembreteData);
+}
 
 export interface FiltrosState {
   cidade: string; // "" = todas; senão a chave de CIDADES_FILTRO
@@ -93,9 +101,9 @@ export function aplicarFiltros(visao: Visao, { cidade, pessoa, status }: Filtros
   const porCidade = cidade ? tarefas.filter((t) => t.origem === "manual" || normalize(t.cidade ?? "").includes(cidade)) : tarefas;
   const tarefasF =
     status === "a_fazer"
-      ? porCidade.filter((t) => t.status !== "pending_validation" && t.status !== "validated_done")
+      ? porCidade.filter((t) => !efetivamenteConcluida(t))
       : status === "feitas"
-        ? porCidade.filter((t) => t.status === "pending_validation" || t.status === "validated_done")
+        ? porCidade.filter(efetivamenteConcluida)
         : porCidade;
   return { pracas: pracasF, quadrosEscalonamento: escalF, tarefas: tarefasF };
 }

@@ -3,26 +3,29 @@
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Pencil, Trash2, UserCog, Undo2 } from "lucide-react";
+import { AlertTriangle, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, Pencil, Trash2, UserCog, Undo2 } from "lucide-react";
 import type { ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
 import {
   alternarClienteEnvolvido,
+  atualizarLembrete,
   definirResponsavelCustomizado,
   excluirTarefa,
   marcarFeitaPelaGerencia,
   marcarTarefaResolvida,
+  removerLembrete,
   reverterTarefa,
   type DestinoResponsavelCustomizado,
+  type LembreteInput,
 } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { meuQuadroInterativo, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
 import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { useColaboradores } from "@/lib/hooks/useColaboradores";
-import { formatDateBR } from "@/lib/utils/dates";
+import { formatDateBR, lembreteVencido } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
-import { ConfirmarExclusaoModal, DetalhesTarefaModal, NotaConclusaoModal } from "./ModaisTarefa";
+import { ConfirmarExclusaoModal, DetalhesTarefaModal, EditarLembreteModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
 import { NovaTarefaModal } from "./NovaTarefaModal";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
@@ -99,15 +102,19 @@ export function TaskCard({
   const { firebaseUser, profile } = useAuth();
   const { overrides: pracaOverrides } = useMapeamentoPracas();
   const { colaboradores } = useColaboradores(profile?.role === "gerencia");
-  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | null>(null);
+  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | "editarLembrete" | null>(null);
   // Número do cliente cujo check completa a tarefa agregada (pede a nota opcional antes de gravar).
   const [clientePendente, setClientePendente] = useState<string | null>(null);
   const [expandido, setExpandido] = useState(false);
 
+  // Lembrete Programado vencido: reabre a tarefa mesmo já concluída/arquivada — vira card ATIVO
+  // de novo (com destaque), em vez do card-pílula só de leitura.
+  const comLembreteVencido = lembreteVencido(tarefa.lembreteAtivo, tarefa.lembreteData);
   // "Feitas"/"Realizadas": tanto a tarefa aguardando confirmação da próxima planilha
   // (pending_validation) quanto a já confirmada e arquivada (validated_done) viram o mesmo
-  // card-pílula, só de leitura — com autor, data e notas de resolução sempre visíveis.
-  const concluida = tarefa.status === "pending_validation" || tarefa.status === "validated_done";
+  // card-pílula, só de leitura — com autor, data e notas de resolução sempre visíveis. Um
+  // lembrete vencido tem prioridade: a tarefa volta a ser tratada como ativa.
+  const concluida = (tarefa.status === "pending_validation" || tarefa.status === "validated_done") && !comLembreteVencido;
   const falhaAuditoria = tarefa.status === "audit_failed";
   const diasEtapa = diasNaEtapaAtual(tarefa);
   const isAgregado = tarefa.origem === "agregado";
@@ -134,6 +141,9 @@ export function TaskCard({
     (ehGerencia ||
       meuQuadroInterativo(profile).includes(tarefa.praca) ||
       (["coordenador", "analista"].includes(profile.role) && PRACAS_ASSISTENTES.includes(tarefa.praca)));
+  // Mesma permissão de quem conclui a tarefa: Gerência ou o dono do quadro — não a auditoria
+  // de Coordenador/Analista, que só revisa (reverter), sem editar o lembrete de outra pessoa.
+  const podeGerenciarLembrete = ehGerencia || (!!profile && meuQuadroInterativo(profile).includes(tarefa.praca));
 
   const tituloAgregado = `${tarefa.tipoPendencia.startsWith("Gargalo") ? "Gargalo detectado" : tarefa.tipoPendencia}: ${totalPastas} pastas`;
   // Tarefa agregada: as notas ficam em cada cliente (só entradas do God Mode moram na tarefa mãe).
@@ -167,14 +177,15 @@ export function TaskCard({
   }
   if (podeEditarExcluir && !gargalo) itensMenu.push({ rotulo: "Excluir", icone: Trash2, onClick: () => setModal("excluir"), perigo: true });
 
-  async function confirmarConclusao(nota: string) {
+  async function confirmarConclusao(nota: string, lembrete: LembreteInput | null) {
     if (!firebaseUser) return;
-    await marcarTarefaResolvida(tarefa, firebaseUser.uid, nota, profile?.nome, profile?.role);
+    await marcarTarefaResolvida(tarefa, firebaseUser.uid, nota, profile?.nome, profile?.role, lembrete);
     setModal(null);
   }
 
   // Cliente dentro do gargalo (modal do cliente): concluir pede a nota, como num card individual;
-  // desmarcar só volta o check — a nota gravada fica.
+  // desmarcar só volta o check — a nota gravada fica. Lembrete não se aplica aqui (vive na tarefa
+  // mãe, não no cliente — NotaConclusaoModal já esconde o campo com permiteLembrete={false}).
   async function marcarClienteDoGargalo(nota: string) {
     if (!firebaseUser || !gargalo) return;
     await alternarClienteEnvolvido(gargalo.pai.id, gargalo.numero, firebaseUser.uid, nota, profile?.nome, profile?.role);
@@ -215,6 +226,14 @@ export function TaskCard({
     if (!firebaseUser) return;
     await excluirTarefa(tarefa.id, await firebaseUser.getIdToken());
     setModal(null);
+  }
+
+  async function salvarEdicaoLembrete(lembrete: LembreteInput) {
+    await atualizarLembrete(tarefa.id, lembrete, profile?.nome ?? null);
+  }
+
+  async function removerLembreteDaTarefa() {
+    await removerLembrete(tarefa.id);
   }
 
   if (concluida) {
@@ -282,10 +301,16 @@ export function TaskCard({
             colaboradores={colaboradores}
             pracaOverrides={pracaOverrides}
             onAlterarResponsavel={alterarResponsavel}
+            podeGerenciarLembrete={!gargalo && podeGerenciarLembrete}
+            onEditarLembrete={!gargalo ? () => setModal("editarLembrete") : undefined}
+            onRemoverLembrete={!gargalo ? removerLembreteDaTarefa : undefined}
           />
         )}
         {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
         {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
+        {modal === "editarLembrete" && (
+          <EditarLembreteModal tarefa={tarefa} onSalvar={salvarEdicaoLembrete} onCancelar={() => setModal(null)} />
+        )}
       </>
     );
   }
@@ -306,6 +331,36 @@ export function TaskCard({
       )}
       {falhaAuditoria && tarefa.falhaAuditoriaMotivo && (
         <p className="text-xs text-status-danger">{tarefa.falhaAuditoriaMotivo}</p>
+      )}
+
+      {comLembreteVencido && (
+        <div className="flex items-start gap-1.5 rounded-md border border-brand-primary/30 bg-brand-primary/10 p-2">
+          <Bell size={14} className="mt-0.5 shrink-0 text-brand-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-brand-primary">🔔 Lembrete</p>
+            {tarefa.lembreteMensagem && <p className="text-xs text-ink-secondary dark:text-white/70">{tarefa.lembreteMensagem}</p>}
+          </div>
+          {podeGerenciarLembrete && (
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                aria-label="Editar lembrete"
+                onClick={() => setModal("editarLembrete")}
+                className="rounded p-1 text-ink-secondary transition-colors hover:bg-brand-primary/15 dark:text-white/70"
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                type="button"
+                aria-label="Excluir lembrete"
+                onClick={removerLembreteDaTarefa}
+                className="rounded p-1 text-status-danger transition-colors hover:bg-status-danger/15"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Cabeçalho empilhado: 1) dias na etapa + menu · 2/3) identidade do card (cliente + imobiliária
@@ -487,13 +542,29 @@ export function TaskCard({
           colaboradores={colaboradores}
           pracaOverrides={pracaOverrides}
           onAlterarResponsavel={alterarResponsavel}
+          podeGerenciarLembrete={!gargalo && podeGerenciarLembrete}
+          onEditarLembrete={!gargalo ? () => setModal("editarLembrete") : undefined}
+          onRemoverLembrete={!gargalo ? removerLembreteDaTarefa : undefined}
         />
       )}
       {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
       {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
-      {modal === "nota" && <NotaConclusaoModal onConfirmar={gargalo ? marcarClienteDoGargalo : confirmarConclusao} onCancelar={() => setModal(null)} />}
+      {modal === "editarLembrete" && (
+        <EditarLembreteModal tarefa={tarefa} onSalvar={salvarEdicaoLembrete} onCancelar={() => setModal(null)} />
+      )}
+      {modal === "nota" && (
+        <NotaConclusaoModal
+          onConfirmar={gargalo ? marcarClienteDoGargalo : confirmarConclusao}
+          onCancelar={() => setModal(null)}
+          permiteLembrete={!gargalo}
+        />
+      )}
       {clientePendente && (
-        <NotaConclusaoModal onConfirmar={confirmarClientePendente} onCancelar={() => setClientePendente(null)} />
+        <NotaConclusaoModal
+          onConfirmar={confirmarClientePendente}
+          onCancelar={() => setClientePendente(null)}
+          permiteLembrete={false}
+        />
       )}
     </div>
   );

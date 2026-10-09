@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Undo2 } from "lucide-react";
+import { Bell, Pencil, Trash2, Undo2 } from "lucide-react";
 import type { Assistente, ClienteEnvolvido, Quadro, Role, Tarefa } from "@/lib/types";
-import { formatDateTimeBR } from "@/lib/utils/dates";
+import { formatDateBR, formatDateTimeBR, hojeISO } from "@/lib/utils/dates";
 import { Modal } from "@/components/ui/Modal";
 import { PRACAS_FILTRO_UI, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
-import type { DestinoResponsavelCustomizado } from "@/lib/services/tarefasService";
+import type { DestinoResponsavelCustomizado, LembreteInput } from "@/lib/services/tarefasService";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
 import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, notasDe } from "./partesCard";
 
@@ -153,11 +153,17 @@ function SecaoResponsavel({
 export function NotaConclusaoModal({
   onConfirmar,
   onCancelar,
+  permiteLembrete = true,
 }: {
-  onConfirmar: (nota: string) => Promise<void>;
+  onConfirmar: (nota: string, lembrete: LembreteInput | null) => Promise<void>;
   onCancelar: () => void;
+  /** Gargalo (conclusão por cliente individual): o lembrete vive na tarefa, não no cliente — some aqui. */
+  permiteLembrete?: boolean;
 }) {
   const [nota, setNota] = useState("");
+  const [lembreteAberto, setLembreteAberto] = useState(false);
+  const [lembreteData, setLembreteData] = useState("");
+  const [lembreteMensagem, setLembreteMensagem] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -165,7 +171,8 @@ export function NotaConclusaoModal({
     setEnviando(true);
     setErro(null);
     try {
-      await onConfirmar(nota);
+      const lembrete = lembreteAberto && lembreteData ? { data: lembreteData, mensagem: lembreteMensagem.trim() } : null;
+      await onConfirmar(nota, lembrete);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível concluir. Tente novamente.");
     } finally {
@@ -186,13 +193,141 @@ export function NotaConclusaoModal({
         placeholder="Opcional. Ex.: Liguei para o corretor, ele vai enviar o RG até amanhã."
         className="w-full resize-none rounded-md border border-border bg-surface p-3 text-base sm:text-sm text-ink-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 dark:border-white/15 dark:bg-[#1B1E17] dark:text-white"
       />
+
+      {permiteLembrete && (
+        <div className="mt-3">
+          {!lembreteAberto ? (
+            <button
+              type="button"
+              onClick={() => setLembreteAberto(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-semibold text-ink-secondary transition-colors hover:bg-surface-soft dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+            >
+              <Bell size={14} />
+              Definir Lembrete
+            </button>
+          ) : (
+            <div className="rounded-md border border-border bg-surface-secondary/60 p-3 dark:border-white/10 dark:bg-white/5">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-ink-primary dark:text-white">
+                  <Bell size={14} />
+                  Lembrete Programado
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLembreteAberto(false);
+                    setLembreteData("");
+                    setLembreteMensagem("");
+                  }}
+                  className="text-[11px] font-semibold text-ink-muted hover:underline"
+                >
+                  Remover
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr]">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-ink-secondary dark:text-white/70">Data</span>
+                  <input
+                    type="date"
+                    min={hojeISO()}
+                    value={lembreteData}
+                    onChange={(e) => setLembreteData(e.target.value)}
+                    className="input-field h-10"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-ink-secondary dark:text-white/70">Mensagem</span>
+                  <input
+                    type="text"
+                    value={lembreteMensagem}
+                    onChange={(e) => setLembreteMensagem(e.target.value)}
+                    placeholder="Ex.: Cobrar retorno do corretor sobre o RG."
+                    className="input-field h-10"
+                  />
+                </label>
+              </div>
+              <p className="mt-2 text-[11px] text-ink-muted">
+                A tarefa volta a aparecer como pendente em {lembreteData ? formatDateBR(lembreteData) : "—"}, com esta
+                mensagem em destaque.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {erro && <p className="mt-2 text-xs text-status-danger">{erro}</p>}
       <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onCancelar} disabled={enviando}>
           Cancelar
         </button>
-        <button type="button" className="btn-primary h-11 sm:h-10" onClick={confirmar} disabled={enviando}>
+        <button
+          type="button"
+          className="btn-primary h-11 sm:h-10"
+          onClick={confirmar}
+          disabled={enviando || (lembreteAberto && !lembreteData)}
+        >
           Confirmar Conclusão
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Edita data/mensagem de um Lembrete Programado já existente — pré-preenche com o que já está
+ * salvo na tarefa. Usado pelo lápis no banner do card e no modal de detalhes. */
+export function EditarLembreteModal({
+  tarefa,
+  onSalvar,
+  onCancelar,
+}: {
+  tarefa: Tarefa;
+  onSalvar: (lembrete: LembreteInput) => Promise<void>;
+  onCancelar: () => void;
+}) {
+  const [data, setData] = useState(tarefa.lembreteData ?? "");
+  const [mensagem, setMensagem] = useState(tarefa.lembreteMensagem ?? "");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function salvar() {
+    if (!data) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      await onSalvar({ data, mensagem: mensagem.trim() });
+      onCancelar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível salvar o lembrete.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <Modal titulo="Editar Lembrete" onClose={onCancelar}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_1fr]">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[11px] text-ink-secondary dark:text-white/70">Data</span>
+          <input type="date" value={data} onChange={(e) => setData(e.target.value)} className="input-field h-10" />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[11px] text-ink-secondary dark:text-white/70">Mensagem</span>
+          <input
+            type="text"
+            value={mensagem}
+            onChange={(e) => setMensagem(e.target.value)}
+            placeholder="Ex.: Cobrar retorno do corretor sobre o RG."
+            className="input-field h-10"
+          />
+        </label>
+      </div>
+      {erro && <p className="mt-2 text-xs text-status-danger">{erro}</p>}
+      <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button type="button" className="btn-secondary h-11 sm:h-10" onClick={onCancelar} disabled={salvando}>
+          Cancelar
+        </button>
+        <button type="button" className="btn-primary h-11 sm:h-10" onClick={salvar} disabled={salvando || !data}>
+          {salvando ? "Salvando…" : "Salvar Lembrete"}
         </button>
       </div>
     </Modal>
@@ -253,6 +388,9 @@ export function DetalhesTarefaModal({
   colaboradores,
   pracaOverrides,
   onAlterarResponsavel,
+  podeGerenciarLembrete,
+  onEditarLembrete,
+  onRemoverLembrete,
 }: {
   tarefa: Tarefa;
   renderDetalheCliente: (cliente: ClienteEnvolvido, fechar: () => void) => ReactNode;
@@ -264,8 +402,23 @@ export function DetalhesTarefaModal({
   colaboradores?: ColaboradorSelecionavel[];
   pracaOverrides?: PracaOverrides | null;
   onAlterarResponsavel?: (destino: DestinoResponsavelCustomizado | null) => Promise<void>;
+  /** Mesma permissão de quem pode concluir a tarefa (dono do quadro ou Gerência) — ver TaskCard.tsx. */
+  podeGerenciarLembrete?: boolean;
+  onEditarLembrete?: () => void;
+  onRemoverLembrete?: () => Promise<void>;
 }) {
   const [revertendo, setRevertendo] = useState(false);
+  const [removendoLembrete, setRemovendoLembrete] = useState(false);
+
+  async function removerLembreteClick() {
+    if (!onRemoverLembrete) return;
+    setRemovendoLembrete(true);
+    try {
+      await onRemoverLembrete();
+    } finally {
+      setRemovendoLembrete(false);
+    }
+  }
   const isManual = tarefa.origem === "manual";
   const clientes = tarefa.clientesEnvolvidos ?? [];
   const isGargalo = tarefa.origem === "agregado" && clientes.length > 0;
@@ -318,6 +471,46 @@ export function DetalhesTarefaModal({
                 : tarefa.imobiliaria || "Imobiliária não informada"}
           </p>
         </div>
+
+        {tarefa.lembreteAtivo && tarefa.lembreteMensagem && (
+          <div className="flex items-start gap-2 rounded-md border border-brand-primary/30 bg-brand-primary/10 p-3">
+            <Bell size={16} className="mt-0.5 shrink-0 text-brand-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-ink-primary dark:text-white">
+                Lembrete para {tarefa.lembreteData ? formatDateBR(tarefa.lembreteData) : "—"}
+              </p>
+              <p className="mt-0.5 text-xs text-ink-secondary dark:text-white/70">{tarefa.lembreteMensagem}</p>
+              {tarefa.lembreteDefinidoPor && (
+                <p className="mt-1 text-[11px] text-ink-muted">Definido por {tarefa.lembreteDefinidoPor}</p>
+              )}
+            </div>
+            {podeGerenciarLembrete && (onEditarLembrete || onRemoverLembrete) && (
+              <div className="flex shrink-0 items-center gap-1">
+                {onEditarLembrete && (
+                  <button
+                    type="button"
+                    aria-label="Editar lembrete"
+                    onClick={onEditarLembrete}
+                    className="rounded p-1.5 text-ink-secondary transition-colors hover:bg-brand-primary/15 dark:text-white/70"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                )}
+                {onRemoverLembrete && (
+                  <button
+                    type="button"
+                    aria-label="Excluir lembrete"
+                    onClick={removerLembreteClick}
+                    disabled={removendoLembrete}
+                    className="rounded p-1.5 text-status-danger transition-colors hover:bg-status-danger/15 disabled:opacity-50"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {podeAlterarResponsavel && colaboradores && onAlterarResponsavel && (
           <SecaoResponsavel

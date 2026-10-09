@@ -40,6 +40,47 @@ function semente(historico: NotaResolucao[] | undefined, notaLegada: string | nu
   return !historico?.length && notaLegada ? [{ texto: notaLegada, data: data ?? "", autor: null }] : [];
 }
 
+/** Lembrete Programado, definido junto com a nota de conclusão (ver NotaConclusaoModal). */
+export interface LembreteInput {
+  data: string; // yyyy-MM-dd
+  mensagem: string;
+}
+
+/** Campos do lembrete para a escrita no Firestore: grava o novo lembrete quando informado, ou
+ * desativa o anterior — ele já cumpriu o papel de reabrir a tarefa até aqui. */
+function camposLembrete(lembrete: LembreteInput | null | undefined, autor: string | null | undefined) {
+  return lembrete
+    ? {
+        lembreteAtivo: true,
+        lembreteData: lembrete.data,
+        lembreteMensagem: lembrete.mensagem,
+        lembreteDefinidoPor: autor ?? null,
+      }
+    : { lembreteAtivo: false };
+}
+
+/** Edita a data/mensagem de um lembrete já existente (lápis no banner/detalhes) — não toca em
+ * mais nenhum campo da tarefa (histórico, resolução, etc. ficam intactos). */
+export async function atualizarLembrete(tarefaId: string, lembrete: LembreteInput, autor: string | null) {
+  await updateDoc(doc(db, "tarefas", tarefaId), {
+    lembreteAtivo: true,
+    lembreteData: lembrete.data,
+    lembreteMensagem: lembrete.mensagem,
+    lembreteDefinidoPor: autor ?? null,
+  });
+}
+
+/** Desativa e limpa o lembrete (lixeira) — a tarefa deixa de ser reaberta por ele, mas o
+ * status/histórico/resolução continuam exatamente como estavam. */
+export async function removerLembrete(tarefaId: string) {
+  await updateDoc(doc(db, "tarefas", tarefaId), {
+    lembreteAtivo: false,
+    lembreteData: null,
+    lembreteMensagem: null,
+    lembreteDefinidoPor: null,
+  });
+}
+
 /**
  * Assistente, Analista ou Coordenador marca a tarefa como resolvida. A nota "O que foi feito" é
  * OPCIONAL: se vier vazia, entra a mensagem padrão ("Marcada como feita pela Assistente.", etc.) —
@@ -52,7 +93,8 @@ export async function marcarTarefaResolvida(
   uid: string,
   nota: string,
   autor?: string | null,
-  cargo?: Role | null
+  cargo?: Role | null,
+  lembrete?: LembreteInput | null
 ) {
   const notaDigitada = normalizarNota(nota);
   const texto = mensagemPadraoOuNota(notaDigitada, cargo);
@@ -68,6 +110,7 @@ export async function marcarTarefaResolvida(
       ...semente(tarefa.historicoNotas, tarefa.notaResolucao, tarefa.resolvidoEm),
       { texto, data: agora, autor: autor ?? null }
     ),
+    ...camposLembrete(lembrete, autor),
   });
 }
 

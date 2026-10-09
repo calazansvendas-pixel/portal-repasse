@@ -62,6 +62,13 @@ export function hojeISO(): string {
   return toISODateOnly(new Date());
 }
 
+/** Lembrete Programado (ver Tarefa.lembreteAtivo/lembreteData): vencido quando a data marcada
+ * já chegou — "menor ou igual a hoje", comparando como string yyyy-MM-dd (ordem lexicográfica
+ * bate com a cronológica nesse formato, sem fuso para se preocupar). */
+export function lembreteVencido(lembreteAtivo: boolean | undefined, lembreteData: string | null | undefined): boolean {
+  return !!lembreteAtivo && !!lembreteData && lembreteData <= hojeISO();
+}
+
 /** Dias corridos entre uma data ISO e hoje (>= 0). Retorna null se a data for inválida. */
 export function diasDesde(isoDate: string | null | undefined): number | null {
   if (!isoDate) return null;

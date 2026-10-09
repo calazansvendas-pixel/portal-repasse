@@ -106,8 +106,9 @@ service cloud.firestore {
         (souDonoDoQuadro(resource.data.praca) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(
             ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao',
-             'observacaoNoMomentoResolucao', 'notaResolucao', 'historicoNotas', 'clientesEnvolvidos']
-          )) || // a nota "O que foi feito" é opcional: concluir não exige texto
+             'observacaoNoMomentoResolucao', 'notaResolucao', 'historicoNotas', 'clientesEnvolvidos',
+             'lembreteAtivo', 'lembreteData', 'lembreteMensagem', 'lembreteDefinidoPor']
+          )) || // a nota "O que foi feito" é opcional: concluir não exige texto; Lembrete Programado
         (papelGestor() &&
           resource.data.praca in ['layza', 'eliane', 'catharina'] &&
           resource.data.status in ['pending_validation', 'validated_done'] &&

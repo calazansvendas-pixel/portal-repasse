@@ -191,6 +191,13 @@ export interface Tarefa {
   pracaCustomizada?: Quadro | null;
   responsavelCustomizadoId?: string | null;
   responsavelCustomizadoNome?: string | null;
+  // Lembrete Programado: definido ao concluir a tarefa ("Definir Lembrete" no modal de
+  // resolução). Quando lembreteAtivo e lembreteData <= hoje, a tarefa volta a aparecer como
+  // pendente (mesmo já concluída/arquivada) com destaque — ver lembreteVencido() em dates.ts.
+  lembreteData?: string | null; // yyyy-MM-dd
+  lembreteMensagem?: string | null;
+  lembreteDefinidoPor?: string | null;
+  lembreteAtivo?: boolean;
   // Quadros extras onde este mesmo card também deve aparecer simultaneamente
   // (recalculado a cada importação — ver auditEngine.ts).
   escalonadoPara: QuadroEscalonamento[];
