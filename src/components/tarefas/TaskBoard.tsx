@@ -74,7 +74,10 @@ export function TaskBoard({
   // (useTarefasPorQuadros + aplicarFiltros), então o indicador reflete sozinho o mesmo recorte —
   // filtrar pela Eliane só acende as etapas em que ELA tem pendência.
   const etapasComPendencia = useMemo(
-    () => new Set(tarefas.filter((t) => t.status !== "pending_validation").map((t) => codigoEtapa(t.etapa))),
+    () =>
+      new Set(
+        tarefas.filter((t) => t.status !== "pending_validation" && t.status !== "validated_done").map((t) => codigoEtapa(t.etapa))
+      ),
     [tarefas]
   );
   const [etapasSelecionadas, setEtapasSelecionadas] = useState<Set<string>>(new Set());

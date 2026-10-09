@@ -104,7 +104,10 @@ export function TaskCard({
   const [clientePendente, setClientePendente] = useState<string | null>(null);
   const [expandido, setExpandido] = useState(false);
 
-  const aguardandoValidacao = tarefa.status === "pending_validation";
+  // "Feitas"/"Realizadas": tanto a tarefa aguardando confirmação da próxima planilha
+  // (pending_validation) quanto a já confirmada e arquivada (validated_done) viram o mesmo
+  // card-pílula, só de leitura — com autor, data e notas de resolução sempre visíveis.
+  const concluida = tarefa.status === "pending_validation" || tarefa.status === "validated_done";
   const falhaAuditoria = tarefa.status === "audit_failed";
   const diasEtapa = diasNaEtapaAtual(tarefa);
   const isAgregado = tarefa.origem === "agregado";
@@ -153,13 +156,13 @@ export function TaskCard({
         onClick: () => (clienteDoGargalo.concluido ? desmarcarClienteDoGargalo() : setModal("nota")),
       });
     }
-  } else if (ehGerencia && !aguardandoValidacao) {
+  } else if (ehGerencia && !concluida) {
     itensMenu.push({
       rotulo: "Marcar como feita",
       icone: CheckCircle2,
       onClick: () => firebaseUser && marcarFeitaPelaGerencia(tarefa, firebaseUser.uid, profile?.nome),
     });
-  } else if (ehGerencia && aguardandoValidacao) {
+  } else if (ehGerencia && concluida) {
     itensMenu.push({ rotulo: "Voltar para ativa", icone: Undo2, onClick: () => reverterTarefa(tarefa) });
   }
   if (podeEditarExcluir && !gargalo) itensMenu.push({ rotulo: "Excluir", icone: Trash2, onClick: () => setModal("excluir"), perigo: true });
@@ -214,7 +217,7 @@ export function TaskCard({
     setModal(null);
   }
 
-  if (aguardandoValidacao) {
+  if (concluida) {
     const nome = isManual
       ? formatarDescricao(tarefa, pracaOverrides)
       : isAgregado

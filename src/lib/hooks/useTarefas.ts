@@ -6,7 +6,9 @@ import { db } from "@/lib/firebase/client";
 import type { EtapaHistorico, Quadro, QuadroEscalonamento, Tarefa } from "@/lib/types";
 import { normalizarTarefa } from "@/lib/utils/normalizarTarefa";
 
-const STATUS_ATIVOS: Tarefa["status"][] = ["pendente", "pending_validation", "audit_failed"];
+// Inclui "validated_done": as assistentes precisam ver o histórico do que já foi confirmado pela
+// planilha, não só o que está aguardando confirmação (ver aba "Feitas" em FiltrosTarefas.tsx).
+const STATUS_ATIVOS: Tarefa["status"][] = ["pendente", "pending_validation", "audit_failed", "validated_done"];
 
 /**
  * Tarefas ativas dos quadros informados, mais recentes primeiro. `quadros`
@@ -32,7 +34,6 @@ export function useTarefasPorQuadros(quadros: Quadro[]) {
     const q = query(
       collection(db, "tarefas"),
       where("praca", "in", quadros),
-      // Filtra no servidor: tarefas já validadas (validated_done) nunca são baixadas.
       where("status", "in", STATUS_ATIVOS),
       orderBy("criadoEm", "desc")
     );

@@ -13,13 +13,15 @@ export interface FiltrosState {
   status: FiltroStatus;
 }
 
-/** "a_fazer" oculta o que já tem o check verde (pending_validation); "feitas" mostra só isso. */
+/** "a_fazer" oculta o que já tem o check verde (pending_validation/validated_done); "feitas"
+ * mostra só isso — inclui tanto o que aguarda confirmação da próxima planilha quanto o que ela
+ * já confirmou e arquivou, para o histórico de trabalho das assistentes nunca desaparecer. */
 export type FiltroStatus = "todas" | "a_fazer" | "feitas";
 
 const OPCOES_STATUS: { valor: FiltroStatus; rotulo: string }[] = [
   { valor: "todas", rotulo: "Todas" },
   { valor: "a_fazer", rotulo: "A fazer" },
-  { valor: "feitas", rotulo: "Feitas" },
+  { valor: "feitas", rotulo: "Realizadas" },
 ];
 
 /** Grupo de botões Todas / A fazer / Feitas. Visível para todos os perfis. */
@@ -91,9 +93,9 @@ export function aplicarFiltros(visao: Visao, { cidade, pessoa, status }: Filtros
   const porCidade = cidade ? tarefas.filter((t) => t.origem === "manual" || normalize(t.cidade ?? "").includes(cidade)) : tarefas;
   const tarefasF =
     status === "a_fazer"
-      ? porCidade.filter((t) => t.status !== "pending_validation")
+      ? porCidade.filter((t) => t.status !== "pending_validation" && t.status !== "validated_done")
       : status === "feitas"
-        ? porCidade.filter((t) => t.status === "pending_validation")
+        ? porCidade.filter((t) => t.status === "pending_validation" || t.status === "validated_done")
         : porCidade;
   return { pracas: pracasF, quadrosEscalonamento: escalF, tarefas: tarefasF };
 }
