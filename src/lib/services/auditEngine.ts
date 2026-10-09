@@ -149,6 +149,21 @@ export async function executarAuditoriaDiaria(params: {
     tarefasPorChave.set(data.chaveRegra, { id: doc.id, data });
   });
 
+  // Trava de etapa: a planilha diária repete o histórico acumulado (a mesma pasta, na mesma
+  // etapa, aparece dia após dia). Sem isso, toda regra que já foi CONCLUÍDA (validated_done)
+  // nasceria de novo a cada importação, porque só tarefas ATIVAS entram em `tarefasPorChave`.
+  // Guarda, por chaveRegra, a etapa em que a última tarefa concluída daquela regra+pasta foi
+  // encerrada — uma nova tarefa só nasce se a etapa mudou desde então (transição real de fase).
+  const ultimaEtapaConcluidaPorChave = new Map<string, { etapa: string; atualizadoEm: string }>();
+  const tarefasConcluidasSnap = await db.collection("tarefas").where("status", "==", "validated_done").get();
+  tarefasConcluidasSnap.forEach((doc) => {
+    const data = doc.data() as Tarefa;
+    const atual = ultimaEtapaConcluidaPorChave.get(data.chaveRegra);
+    if (!atual || data.atualizadoEm > atual.atualizadoEm) {
+      ultimaEtapaConcluidaPorChave.set(data.chaveRegra, { etapa: data.etapa, atualizadoEm: data.atualizadoEm });
+    }
+  });
+
   // Motor de Regras Dinâmicas (No-Code): busca as regras ativas cadastradas pela Gerência — a
   // ÚNICA fonte de geração de tarefa nesta importação (ver Passo 1, 2 e 3 abaixo). Sem regra
   // ativa nenhuma, a lista vem vazia e nenhuma tarefa nova nasce.
@@ -265,6 +280,13 @@ export async function executarAuditoriaDiaria(params: {
     }
 
     if (!tarefaAtiva && dados.condicaoAtiva) {
+      // Trava de etapa: a regra+pasta já foi concluída nessa MESMA etapa antes (planilha com
+      // histórico acumulado repetindo o dado) — não reabre, não duplica. Só nasce tarefa nova se
+      // a etapa avançou desde a última conclusão (transição real) ou se nunca houve conclusão.
+      const ultimaConclusao = ultimaEtapaConcluidaPorChave.get(dados.chaveRegra);
+      if (ultimaConclusao && ultimaConclusao.etapa === dados.etapa) {
+        return;
+      }
       const ref = db.collection("tarefas").doc();
       const tarefa: Omit<Tarefa, "id"> = {
         chaveRegra: dados.chaveRegra,
