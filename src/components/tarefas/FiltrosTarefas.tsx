@@ -1,10 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { CIDADES_FILTRO, normalize } from "@/lib/auth/roles";
 import { lembreteVencido } from "@/lib/utils/dates";
+import { somenteDigitos } from "@/lib/utils/cpf";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import type { Assistente, QuadroEscalonamento, Tarefa } from "@/lib/types";
 
@@ -19,6 +20,19 @@ export interface FiltrosState {
   cidade: string; // "" = todas; senão a chave de CIDADES_FILTRO
   pessoa: string; // "todos" | "coordenador" | "analista" | "assistentes" | id de assistente
   status: FiltroStatus;
+  busca: string; // nome do cliente OU CPF/CNPJ (com ou sem pontuação) — ver tarefaBateNaBusca
+}
+
+/** Nome e CPF podem bater: nome por inclusão normalizada, CPF só comparando dígitos (o usuário
+ * pode digitar com ou sem pontuação). Olha tanto o cliente principal quanto os relacionados de
+ * uma tarefa agregada (Motor de Regras), já que o card lista os dois. */
+function tarefaBateNaBusca(t: Tarefa, termoNome: string, termoCpf: string): boolean {
+  if (!termoNome && !termoCpf) return true;
+  const nomes = [t.clienteNome, ...(t.nomesRelacionados ?? [])].filter((n): n is string => !!n);
+  if (termoNome && nomes.some((n) => normalize(n).includes(termoNome))) return true;
+  if (!termoCpf) return false;
+  const cpfs = [t.cpfCnpj, ...(t.cpfsRelacionados ?? [])].filter((c): c is string => !!c);
+  return cpfs.some((c) => somenteDigitos(c).includes(termoCpf));
 }
 
 /** "a_fazer" oculta o que já tem o check verde (pending_validation/validated_done); "feitas"
@@ -31,6 +45,26 @@ const OPCOES_STATUS: { valor: FiltroStatus; rotulo: string }[] = [
   { valor: "a_fazer", rotulo: "A fazer" },
   { valor: "feitas", rotulo: "Realizadas" },
 ];
+
+/** Campo de busca por nome do cliente ou CPF/CNPJ (com ou sem pontuação) — visível para todos os
+ * perfis, inclusive Assistente (que não tem a barra de filtros completa). */
+export function BuscaTarefas({ valor, onChange }: { valor: string; onChange: (novo: string) => void }) {
+  return (
+    <label className="relative flex w-full flex-col gap-1.5 sm:w-72">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Buscar</span>
+      <div className="relative">
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+        <input
+          type="text"
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Nome do cliente ou CPF/CNPJ"
+          className="input-field pl-9"
+        />
+      </div>
+    </label>
+  );
+}
 
 /** Grupo de botões Todas / A fazer / Feitas. Visível para todos os perfis. */
 export function FiltroStatusTarefas({
@@ -62,7 +96,7 @@ export function FiltroStatusTarefas({
   );
 }
 
-export const FILTROS_INICIAIS: FiltrosState = { cidade: "", pessoa: "todos", status: "todas" };
+export const FILTROS_INICIAIS: FiltrosState = { cidade: "", pessoa: "todos", status: "todas", busca: "" };
 
 interface Visao {
   pracas: Assistente[];
@@ -71,8 +105,10 @@ interface Visao {
 }
 
 /** Aplica cidade + cargo/pessoa sobre o que o perfil já pode ver (o RBAC é decidido antes, em roles.ts). */
-export function aplicarFiltros(visao: Visao, { cidade, pessoa, status }: FiltrosState): Visao {
+export function aplicarFiltros(visao: Visao, { cidade, pessoa, status, busca }: FiltrosState): Visao {
   const { pracas, quadrosEscalonamento, tarefas } = visao;
+  const termoNome = normalize(busca.trim());
+  const termoCpf = somenteDigitos(busca);
   const pracaDaCidade = cidade ? CIDADES_FILTRO.find((c) => c.chave === cidade)?.praca ?? null : null;
 
   let pracasF = pracas;
@@ -99,12 +135,13 @@ export function aplicarFiltros(visao: Visao, { cidade, pessoa, status }: Filtros
   }
 
   const porCidade = cidade ? tarefas.filter((t) => t.origem === "manual" || normalize(t.cidade ?? "").includes(cidade)) : tarefas;
-  const tarefasF =
+  const porStatus =
     status === "a_fazer"
       ? porCidade.filter((t) => !efetivamenteConcluida(t))
       : status === "feitas"
         ? porCidade.filter(efetivamenteConcluida)
         : porCidade;
+  const tarefasF = busca.trim() ? porStatus.filter((t) => tarefaBateNaBusca(t, termoNome, termoCpf)) : porStatus;
   return { pracas: pracasF, quadrosEscalonamento: escalF, tarefas: tarefasF };
 }
 
@@ -123,10 +160,12 @@ export function FiltrosTarefas({
   acao?: ReactNode;
 }) {
   const cidades = CIDADES_FILTRO.filter((c) => pracas.includes(c.praca));
-  const ativo = valor.cidade !== "" || valor.pessoa !== "todos" || valor.status !== "todas";
+  const ativo = valor.cidade !== "" || valor.pessoa !== "todos" || valor.status !== "todas" || valor.busca !== "";
 
   return (
     <div className="surface-card mb-4 flex flex-wrap items-end gap-3 p-3 sm:mb-6 sm:gap-4 sm:p-4">
+      <BuscaTarefas valor={valor.busca} onChange={(busca) => onChange({ ...valor, busca })} />
+
       <label className="flex w-full flex-col gap-1.5 sm:w-56">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Cidade</span>
         <select

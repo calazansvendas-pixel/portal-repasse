@@ -31,6 +31,8 @@ export interface AvaliacaoDinamica {
   numerosRelacionados: string[] | null;
   // Nomes dos clientes, na mesma ordem de numerosRelacionados — só para exibição direta no card.
   nomesRelacionados?: string[] | null;
+  // CPF/CNPJ de cada pasta, na MESMA ordem de nomesRelacionados — idem, só exibição.
+  cpfsRelacionados?: string[] | null;
   imobiliaria: string;
   etapa: string;
   tipoPendencia: string;
@@ -320,6 +322,10 @@ function nomesDoGrupo(grupo: LinhaPlanilha[]): string[] {
   return grupo.map((l) => l.clienteNome || `Pasta ${l.numero}`);
 }
 
+function cpfsDoGrupo(grupo: LinhaPlanilha[]): string[] {
+  return grupo.map((l) => l.cpfCnpj ?? "");
+}
+
 function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[]): AvaliacaoDinamica[] {
   const quadro = quadroParaAgregado(regra);
   const limite = regra.parametros.quantidade ?? 0;
@@ -343,6 +349,7 @@ function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[
         quadro,
         numerosRelacionados: grupo.map((l) => l.numero),
         nomesRelacionados: nomesDoGrupo(grupo),
+        cpfsRelacionados: cpfsDoGrupo(grupo),
         imobiliaria: "",
         etapa: etapaAlvo,
         tipoPendencia: regra.nomeRegra,
@@ -374,6 +381,7 @@ function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[
       quadro,
       numerosRelacionados: grupo.map((l) => l.numero),
       nomesRelacionados: nomesDoGrupo(grupo),
+      cpfsRelacionados: cpfsDoGrupo(grupo),
       imobiliaria: dimensao === "imobiliaria" ? valor : "",
       etapa: dimensao === "etapa" ? valor : "",
       tipoPendencia: regra.nomeRegra,
@@ -458,6 +466,7 @@ function avaliarQualidadeReprovacao(regra: RegraAuditoria, todasLinhas: LinhaPla
       quadro,
       numerosRelacionados: grupo.map((l) => l.numero),
       nomesRelacionados: nomesDoGrupo(grupo),
+      cpfsRelacionados: cpfsDoGrupo(grupo),
       imobiliaria,
       etapa: "",
       tipoPendencia: regra.nomeRegra,
@@ -489,6 +498,7 @@ function avaliarDuplicidade(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[])
       quadro,
       numerosRelacionados: numeros,
       nomesRelacionados: nomesDoGrupo(grupo),
+      cpfsRelacionados: cpfsDoGrupo(grupo),
       imobiliaria: grupo[0].responsavel,
       etapa: "",
       tipoPendencia: regra.nomeRegra,
@@ -531,6 +541,7 @@ function avaliarAcoesPositivas(
       quadro,
       numerosRelacionados: grupo.map((l) => l.numero),
       nomesRelacionados: nomesDoGrupo(grupo),
+      cpfsRelacionados: cpfsDoGrupo(grupo),
       imobiliaria,
       etapa: "",
       tipoPendencia: regra.nomeRegra,

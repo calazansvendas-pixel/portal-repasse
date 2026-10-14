@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Bell, Pencil, Trash2, Undo2 } from "lucide-react";
 import type { Assistente, ClienteEnvolvido, Quadro, Role, Tarefa } from "@/lib/types";
 import { formatDateBR, formatDateTimeBR, hojeISO } from "@/lib/utils/dates";
+import { formatarCpfCnpj } from "@/lib/utils/cpf";
 import { Modal } from "@/components/ui/Modal";
 import { PRACAS_FILTRO_UI, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
 import type { DestinoResponsavelCustomizado, LembreteInput } from "@/lib/services/tarefasService";
@@ -463,6 +464,9 @@ export function DetalhesTarefaModal({
                 ? `${tarefa.tipoPendencia}: ${clientes.length} pastas`
                 : tarefa.clienteNome || "Cliente não identificado"}
           </p>
+          {!isManual && !isGargalo && tarefa.cpfCnpj && (
+            <p className="text-xs text-ink-muted">CPF/CNPJ: {formatarCpfCnpj(tarefa.cpfCnpj)}</p>
+          )}
           <p className="text-xs text-ink-muted">
             {isManual
               ? `Enviado por: ${tarefa.criadaPorNome || "—"}`

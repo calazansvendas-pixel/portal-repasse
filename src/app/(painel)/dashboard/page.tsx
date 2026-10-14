@@ -14,7 +14,7 @@ import { useTarefasPorQuadros } from "@/lib/hooks/useTarefas";
 import { Topbar } from "@/components/layout/Topbar";
 import { TaskBoard } from "@/components/tarefas/TaskBoard";
 import { NovaTarefaModal } from "@/components/tarefas/NovaTarefaModal";
-import { FILTROS_INICIAIS, FiltroStatusTarefas, FiltrosTarefas, aplicarFiltros } from "@/components/tarefas/FiltrosTarefas";
+import { BuscaTarefas, FILTROS_INICIAIS, FiltroStatusTarefas, FiltrosTarefas, aplicarFiltros } from "@/components/tarefas/FiltrosTarefas";
 
 export default function DashboardPage() {
   const { profile } = useAuth();
@@ -57,9 +57,12 @@ export default function DashboardPage() {
         </p>
       ) : (
         <>
-          {/* Assistentes não têm a barra de filtros, mas também podem separar A fazer / Feitas. */}
+          {/* Assistentes não têm a barra de filtros completa, mas têm busca e A fazer / Feitas. */}
           {!mostrarFiltros && (
-            <FiltroStatusTarefas valor={filtros.status} onChange={(status) => setFiltros({ ...filtros, status })} />
+            <div className="flex flex-wrap items-end gap-3">
+              <BuscaTarefas valor={filtros.busca} onChange={(busca) => setFiltros({ ...filtros, busca })} />
+              <FiltroStatusTarefas valor={filtros.status} onChange={(status) => setFiltros({ ...filtros, status })} />
+            </div>
           )}
           {mostrarFiltros && (
             <FiltrosTarefas

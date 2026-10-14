@@ -81,7 +81,10 @@ interface DadosParaReconciliar {
   numerosRelacionados?: string[];
   // Nomes dos clientes de numerosRelacionados, na mesma ordem — só para exibição direta no card.
   nomesRelacionados?: string[];
+  // CPF/CNPJ de cada pasta de numerosRelacionados, na MESMA ordem — idem, só exibição.
+  cpfsRelacionados?: string[];
   clienteNome?: string | null;
+  cpfCnpj?: string | null;
   dataEntrada?: string | null;
   // Trajeto completo da pasta já acumulado na base (origem "linha" apenas —
   // agregados não têm uma única pasta/etapa a rastrear).
@@ -266,8 +269,10 @@ export async function executarAuditoriaDiaria(params: {
           observacaoOriginal: dados.observacaoOriginal,
           numerosRelacionados: dados.numerosRelacionados ?? null,
           nomesRelacionados: dados.nomesRelacionados ?? null,
+          cpfsRelacionados: dados.cpfsRelacionados ?? null,
           ...(dados.clientesEnvolvidos ? { clientesEnvolvidos: dados.clientesEnvolvidos } : {}),
           clienteNome: dados.clienteNome ?? null,
+          cpfCnpj: dados.cpfCnpj ?? null,
           dataEntrada: dados.dataEntrada ?? null,
           historicoEtapas: dados.historicoPasta ?? tarefaAtiva.data.historicoEtapas ?? [],
           atualizadoEm: agora,
@@ -296,7 +301,9 @@ export async function executarAuditoriaDiaria(params: {
         numero: dados.numero,
         numerosRelacionados: dados.numerosRelacionados ?? null,
         nomesRelacionados: dados.nomesRelacionados ?? null,
+        cpfsRelacionados: dados.cpfsRelacionados ?? null,
         clienteNome: dados.clienteNome ?? null,
+        cpfCnpj: dados.cpfCnpj ?? null,
         dataEntrada: dados.dataEntrada ?? null,
         cidade: dados.cidade,
         praca: dados.quadro,
@@ -405,6 +412,7 @@ export async function executarAuditoriaDiaria(params: {
       origem: "linha" as const,
       numero: linha.numero,
       clienteNome: linha.clienteNome,
+      cpfCnpj: linha.cpfCnpj,
       dataEntrada: linha.dataEntrada,
       historicoPasta,
       cidade: linha.cidade,
@@ -460,6 +468,7 @@ export async function executarAuditoriaDiaria(params: {
       numero: null,
       numerosRelacionados: dinamica.numerosRelacionados ?? undefined,
       nomesRelacionados: dinamica.nomesRelacionados ?? undefined,
+      cpfsRelacionados: dinamica.cpfsRelacionados ?? undefined,
       cidade: "",
       quadro: dinamica.quadro,
       imobiliaria: dinamica.imobiliaria,

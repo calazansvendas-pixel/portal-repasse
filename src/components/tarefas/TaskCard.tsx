@@ -24,6 +24,7 @@ import { meuQuadroInterativo, resolvePracaPorCidade, type PracaOverrides } from 
 import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { useColaboradores } from "@/lib/hooks/useColaboradores";
 import { formatDateBR, lembreteVencido } from "@/lib/utils/dates";
+import { formatarCpfCnpj } from "@/lib/utils/cpf";
 import { cn } from "@/lib/utils/cn";
 import { ConfirmarExclusaoModal, DetalhesTarefaModal, EditarLembreteModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
@@ -252,7 +253,12 @@ export function TaskCard({
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setModal("detalhes")}
             className="flex min-h-[44px] cursor-pointer items-center justify-between gap-3 transition-opacity hover:opacity-80"
           >
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-ink-primary dark:text-white">{nome}</p>
+              {!isManual && !isAgregado && tarefa.cpfCnpj && (
+                <p className="truncate text-xs text-ink-muted">CPF/CNPJ: {formatarCpfCnpj(tarefa.cpfCnpj)}</p>
+              )}
+            </div>
             <div className="flex shrink-0 items-center gap-2">
               {itensMenu.length > 0 && <MenuTarefa itens={itensMenu} />}
               <span className="rounded-full bg-status-success/15 p-1.5 text-status-success">
@@ -415,6 +421,9 @@ export function TaskCard({
             <p className="break-words text-sm font-semibold leading-snug text-ink-primary dark:text-white">
               {tarefa.clienteNome || "Cliente não identificado"}
             </p>
+            {tarefa.cpfCnpj && (
+              <p className="text-xs text-ink-muted">CPF/CNPJ: {formatarCpfCnpj(tarefa.cpfCnpj)}</p>
+            )}
             <p className="break-words text-xs text-ink-muted">{tarefa.imobiliaria || "Imobiliária não informada"}</p>
           </div>
         )}
@@ -426,14 +435,19 @@ export function TaskCard({
       </p>
 
       {/* Lista direta dos clientes envolvidos (agregados do Motor de Regras) — sem precisar abrir
-          modal ou sanfona para ver quem está no gargalo. */}
+          modal ou sanfona para ver quem está no gargalo. CPF ao lado de cada um (quando
+          disponível) para localizar rápido qual proponente é qual dentro do gargalo. */}
       {isAgregado && !!tarefa.nomesRelacionados?.length && (
         <ul className="space-y-0.5 text-sm text-gray-600 dark:text-white/60">
-          {tarefa.nomesRelacionados.map((nome, i) => (
-            <li key={i} className="truncate">
-              {nome}
-            </li>
-          ))}
+          {tarefa.nomesRelacionados.map((nome, i) => {
+            const cpf = tarefa.cpfsRelacionados?.[i];
+            return (
+              <li key={i} className="truncate">
+                {nome}
+                {cpf && <span className="text-xs text-gray-400 dark:text-white/40"> — {formatarCpfCnpj(cpf)}</span>}
+              </li>
+            );
+          })}
         </ul>
       )}
 
