@@ -425,6 +425,9 @@ export function TaskCard({
               <p className="text-xs text-ink-muted">CPF/CNPJ: {formatarCpfCnpj(tarefa.cpfCnpj)}</p>
             )}
             <p className="break-words text-xs text-ink-muted">{tarefa.imobiliaria || "Imobiliária não informada"}</p>
+            {tarefa.responsavelNome && (
+              <p className="truncate text-xs font-medium text-brand-primary">Responsável: {tarefa.responsavelNome}</p>
+            )}
           </div>
         )}
       </div>

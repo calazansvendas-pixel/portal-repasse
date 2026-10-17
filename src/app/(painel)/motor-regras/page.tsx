@@ -14,6 +14,7 @@ import {
 import { Topbar } from "@/components/layout/Topbar";
 import { FormularioRegra } from "@/components/regras/FormularioRegra";
 import { MapeamentoPracas } from "@/components/regras/MapeamentoPracas";
+import { MapeamentoEmpreendimentos } from "@/components/regras/MapeamentoEmpreendimentos";
 import {
   CARGO_DESTINO_LABEL,
   CATEGORIA_GATILHO_LABEL,
@@ -118,6 +119,7 @@ export default function MotorDeRegrasPage() {
       </div>
 
       <MapeamentoPracas />
+      <MapeamentoEmpreendimentos />
 
       {erro && (
         <div className="flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger">

@@ -1,7 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { LinhaPlanilha } from "./parseSheet";
 import { ehFimDeEsteira } from "./taskRouter";
-import { resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
+import { resolvePracaPorCidade, type MatrizEmpreendimentos, type PracaOverrides } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
 import {
@@ -86,6 +86,11 @@ interface DadosParaReconciliar {
   clienteNome?: string | null;
   cpfCnpj?: string | null;
   dataEntrada?: string | null;
+  // Resolvido pelo Mapeamento de Empreendimentos (ou destino fixo "pessoa" da regra) — ver
+  // resolverDestinoLinha em dynamicRuleEngine.ts. null = o quadro não aponta uma pessoa
+  // específica além de quem já é dono daquela praça/cargo.
+  responsavelId?: string | null;
+  responsavelNome?: string | null;
   // Trajeto completo da pasta já acumulado na base (origem "linha" apenas —
   // agregados não têm uma única pasta/etapa a rastrear).
   historicoPasta?: EtapaHistorico[];
@@ -178,6 +183,13 @@ export async function executarAuditoriaDiaria(params: {
   const mapeamentoSnap = await db.collection("configuracoes").doc("mapeamentoPracas").get();
   const pracaOverrides = (mapeamentoSnap.data()?.overrides as PracaOverrides | undefined) ?? null;
 
+  // Matriz de Empreendimentos: atribuição colaborador <-> empreendimento <-> etapas, com prioridade
+  // sobre a praça por cidade quando a etapa da pasta bate (ver resolverDestinoLinha em
+  // dynamicRuleEngine.ts). Mesmo padrão de leitura única por importação do mapeamento de praças, acima.
+  const mapeamentoEmpreendimentosSnap = await db.collection("configuracoes").doc("mapeamentoEmpreendimentos").get();
+  const empreendimentoOverrides =
+    (mapeamentoEmpreendimentosSnap.data()?.overrides as MatrizEmpreendimentos | undefined) ?? null;
+
   const resumo: ResumoImportacao = {
     importacaoId,
     sheetName,
@@ -263,7 +275,9 @@ export async function executarAuditoriaDiaria(params: {
           slaStatus: dados.slaStatus,
           imobiliaria: dados.imobiliaria,
           tipoPendencia: dados.tipoPendencia,
-          ...(dados.reroteavel && !temOverrideManual ? { praca: dados.quadro, nivel: dados.nivel } : {}),
+          ...(dados.reroteavel && !temOverrideManual
+            ? { praca: dados.quadro, nivel: dados.nivel, responsavelId: dados.responsavelId ?? null, responsavelNome: dados.responsavelNome ?? null }
+            : {}),
           // Se a Gerência reescreveu o texto, a importação não o sobrescreve.
           descricao: tarefaAtiva.data.descricaoEditada ? tarefaAtiva.data.descricao : dados.descricao,
           observacaoOriginal: dados.observacaoOriginal,
@@ -307,6 +321,8 @@ export async function executarAuditoriaDiaria(params: {
         dataEntrada: dados.dataEntrada ?? null,
         cidade: dados.cidade,
         praca: dados.quadro,
+        responsavelId: dados.responsavelId ?? null,
+        responsavelNome: dados.responsavelNome ?? null,
         imobiliaria: dados.imobiliaria,
         etapa: dados.etapa,
         prazoEtapa: dados.prazoEtapa,
@@ -442,12 +458,22 @@ export async function executarAuditoriaDiaria(params: {
 
     // Motor de Regras Dinâmicas — categorias por pasta: SLA/Estagnação, Análise Textual,
     // Regressão e Conformidade (vencimento longo).
-    for (const dinamica of avaliarRegrasPorLinha(regrasDinamicasAtivas, linha, historicoPasta, antigo, importacaoId, pracaOverrides)) {
+    for (const dinamica of avaliarRegrasPorLinha(
+      regrasDinamicasAtivas,
+      linha,
+      historicoPasta,
+      antigo,
+      importacaoId,
+      pracaOverrides,
+      empreendimentoOverrides
+    )) {
       reconciliarTarefa({
         ...camposComuns,
         chaveRegra: dinamica.chaveRegra,
         nivel: NIVEL_POR_QUADRO[dinamica.quadro],
         quadro: dinamica.quadro,
+        responsavelId: dinamica.responsavelId ?? null,
+        responsavelNome: dinamica.responsavelNome ?? null,
         tipoPendencia: dinamica.tipoPendencia,
         descricao: dinamica.descricao,
         condicaoAtiva: dinamica.condicaoAtiva,

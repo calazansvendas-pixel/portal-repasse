@@ -49,6 +49,50 @@ export function cidadePertenceAPraca(cidade: string, praca: Assistente): boolean
   return CIDADES_FILTRO.filter((c) => c.praca === praca).some((c) => alvo.includes(c.chave));
 }
 
+/** Código de etapa, sem o sufixo descritivo: "1.17 - Documentação incompleta" -> "1.17" (mesmo
+ * critério usado no Kanban e no Motor de Regras para casar uma etapa-alvo com a etapa da linha). */
+export function codigoEtapa(etapa: string): string {
+  return etapa.trim().split(" - ")[0]?.trim() || etapa.trim();
+}
+
+/** Uma atribuição de Empreendimento + Etapa (Gerência): este colaborador cuida das pastas daquele
+ * empreendimento especificamente nas etapas listadas — ex.: Paulo cuida da "Vista dos Colibris" só
+ * nas etapas de documentação, o resto segue o roteamento padrão por cidade/etapa. Empreendimentos e
+ * etapas são extraídos dinamicamente das pastas já importadas (coleção "registros") — não há
+ * cadastro manual de nenhum dos dois; só o vínculo colaborador<->empreendimento<->etapas é
+ * configurado pela Gerência. O colaborador pode ser qualquer um com quadro próprio
+ * (assistente/coordenador/analista), não só os 3 assistentes regionais, por isso guarda `quadro`
+ * junto (mesmo padrão de `pessoaQuadro` no Motor de Regras). */
+export interface AtribuicaoEmpreendimento {
+  colaboradorId: string;
+  colaboradorNome: string;
+  quadro: Quadro;
+  etapas: string[]; // códigos de etapa (ver codigoEtapa) sob responsabilidade deste colaborador
+}
+
+/** Chave = normalize(nome do empreendimento), igual ao nome na coluna "Empreendimento" da planilha
+ * (ver LinhaPlanilha.produto em parseSheet.ts). Ausente/undefined numa chave, ou nenhuma etapa da
+ * linha batendo nas atribuições cadastradas, = sem responsável fixo: cai no roteamento padrão por
+ * cidade (resolvePracaPorCidade) — fallback em cascata, nunca fica sem destino por causa disto. */
+export type MatrizEmpreendimentos = Partial<Record<string, AtribuicaoEmpreendimento[]>>;
+
+/** Dados o empreendimento e a etapa da pasta ("Empreendimento"/"Etapa do processo" da planilha),
+ * resolve o responsável fixo cadastrado pela Gerência para ESTA etapa específica — ou null se não
+ * houver nenhuma atribuição que cubra essa etapa (quem chama cai de volta para
+ * resolvePracaPorCidade). */
+export function resolveResponsavelPorEmpreendimento(
+  produto: string | null | undefined,
+  etapa: string | null | undefined,
+  matriz?: MatrizEmpreendimentos | null
+): AtribuicaoEmpreendimento | null {
+  const chaveProduto = normalize(produto ?? "");
+  if (!chaveProduto) return null;
+  const atribuicoes = matriz?.[chaveProduto];
+  if (!atribuicoes?.length) return null;
+  const codigo = codigoEtapa(etapa ?? "");
+  return atribuicoes.find((a) => a.etapas.includes(codigo)) ?? null;
+}
+
 /** Quais praças (quadros de tarefas) o usuário pode enxergar. */
 export function pracasVisiveis(profile: UserProfile): Assistente[] {
   const todas: Assistente[] = ["layza", "eliane", "catharina"];

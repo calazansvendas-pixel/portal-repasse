@@ -474,6 +474,9 @@ export function DetalhesTarefaModal({
                 ? tarefa.descricao
                 : tarefa.imobiliaria || "Imobiliária não informada"}
           </p>
+          {!isManual && !isGargalo && tarefa.responsavelNome && (
+            <p className="text-xs font-medium text-brand-primary">Responsável: {tarefa.responsavelNome}</p>
+          )}
         </div>
 
         {tarefa.lembreteAtivo && tarefa.lembreteMensagem && (

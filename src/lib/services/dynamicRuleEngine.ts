@@ -1,5 +1,13 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { cidadePertenceAPraca, normalize, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
+import {
+  cidadePertenceAPraca,
+  codigoEtapa,
+  normalize,
+  resolvePracaPorCidade,
+  resolveResponsavelPorEmpreendimento,
+  type MatrizEmpreendimentos,
+  type PracaOverrides,
+} from "@/lib/auth/roles";
 import { ehFimDeEsteira } from "./taskRouter";
 import type { LinhaPlanilha } from "./parseSheet";
 import type { CategoriaGatilho, RegraAuditoria } from "@/lib/types/regrasAuditoria";
@@ -33,6 +41,11 @@ export interface AvaliacaoDinamica {
   nomesRelacionados?: string[] | null;
   // CPF/CNPJ de cada pasta, na MESMA ordem de nomesRelacionados — idem, só exibição.
   cpfsRelacionados?: string[] | null;
+  // Colaborador resolvido pelo Mapeamento de Empreendimentos (ou pelo destino fixo "pessoa" da
+  // própria regra) — ver resolverDestinoLinha. Ausente = o quadro não aponta UMA pessoa específica
+  // além de quem já é dono daquela praça/cargo.
+  responsavelId?: string | null;
+  responsavelNome?: string | null;
   imobiliaria: string;
   etapa: string;
   tipoPendencia: string;
@@ -52,6 +65,10 @@ export interface ContextoAvaliacao {
   // Substituições explícitas do vínculo padrão de praça (Gerência) — só afeta cargoDestino
   // "assistente", nas categorias por linha (as agregadas nunca resolvem "assistente" com segurança).
   pracaOverrides?: PracaOverrides | null;
+  // Mapeamento de Empreendimentos (Gerência): mesma ideia do mapeamento de praças, mas pelo nome
+  // do empreendimento — tem prioridade sobre a praça por cidade. Só afeta cargoDestino
+  // "assistente", nas categorias por linha (idem pracaOverrides).
+  empreendimentoOverrides?: MatrizEmpreendimentos | null;
 }
 
 /** Lê só as regras com `ativo === true` — as desligadas não custam nenhum processamento. */
@@ -79,13 +96,45 @@ function diasEntre(dataMaisRecenteISO: string, dataMaisAntigaISO: string): numbe
   return Math.floor((Date.parse(dataMaisRecenteISO.slice(0, 10)) - Date.parse(dataMaisAntigaISO.slice(0, 10))) / 86_400_000);
 }
 
+/** Resultado de resolver o destino de uma linha: o quadro (coluna do painel) e, quando a
+ * resolução aponta para UMA pessoa específica (destino fixo da regra, ou Mapeamento de
+ * Empreendimentos), quem é ela — para o card poder exibir/registrar o responsável. */
+interface DestinoLinha {
+  quadro: Quadro;
+  responsavelId?: string | null;
+  responsavelNome?: string | null;
+}
+
 /** cargoDestino -> Quadro só quando dá para rotear com confiança para uma única coluna do painel.
  * Destino "pessoa" fixa o quadro do colaborador escolhido e NUNCA passa pela praça da imobiliária
- * — nem na variante de linha, nem na agregada. */
-function quadroParaLinha(regra: RegraAuditoria, cidade: string, overrides?: PracaOverrides | null): Quadro | null {
-  if (regra.destinoTipo === "pessoa") return regra.pessoaQuadro ?? null;
-  if (regra.cargoDestino === "assistente") return resolvePracaPorCidade(cidade, overrides);
-  if (regra.cargoDestino === "coordenador" || regra.cargoDestino === "analista") return regra.cargoDestino;
+ * nem pela Matriz de Empreendimentos — nem na variante de linha, nem na agregada. Para cargoDestino
+ * "assistente", roteamento em cascata: 1) colaborador vinculado a este empreendimento NESTA etapa
+ * específica (Matriz de Empreendimentos, ver resolveResponsavelPorEmpreendimento em roles.ts); 2)
+ * sem vínculo que cubra a etapa, cai no roteamento padrão por cidade — mesmo fallback de sempre. */
+function resolverDestinoLinha(
+  regra: RegraAuditoria,
+  linha: LinhaPlanilha,
+  pracaOverrides?: PracaOverrides | null,
+  matrizEmpreendimentos?: MatrizEmpreendimentos | null
+): DestinoLinha | null {
+  if (regra.destinoTipo === "pessoa") {
+    return regra.pessoaQuadro
+      ? { quadro: regra.pessoaQuadro, responsavelId: regra.pessoaId ?? null, responsavelNome: regra.pessoaNome ?? null }
+      : null;
+  }
+  if (regra.cargoDestino === "assistente") {
+    const porEmpreendimento = resolveResponsavelPorEmpreendimento(linha.produto, linha.etapa, matrizEmpreendimentos);
+    if (porEmpreendimento) {
+      return {
+        quadro: porEmpreendimento.quadro,
+        responsavelId: porEmpreendimento.colaboradorId,
+        responsavelNome: porEmpreendimento.colaboradorNome,
+      };
+    }
+    const quadro = resolvePracaPorCidade(linha.cidade, pracaOverrides);
+    return quadro ? { quadro } : null;
+  }
+  if (regra.cargoDestino === "coordenador" || regra.cargoDestino === "analista") return { quadro: regra.cargoDestino };
   return null; // "gerencia": sem quadro próprio no painel.
 }
 
@@ -117,15 +166,19 @@ export function avaliarRegra(regra: RegraAuditoria, ctxOriginal: ContextoAvaliac
   switch (categoria) {
     case "sla_estagnacao":
       return ctx.linha && ctx.historicoPasta
-        ? soArray(avaliarSlaEstagnacao(regra, ctx.linha, ctx.historicoPasta, ctx.pracaOverrides))
+        ? soArray(avaliarSlaEstagnacao(regra, ctx.linha, ctx.historicoPasta, ctx.pracaOverrides, ctx.empreendimentoOverrides))
         : [];
     case "analise_textual":
-      return ctx.linha ? soArray(avaliarAnaliseTextual(regra, ctx.linha, ctx.pracaOverrides)) : [];
+      return ctx.linha ? soArray(avaliarAnaliseTextual(regra, ctx.linha, ctx.pracaOverrides, ctx.empreendimentoOverrides)) : [];
     case "regressao":
-      return ctx.linha ? soArray(avaliarRegressao(regra, ctx.linha, ctx.antigo ?? null, ctx.pracaOverrides)) : [];
+      return ctx.linha
+        ? soArray(avaliarRegressao(regra, ctx.linha, ctx.antigo ?? null, ctx.pracaOverrides, ctx.empreendimentoOverrides))
+        : [];
     case "conformidade":
       if (regra.parametros.subtipoConformidade === "vencimento_longo") {
-        return ctx.linha ? soArray(avaliarVencimentoLongo(regra, ctx.linha, ctx.importacaoId, ctx.pracaOverrides)) : [];
+        return ctx.linha
+          ? soArray(avaliarVencimentoLongo(regra, ctx.linha, ctx.importacaoId, ctx.pracaOverrides, ctx.empreendimentoOverrides))
+          : [];
       }
       return ctx.todasLinhas ? avaliarDuplicidade(regra, ctx.todasLinhas) : [];
     case "volume_gargalo":
@@ -163,12 +216,14 @@ function avaliarSlaEstagnacao(
   regra: RegraAuditoria,
   linha: LinhaPlanilha,
   historicoPasta: EtapaHistorico[],
-  overrides?: PracaOverrides | null
+  overrides?: PracaOverrides | null,
+  empreendimentoOverrides?: MatrizEmpreendimentos | null
 ): AvaliacaoDinamica | null {
-  const quadro = quadroParaLinha(regra, linha.cidade, overrides);
+  const destino = resolverDestinoLinha(regra, linha, overrides, empreendimentoOverrides);
   // `dias: 0` é um gatilho válido (ação imediata ao entrar na etapa) — só falta configuração
   // quando o campo nem foi preenchido (undefined), nunca quando o valor é zero.
-  if (!quadro || regra.parametros.dias === undefined) return null;
+  if (!destino || regra.parametros.dias === undefined) return null;
+  const { quadro, responsavelId, responsavelNome } = destino;
   const diasLimite = regra.parametros.dias;
   // A planilha traz a etapa com sufixo descritivo (ex.: "1.17 - Documentação incompleta"); a
   // regra cadastra só o código (ex.: "1.17"). Basta o código bater no início da etapa da linha.
@@ -186,6 +241,8 @@ function avaliarSlaEstagnacao(
     chaveRegra: `DINAMICA::${regra.id}::${linha.numero}`,
     origem: "linha",
     quadro,
+    responsavelId,
+    responsavelNome,
     numerosRelacionados: null,
     imobiliaria: linha.responsavel,
     etapa: linha.etapa,
@@ -203,17 +260,21 @@ function avaliarSlaEstagnacao(
 function avaliarAnaliseTextual(
   regra: RegraAuditoria,
   linha: LinhaPlanilha,
-  overrides?: PracaOverrides | null
+  overrides?: PracaOverrides | null,
+  empreendimentoOverrides?: MatrizEmpreendimentos | null
 ): AvaliacaoDinamica | null {
-  const quadro = quadroParaLinha(regra, linha.cidade, overrides);
+  const destino = resolverDestinoLinha(regra, linha, overrides, empreendimentoOverrides);
   const palavraChave = regra.parametros.palavraChave?.trim();
-  if (!quadro || !palavraChave) return null;
+  if (!destino || !palavraChave) return null;
+  const { quadro, responsavelId, responsavelNome } = destino;
 
   const bate = normalize(linha.observacao).includes(normalize(palavraChave));
   return {
     chaveRegra: `DINAMICA::${regra.id}::${linha.numero}`,
     origem: "linha",
     quadro,
+    responsavelId,
+    responsavelNome,
     numerosRelacionados: null,
     imobiliaria: linha.responsavel,
     etapa: linha.etapa,
@@ -237,10 +298,12 @@ function avaliarRegressao(
   regra: RegraAuditoria,
   linha: LinhaPlanilha,
   antigo: Registro | null,
-  overrides?: PracaOverrides | null
+  overrides?: PracaOverrides | null,
+  empreendimentoOverrides?: MatrizEmpreendimentos | null
 ): AvaliacaoDinamica | null {
-  const quadro = quadroParaLinha(regra, linha.cidade, overrides);
-  if (!quadro || !antigo) return null;
+  const destino = resolverDestinoLinha(regra, linha, overrides, empreendimentoOverrides);
+  if (!destino || !antigo) return null;
+  const { quadro, responsavelId, responsavelNome } = destino;
 
   const etapaAntiga = valorNumericoDaEtapa(antigo.etapa);
   const etapaNova = valorNumericoDaEtapa(linha.etapa);
@@ -257,6 +320,8 @@ function avaliarRegressao(
     chaveRegra: `DINAMICA::${regra.id}::${linha.numero}`,
     origem: "linha",
     quadro,
+    responsavelId,
+    responsavelNome,
     numerosRelacionados: null,
     imobiliaria: linha.responsavel,
     etapa: linha.etapa,
@@ -277,10 +342,12 @@ function avaliarVencimentoLongo(
   regra: RegraAuditoria,
   linha: LinhaPlanilha,
   importacaoId: string,
-  overrides?: PracaOverrides | null
+  overrides?: PracaOverrides | null,
+  empreendimentoOverrides?: MatrizEmpreendimentos | null
 ): AvaliacaoDinamica | null {
-  const quadro = quadroParaLinha(regra, linha.cidade, overrides);
-  if (!quadro || regra.parametros.dias === undefined || !linha.prazoEtapa) return null;
+  const destino = resolverDestinoLinha(regra, linha, overrides, empreendimentoOverrides);
+  if (!destino || regra.parametros.dias === undefined || !linha.prazoEtapa) return null;
+  const { quadro, responsavelId, responsavelNome } = destino;
   const diasLimite = regra.parametros.dias;
 
   const diasAteVencer = diasEntre(linha.prazoEtapa, importacaoId);
@@ -288,6 +355,8 @@ function avaliarVencimentoLongo(
     chaveRegra: `DINAMICA::${regra.id}::${linha.numero}`,
     origem: "linha",
     quadro,
+    responsavelId,
+    responsavelNome,
     numerosRelacionados: null,
     imobiliaria: linha.responsavel,
     etapa: linha.etapa,
@@ -306,11 +375,6 @@ function avaliarVencimentoLongo(
 // ---------------------------------------------------------------------------
 
 const PREFIXO_NUMERICO_NOME = /^(\d+\.\d+)/;
-
-/** Código de etapa de uma linha: "1.17 - Documentação incompleta" -> "1.17" (mesmo critério do Kanban). */
-function codigoEtapaLinha(etapa: string): string {
-  return etapa.trim().split(" - ")[0]?.trim() || etapa.trim();
-}
 
 /** Prefixo numérico do nome da regra, se houver — mesma convenção da ordenação em motor-regras/page.tsx. */
 function etapaAlvoDoNome(nomeRegra: string): string | null {
@@ -339,7 +403,7 @@ function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[
   const etapaAlvo = dimensao === "etapa" ? etapaAlvoDoNome(regra.nomeRegra) : null;
 
   if (etapaAlvo) {
-    const grupo = todasLinhas.filter((l) => !ehFimDeEsteira(l.etapa) && codigoEtapaLinha(l.etapa) === etapaAlvo);
+    const grupo = todasLinhas.filter((l) => !ehFimDeEsteira(l.etapa) && codigoEtapa(l.etapa) === etapaAlvo);
     // Sempre emite — mesmo com 0 pastas — para que reconciliarTarefa feche uma tarefa antiga se
     // a contagem cair a zero; condicaoAtiva: false nunca CRIA uma tarefa nova (ver auditEngine.ts).
     return [
@@ -606,9 +670,10 @@ export function avaliarRegrasPorLinha(
   historicoPasta: EtapaHistorico[],
   antigo: Registro | null,
   importacaoId: string,
-  pracaOverrides?: PracaOverrides | null
+  pracaOverrides?: PracaOverrides | null,
+  empreendimentoOverrides?: MatrizEmpreendimentos | null
 ): AvaliacaoDinamica[] {
-  const ctx: ContextoAvaliacao = { linha, historicoPasta, antigo, importacaoId, pracaOverrides };
+  const ctx: ContextoAvaliacao = { linha, historicoPasta, antigo, importacaoId, pracaOverrides, empreendimentoOverrides };
   return regras.flatMap((r) => avaliarRegra(r, ctx));
 }
 

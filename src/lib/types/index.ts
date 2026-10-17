@@ -159,6 +159,13 @@ export interface Tarefa {
   // do campo ficou "praca" por compatibilidade com o índice do Firestore já
   // publicado — mas o tipo agora é o Quadro completo, não só Assistente.
   praca: Quadro;
+  // Colaborador resolvido automaticamente pelo Mapeamento de Empreendimentos (Gerência) — tem
+  // prioridade sobre o roteamento padrão por cidade, mas NÃO é um lock manual: reavaliado a cada
+  // importação, e cede para pracaCustomizada/responsavelCustomizadoId se a Gerência definir um
+  // override manual no cartão (ver auditEngine.ts/reconciliarTarefa). null = quadro resolvido só
+  // por cidade/cargo, sem empreendimento mapeado.
+  responsavelId?: string | null;
+  responsavelNome?: string | null;
   imobiliaria: string;
   etapa: string;
   prazoEtapa: string | null;
