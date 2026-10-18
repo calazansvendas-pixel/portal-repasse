@@ -12,6 +12,7 @@ import { GargalosChart } from "@/components/dashboard/GargalosChart";
 import { EvolucaoDiariaChart } from "@/components/dashboard/EvolucaoDiariaChart";
 import { RankingParceiros } from "@/components/dashboard/RankingParceiros";
 import { MapaTreinamento } from "@/components/dashboard/MapaTreinamento";
+import { ProdutividadeColaboradores } from "@/components/dashboard/ProdutividadeColaboradores";
 import { RelatorioExecutivo } from "@/components/dashboard/RelatorioExecutivo";
 
 const JANELAS = [7, 14, 21, 30, 60, 90];
@@ -148,6 +149,8 @@ export default function AnalyticsPage() {
                 tone="warning"
               />
             </div>
+
+            <ProdutividadeColaboradores dados={dados.produtividade} dias={dias} />
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <GargalosChart dados={dados.evolucao} />

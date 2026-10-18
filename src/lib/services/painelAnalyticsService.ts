@@ -1,6 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { lerAnaliseSnapshots, lerTarefasDaJanela, DIAS_PADRAO } from "@/lib/server/analytics";
+import { lerAnaliseSnapshots, lerTarefasDaJanela, lerTarefasAtivas, lerColaboradoresAtivos, DIAS_PADRAO } from "@/lib/server/analytics";
 import { calcularMapaTreinamento, calcularRankingParceiros, type CruzamentoPendencia, type RankingParceiro } from "./analiseParceiros";
+import { calcularProdutividadeColaboradores, type ProdutividadeColaborador } from "./produtividadeColaboradores";
 import { codigoEtapa } from "@/lib/auth/roles";
 import type { EvolucaoEtapas } from "./analiseEtapas";
 import type { MetricasEstrategicas } from "./analiseEstrategica";
@@ -32,6 +33,8 @@ export interface PainelAnalyticsSnapshot {
   ranking: RankingParceiro[];
   mapa: CruzamentoPendencia[];
   totalTarefas: number;
+  // Carga e desempenho por colaborador individual (ver produtividadeColaboradores.ts).
+  produtividade: ProdutividadeColaborador[];
 }
 
 function calcularVolumePorImobiliaria(linhas: LinhaPlanilha[]): VolumeImobiliaria[] {
@@ -58,11 +61,13 @@ function calcularTaxaDocumentacaoIncompleta(linhas: LinhaPlanilha[]): number {
  */
 export async function recalcularPainelAnalytics(db: Firestore, importacaoId: string, linhas: LinhaPlanilha[]): Promise<void> {
   const dias = DIAS_PADRAO;
-  const [{ evolucao, estrategicas }, tarefas] = await Promise.all([
+  const [{ evolucao, estrategicas }, tarefasJanela, tarefasAtivas, colaboradores] = await Promise.all([
     lerAnaliseSnapshots(db, dias),
     lerTarefasDaJanela(db, dias),
+    lerTarefasAtivas(db),
+    lerColaboradoresAtivos(db),
   ]);
-  const lista = tarefas as Tarefa[];
+  const lista = tarefasJanela as Tarefa[];
 
   const snapshot: PainelAnalyticsSnapshot = {
     importacaoId,
@@ -75,6 +80,7 @@ export async function recalcularPainelAnalytics(db: Firestore, importacaoId: str
     ranking: calcularRankingParceiros(lista),
     mapa: calcularMapaTreinamento(lista),
     totalTarefas: lista.length,
+    produtividade: calcularProdutividadeColaboradores(colaboradores, tarefasAtivas, tarefasJanela),
   };
   await db.collection("analytics").doc("painel").set(snapshot);
 }

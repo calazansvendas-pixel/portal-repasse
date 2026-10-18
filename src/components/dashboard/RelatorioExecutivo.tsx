@@ -19,6 +19,12 @@ const PISO_PENDENCIAS_CRITICA = 3;
 const MAX_IMOBILIARIAS_CRITICAS = 8;
 const MAX_GARGALOS = 6;
 
+const ROLE_LABEL_RELATORIO: Record<string, string> = {
+  assistente: "Assistente",
+  coordenador: "Coordenador",
+  analista: "Analista",
+};
+
 function imobiliariasCriticas(ranking: RankingParceiro[]): RankingParceiro[] {
   return [...ranking]
     .filter((r) => r.totalPendencias >= PISO_PENDENCIAS_CRITICA && r.taxaFalhaPct > 0)
@@ -119,6 +125,42 @@ export function RelatorioExecutivo({
                   <tr key={g.etapa} className="border-b border-[#1F2417]/10">
                     <td className="py-1.5">{g.etapa}</td>
                     <td className="py-1.5 text-right tabular-nums">{g.diasMedios}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        <section className="mt-6 break-inside-avoid">
+          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-[#2F6B3C]">Produtividade por colaborador</h2>
+          {dados.produtividade.length === 0 ? (
+            <p className="text-sm text-[#5B6356]">Nenhum colaborador com quadro próprio cadastrado.</p>
+          ) : (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-[#1F2417]/20 text-left text-[11px] uppercase text-[#5B6356]">
+                  <th className="py-1.5">Colaborador</th>
+                  <th className="py-1.5">Papel</th>
+                  <th className="py-1.5 text-right">Ativas</th>
+                  <th className="py-1.5 text-right">Concluídas</th>
+                  <th className="py-1.5 text-right">Tempo médio</th>
+                  <th className="py-1.5 text-right">Dentro do prazo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.produtividade.map((c) => (
+                  <tr key={c.colaboradorId} className="border-b border-[#1F2417]/10">
+                    <td className="py-1.5">{c.colaboradorNome}</td>
+                    <td className="py-1.5">{ROLE_LABEL_RELATORIO[c.role] ?? c.role}</td>
+                    <td className="py-1.5 text-right tabular-nums">{c.ativas}</td>
+                    <td className="py-1.5 text-right tabular-nums">{c.concluidasNoPeriodo}</td>
+                    <td className="py-1.5 text-right tabular-nums">
+                      {c.tempoMedioConclusaoDias === null ? "—" : `${c.tempoMedioConclusaoDias} d`}
+                    </td>
+                    <td className="py-1.5 text-right tabular-nums">
+                      {c.taxaDentroDoPrazoPct === null ? "—" : `${c.taxaDentroDoPrazoPct}%`}
+                    </td>
                   </tr>
                 ))}
               </tbody>

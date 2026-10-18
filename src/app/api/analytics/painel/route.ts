@@ -2,8 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { podeVerAnalytics } from "@/lib/auth/roles";
 import { autenticar } from "@/lib/server/tarefasManuais";
-import { lerDias, lerAnaliseSnapshots, lerTarefasDaJanela, LIMITE_SNAPSHOTS, LIMITE_TAREFAS } from "@/lib/server/analytics";
+import {
+  lerDias,
+  lerAnaliseSnapshots,
+  lerTarefasDaJanela,
+  lerTarefasAtivas,
+  lerColaboradoresAtivos,
+  LIMITE_SNAPSHOTS,
+  LIMITE_TAREFAS,
+} from "@/lib/server/analytics";
 import { calcularMapaTreinamento, calcularRankingParceiros } from "@/lib/services/analiseParceiros";
+import { calcularProdutividadeColaboradores } from "@/lib/services/produtividadeColaboradores";
 import type { PainelAnalyticsSnapshot } from "@/lib/services/painelAnalyticsService";
 import type { Tarefa } from "@/lib/types";
 
@@ -43,16 +52,19 @@ export async function GET(req: NextRequest) {
         totalTarefas: painel.totalTarefas,
         taxaDocumentacaoIncompletaPct: painel.taxaDocumentacaoIncompletaPct,
         volumePorImobiliaria: painel.volumePorImobiliaria,
+        produtividade: painel.produtividade,
         ultimaImportacao,
         parcial: { snapshots: null, tarefas: null },
       });
     }
 
-    const [{ evolucao, estrategicas, truncado }, tarefas] = await Promise.all([
+    const [{ evolucao, estrategicas, truncado }, tarefasJanela, tarefasAtivas, colaboradores] = await Promise.all([
       lerAnaliseSnapshots(db, dias),
       lerTarefasDaJanela(db, dias),
+      lerTarefasAtivas(db),
+      lerColaboradoresAtivos(db),
     ]);
-    const lista = tarefas as Tarefa[];
+    const lista = tarefasJanela as Tarefa[];
 
     return NextResponse.json({
       dias,
@@ -63,6 +75,7 @@ export async function GET(req: NextRequest) {
       totalTarefas: lista.length,
       taxaDocumentacaoIncompletaPct: painel?.taxaDocumentacaoIncompletaPct ?? 0,
       volumePorImobiliaria: painel?.volumePorImobiliaria ?? [],
+      produtividade: calcularProdutividadeColaboradores(colaboradores, tarefasAtivas, tarefasJanela),
       ultimaImportacao,
       // Avisa a tela quando algum teto de leitura foi atingido (dados parciais).
       parcial: {
