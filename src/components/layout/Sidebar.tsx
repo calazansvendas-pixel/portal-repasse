@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { BarChart3, Building2, ChevronLeft, ChevronRight, LayoutDashboard, Search, UploadCloud, Workflow } from "lucide-react";
 import type { UserProfile } from "@/lib/types";
 import { ROLE_LABEL, ASSISTENTE_LABEL } from "@/lib/types";
+import { podeVerAnalytics } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
 
 const CHAVE_RECOLHIDA = "sidebar-recolhida";
@@ -23,6 +24,10 @@ function navItemsPara(profile: UserProfile): NavItem[] {
   if (profile.role === "gerencia" || profile.role === "coordenador" || profile.role === "analista") {
     items.push({ href: "/auditoria", label: "Auditoria de Planilha", icon: UploadCloud });
     items.push({ href: "/auditoria/cliente", label: "Dossiê do Cliente", icon: Search });
+  }
+  // Analytics: restrito à Gerência (ver podeVerAnalytics em roles.ts) — Coordenador e Analista não
+  // veem este item, mesmo tendo acesso à Auditoria de Planilha acima.
+  if (podeVerAnalytics(profile.role)) {
     items.push({ href: "/analytics", label: "Analytics", icon: BarChart3 });
   }
   if (profile.role === "gerencia" || profile.role === "coordenador") {

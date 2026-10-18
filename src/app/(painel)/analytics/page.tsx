@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardList, Hourglass, Rocket, Undo2, UserX } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, FileText, Hourglass, Printer, Rocket, Undo2, UserX } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { podeVerPainelAnalitico } from "@/lib/auth/roles";
+import { podeVerAnalytics } from "@/lib/auth/roles";
 import type { RankingParceiro } from "@/lib/services/analiseParceiros";
 import { usePainelAnalitico } from "@/lib/hooks/usePainelAnalitico";
 import { Topbar } from "@/components/layout/Topbar";
@@ -12,13 +12,15 @@ import { GargalosChart } from "@/components/dashboard/GargalosChart";
 import { EvolucaoDiariaChart } from "@/components/dashboard/EvolucaoDiariaChart";
 import { RankingParceiros } from "@/components/dashboard/RankingParceiros";
 import { MapaTreinamento } from "@/components/dashboard/MapaTreinamento";
+import { RelatorioExecutivo } from "@/components/dashboard/RelatorioExecutivo";
 
 const JANELAS = [7, 14, 21, 30, 60, 90];
 
 export default function AnalyticsPage() {
   const { profile } = useAuth();
   const [dias, setDias] = useState(21);
-  const podeVer = !!profile && podeVerPainelAnalitico(profile.role);
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
+  const podeVer = !!profile && podeVerAnalytics(profile.role);
   const { dados, loading, erro } = usePainelAnalitico(dias, podeVer);
 
   const resumo = useMemo(() => {
@@ -40,9 +42,15 @@ export default function AnalyticsPage() {
   if (!profile) return null;
   if (!podeVer) {
     return (
-      <div>
+      <div className="flex flex-col gap-4">
         <Topbar titulo="Analytics" />
-        <p className="text-sm text-ink-muted">Você não tem permissão para acessar esta página.</p>
+        <div className="flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 p-4 text-sm text-status-danger">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Acesso restrito (403).</p>
+            <p className="mt-1 text-xs">Esta página é exclusiva da Gerência.</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -53,17 +61,32 @@ export default function AnalyticsPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-secondary dark:text-white/60">Indicadores da esteira nos últimos dias importados.</p>
-        <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-          Período
-          <select className="input-field w-auto normal-case" value={dias} onChange={(e) => setDias(Number(e.target.value))}>
-            {JANELAS.map((d) => (
-              <option key={d} value={d}>
-                Últimos {d} dias
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            Período
+            <select className="input-field w-auto normal-case" value={dias} onChange={(e) => setDias(Number(e.target.value))}>
+              {JANELAS.map((d) => (
+                <option key={d} value={d}>
+                  Últimos {d} dias
+                </option>
+              ))}
+            </select>
+          </label>
+          {dados && resumo && (
+            <button type="button" className="btn-secondary h-10" onClick={() => setRelatorioAberto(true)}>
+              <Printer size={16} />
+              Emitir Relatório Executivo
+            </button>
+          )}
+        </div>
       </div>
+
+      {dados?.ultimaImportacao && (
+        <p className="text-xs text-ink-muted">
+          Dados atualizados da última planilha importada em{" "}
+          {new Date(dados.ultimaImportacao.atualizadoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.
+        </p>
+      )}
 
       {erro && (
         <div className="flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger">
@@ -105,7 +128,7 @@ export default function AnalyticsPage() {
               <StatTile label="Maior gargalo" value={resumo.etapaGargalo} icon={Hourglass} tone="warning" />
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <StatTile
                 label="Vazamento do funil (qualificação ruim)"
                 value={`${dados.estrategicas.taxaVazamentoFunilPct}%`}
@@ -118,6 +141,12 @@ export default function AnalyticsPage() {
                 icon={Rocket}
                 tone="success"
               />
+              <StatTile
+                label="Documentação incompleta (1.17)"
+                value={`${dados.taxaDocumentacaoIncompletaPct}%`}
+                icon={FileText}
+                tone="warning"
+              />
             </div>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
@@ -129,6 +158,10 @@ export default function AnalyticsPage() {
             <MapaTreinamento cruzamento={dados.mapa} />
           </div>
         )
+      )}
+
+      {relatorioAberto && dados && resumo && (
+        <RelatorioExecutivo dados={dados} resumo={resumo} periodoDias={dias} onFechar={() => setRelatorioAberto(false)} />
       )}
     </div>
   );

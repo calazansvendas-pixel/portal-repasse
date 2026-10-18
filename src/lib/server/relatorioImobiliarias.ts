@@ -4,6 +4,15 @@ import type { Registro } from "@/lib/types";
 // Teto de leitura: uma única consulta, sem listener em tempo real (mesmo padrão do Analytics).
 export const LIMITE_REGISTROS = 3000;
 
+/** Um grupo de pastas de uma mesma imobiliária, já filtrado e contado — usado pelo acordeão da
+ * tela e pelo Relatório Executivo gerado a partir dela (ver relatorio-imobiliarias/page.tsx e
+ * RelatorioFiltradoImobiliarias.tsx). */
+export interface GrupoImobiliariaDados {
+  nome: string;
+  lista: PastaRelatorio[];
+  total: number;
+}
+
 export type PastaRelatorio = Pick<
   Registro,
   | "numero"

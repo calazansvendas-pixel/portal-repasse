@@ -79,6 +79,15 @@ service cloud.firestore {
       allow write: if souGerencia();
     }
 
+    // --- analytics: painel consolidado (/analytics/painel), recalculado pelo motor de auditoria
+    // a cada importação (ver painelAnalyticsService.ts). Restrito à Gerência — mesma regra da aba
+    // Analytics (ver podeVerAnalytics em roles.ts); sem isso, Coordenador/Analista ainda
+    // conseguiriam ler o doc direto pelo SDK do Firestore, mesmo com a API/UI bloqueadas. ---
+    match /analytics/{docId} {
+      allow read: if souGerencia();
+      allow write: if false; // só o motor de auditoria (Admin SDK) grava
+    }
+
     // --- tarefas: o campo "praca" guarda o Quadro (regional OU "coordenador"/"analista"
     // nativo). Cada um só marca/desmarca o checkbox no PRÓPRIO quadro — assistente na sua
     // praça, Coordenador em "coordenador", Analista em "analista". Gerência só observa. ---

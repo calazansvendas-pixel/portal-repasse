@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import type { MetricasEstrategicas } from "@/lib/services/analiseEstrategica";
 import type { EvolucaoEtapas } from "@/lib/services/analiseEtapas";
 import type { CruzamentoPendencia, RankingParceiro } from "@/lib/services/analiseParceiros";
+import type { VolumeImobiliaria } from "@/lib/services/painelAnalyticsService";
 
 export interface PainelAnalitico {
   dias: number;
@@ -13,6 +14,12 @@ export interface PainelAnalitico {
   ranking: RankingParceiro[];
   mapa: CruzamentoPendencia[];
   totalTarefas: number;
+  // % das pastas ativas na etapa 1.17 (Documentação incompleta) — foto do dia da última importação.
+  taxaDocumentacaoIncompletaPct: number;
+  // Volume de pastas ativas por imobiliária — idem, foto do dia.
+  volumePorImobiliaria: VolumeImobiliaria[];
+  // Identifica a importação que gerou o snapshot consolidado — null se nenhuma importação rodou ainda.
+  ultimaImportacao: { id: string; atualizadoEm: string } | null;
   /** Tetos de leitura atingidos (null = completo). */
   parcial: { snapshots: number | null; tarefas: number | null };
 }

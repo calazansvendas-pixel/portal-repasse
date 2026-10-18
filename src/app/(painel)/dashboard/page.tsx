@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Plus } from "lucide-react";
+import { AlertTriangle, Plus, Printer } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import {
   pracasVisiveis,
@@ -9,12 +9,17 @@ import {
   quadrosParaBuscar,
   meuQuadroInterativo,
   destinatariosPermitidos,
+  podeVerAnalytics,
 } from "@/lib/auth/roles";
 import { useTarefasPorQuadros } from "@/lib/hooks/useTarefas";
+import { usePainelAnalitico } from "@/lib/hooks/usePainelAnalitico";
 import { Topbar } from "@/components/layout/Topbar";
 import { TaskBoard } from "@/components/tarefas/TaskBoard";
 import { NovaTarefaModal } from "@/components/tarefas/NovaTarefaModal";
+import { RelatorioExecutivo } from "@/components/dashboard/RelatorioExecutivo";
 import { BuscaTarefas, FILTROS_INICIAIS, FiltroStatusTarefas, FiltrosTarefas, aplicarFiltros } from "@/components/tarefas/FiltrosTarefas";
+
+const DIAS_RELATORIO = 21;
 
 export default function DashboardPage() {
   const { profile } = useAuth();
@@ -25,11 +30,30 @@ export default function DashboardPage() {
   const { tarefas, loading, erro } = useTarefasPorQuadros(quadrosBusca);
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
   const [novaTarefaAberta, setNovaTarefaAberta] = useState(false);
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
+  const podeVerRelatorio = !!profile && podeVerAnalytics(profile.role);
+  const { dados: dadosRelatorio, erro: erroRelatorio } = usePainelAnalitico(DIAS_RELATORIO, podeVerRelatorio && relatorioAberto);
   const visao = useMemo(
     () => aplicarFiltros({ pracas, quadrosEscalonamento, tarefas }, filtros),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tarefas, filtros, profile]
   );
+
+  const resumoRelatorio = useMemo(() => {
+    if (!dadosRelatorio) return null;
+    const ranking = dadosRelatorio.ranking;
+    const soma = (f: (r: (typeof ranking)[number]) => number) => ranking.reduce((s, r) => s + f(r), 0);
+    const total = soma((r) => r.totalPendencias);
+    const falhas = soma((r) => r.falhasAuditoria);
+    const maior = [...dadosRelatorio.evolucao.gargalos].sort((a, b) => b.diasMedios - a.diasMedios)[0];
+    return {
+      total,
+      resolvidas: soma((r) => r.resolvidas),
+      falhas,
+      taxaFalha: total ? Math.round((falhas / total) * 1000) / 10 : 0,
+      etapaGargalo: maior ? `Etapa ${maior.etapa}` : "—",
+    };
+  }, [dadosRelatorio]);
 
   if (!profile) return null;
 
@@ -40,6 +64,15 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <Topbar titulo={`Olá, ${profile.nome.split(" ")[0]}`} />
+
+      {podeVerRelatorio && (
+        <div className="flex justify-end">
+          <button type="button" className="btn-secondary h-10 shrink-0" onClick={() => setRelatorioAberto(true)}>
+            <Printer size={16} />
+            Emitir Relatório Executivo
+          </button>
+        </div>
+      )}
 
       {erro && (
         <div className="flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger">
@@ -96,6 +129,23 @@ export default function DashboardPage() {
       )}
 
       {novaTarefaAberta && <NovaTarefaModal onFechar={() => setNovaTarefaAberta(false)} />}
+
+      {relatorioAberto && dadosRelatorio && resumoRelatorio && (
+        <RelatorioExecutivo
+          dados={dadosRelatorio}
+          resumo={resumoRelatorio}
+          periodoDias={DIAS_RELATORIO}
+          onFechar={() => setRelatorioAberto(false)}
+        />
+      )}
+      {relatorioAberto && !dadosRelatorio && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white/90 print:hidden">
+          <p className="text-sm text-ink-muted">{erroRelatorio ?? "Carregando dados do relatório…"}</p>
+          <button type="button" className="btn-secondary h-10" onClick={() => setRelatorioAberto(false)}>
+            Fechar
+          </button>
+        </div>
+      )}
     </div>
   );
 }

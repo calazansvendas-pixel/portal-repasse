@@ -60,3 +60,24 @@
     @apply bg-[#1B1E17] border-white/15 text-white;
   }
 }
+
+/* Relatório Executivo (ver RelatorioExecutivo.tsx): ao imprimir, some com tudo que não for o
+ * conteúdo do relatório — sidebar, topbar e os próprios botões de ação do relatório (print:hidden) — mesmo
+ * padrão clássico de "imprimir só este elemento", sem exigir que o layout saiba que o relatório existe. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #relatorio-executivo,
+  #relatorio-executivo * {
+    visibility: visible;
+  }
+
+  #relatorio-executivo {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
