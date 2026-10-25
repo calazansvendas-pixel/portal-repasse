@@ -76,6 +76,28 @@ export interface AtribuicaoEmpreendimento {
  * cidade (resolvePracaPorCidade) — fallback em cascata, nunca fica sem destino por causa disto. */
 export type MatrizEmpreendimentos = Partial<Record<string, AtribuicaoEmpreendimento[]>>;
 
+/** Regra fixa com precedência absoluta sobre a Matriz de Empreendimentos e sobre a praça por cidade:
+ * a etapa 2.051 do Morada Vitória é sempre da Catharina (a genérica 2.05 não é afetada — o código
+ * de etapa é comparado inteiro, nunca por prefixo). Reaproveita o id da Catharina cadastrado na
+ * Matriz, se houver; sem ele, o quadro "catharina" já identifica a pessoa. */
+export function resolveRegraFixaEtapa(
+  produto: string | null | undefined,
+  etapa: string | null | undefined,
+  matriz?: MatrizEmpreendimentos | null
+): AtribuicaoEmpreendimento | null {
+  if (!normalize(produto ?? "").includes("morada vitoria")) return null;
+  if (codigoEtapa(etapa ?? "") !== "2.051") return null;
+  const daMatriz = Object.values(matriz ?? {})
+    .flatMap((lista) => lista ?? [])
+    .find((a) => a.quadro === "catharina");
+  return {
+    colaboradorId: daMatriz?.colaboradorId ?? "",
+    colaboradorNome: daMatriz?.colaboradorNome ?? "Catharina",
+    quadro: "catharina",
+    etapas: ["2.051"],
+  };
+}
+
 /** Dados o empreendimento e a etapa da pasta ("Empreendimento"/"Etapa do processo" da planilha),
  * resolve o responsável fixo cadastrado pela Gerência para ESTA etapa específica — ou null se não
  * houver nenhuma atribuição que cubra essa etapa (quem chama cai de volta para
@@ -85,6 +107,8 @@ export function resolveResponsavelPorEmpreendimento(
   etapa: string | null | undefined,
   matriz?: MatrizEmpreendimentos | null
 ): AtribuicaoEmpreendimento | null {
+  const fixa = resolveRegraFixaEtapa(produto, etapa, matriz);
+  if (fixa) return fixa;
   const chaveProduto = normalize(produto ?? "");
   if (!chaveProduto) return null;
   const atribuicoes = matriz?.[chaveProduto];

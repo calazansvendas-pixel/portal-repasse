@@ -123,11 +123,12 @@ function resolverDestinoLinha(
       : null;
   }
   if (regra.cargoDestino === "assistente") {
+    // A regra fixa Morada Vitória/2.051 -> Catharina já vem embutida neste resolve (roles.ts).
     const porEmpreendimento = resolveResponsavelPorEmpreendimento(linha.produto, linha.etapa, matrizEmpreendimentos);
     if (porEmpreendimento) {
       return {
         quadro: porEmpreendimento.quadro,
-        responsavelId: porEmpreendimento.colaboradorId,
+        responsavelId: porEmpreendimento.colaboradorId || null,
         responsavelNome: porEmpreendimento.colaboradorNome,
       };
     }
