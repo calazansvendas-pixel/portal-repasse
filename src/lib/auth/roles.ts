@@ -81,12 +81,30 @@ export type MatrizEmpreendimentos = Partial<Record<string, AtribuicaoEmpreendime
  * de etapa é comparado inteiro, nunca por prefixo). Reaproveita o id da Catharina cadastrado na
  * Matriz, se houver; sem ele, o quadro "catharina" já identifica a pessoa. */
 export function resolveRegraFixaEtapa(
-  produto: string | null | undefined,
-  etapa: string | null | undefined,
-  matriz?: MatrizEmpreendimentos | null
+  produto: string | number | null | undefined,
+  etapa: string | number | null | undefined,
+  matriz?: MatrizEmpreendimentos | null,
+  titulos: Array<string | null | undefined> = []
 ): AtribuicaoEmpreendimento | null {
-  if (!normalize(produto ?? "").includes("morada vitoria")) return null;
-  if (codigoEtapa(etapa ?? "") !== "2.051") return null;
+  // "2.051"/"Morada Vitória" também contam quando citados na etapa ou em títulos extras (ex.:
+  // tipoPendencia), cobrindo linhas cujo código base é "2.05". O histórico de etapas fica de fora de
+  // propósito: uma etapa antiga 2.051 não pode puxar etapas posteriores (3.07...).
+  const textos = [etapa, ...titulos].map((t) => normalize(String(t ?? "")));
+  // Remove preposições ("morada de vitoria", "morada da vitoria") e pontuação antes de comparar.
+  const semPreposicao = (v: string) =>
+    v
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((p) => p && !["de", "da", "do", "das", "dos"].includes(p))
+      .join(" ");
+  const ehMoradaVitoria = [normalize(String(produto ?? "")), ...textos].some((t) =>
+    semPreposicao(t).includes("morada vitoria")
+  );
+  if (!ehMoradaVitoria) return null;
+  // Aceita 2.051 numérico (Excel) ou texto; "2.05" e "2.0510" não casam, a menção isolada "2.051" sim.
+  const codigo = codigoEtapa(String(etapa ?? ""));
+  const mencao2051 = textos.some((t) => /(^|[^0-9.])2\.051(?![0-9])/.test(t));
+  if (!(codigo === "2.051" || Number(codigo) === 2.051 || mencao2051)) return null;
   const daMatriz = Object.values(matriz ?? {})
     .flatMap((lista) => lista ?? [])
     .find((a) => a.quadro === "catharina");

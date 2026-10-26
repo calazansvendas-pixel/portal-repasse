@@ -31,6 +31,20 @@ const normalize = (v) =>
     .toLowerCase()
     .trim();
 const codigoEtapa = (e) => String(e ?? "").trim().split(" - ")[0]?.trim() || String(e ?? "").trim();
+const semPreposicao = (v) =>
+  normalize(v)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((p) => p && !["de", "da", "do", "das", "dos"].includes(p))
+    .join(" ");
+// Mesmo critério de resolveRegraFixaEtapa: código 2.051 (texto ou número) ou menção isolada "2.051"
+// na etapa/título; "Morada Vitória" no produto, na etapa ou no título. Histórico de etapas fica de fora.
+const ehMoradaVitoria2051 = (produto, etapa, titulos) => {
+  const textos = [etapa, ...titulos].map((t) => String(t ?? ""));
+  if (![produto, ...textos].some((t) => semPreposicao(t).includes("morada vitoria"))) return false;
+  const cod = codigoEtapa(textos[0]);
+  return cod === "2.051" || Number(cod) === 2.051 || textos.some((t) => /(^|[^0-9.])2\.051(?![0-9])/.test(t));
+};
 
 // Colaboradora da Catharina (para responsavelId/Nome), se houver um único usuário ativo no quadro.
 const usersSnap = await db.collection("users").where("praca", "==", "catharina").get();
@@ -43,9 +57,9 @@ console.log(`${snap.size} tarefa(s) ativa(s) lida(s). Modo: ${aplicar ? "APLICAR
 let alteradas = 0;
 for (const doc of snap.docs) {
   const t = doc.data();
-  if (codigoEtapa(t.etapa) !== "2.051" || !t.numero) continue;
+  if (!t.numero) continue;
   const registro = await db.collection("registros").doc(t.numero).get();
-  if (!normalize(registro.data()?.produto).includes("morada vitoria")) continue;
+  if (!ehMoradaVitoria2051(registro.data()?.produto, t.etapa, [t.tipoPendencia, registro.data()?.etapa])) continue;
 
   const rotulo = `${doc.id} (pasta ${t.numero}, ${t.tipoPendencia}) praca=${t.praca}`;
   if (t.pracaCustomizada) {
