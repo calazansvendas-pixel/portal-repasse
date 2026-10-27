@@ -215,19 +215,10 @@ export function podeVerPainelGerencial(role: Role): boolean {
   return role === "gerencia";
 }
 
-/** Painel analítico de gargalos da esteira: Gerência, Coordenador e a própria Analista.
- * Usado pela página "Auditoria de Planilha" (a Analista acompanha o próprio trabalho ali) — não é
- * a mesma permissão da aba "Analytics" (ver podeVerAnalytics), que é restrita só à Gerência. */
+/** Painel analítico de gargalos da esteira, usado pela página "Auditoria de Planilha" (a Analista
+ * acompanha o próprio trabalho ali): Gerência, Coordenador e a própria Analista. */
 export function podeVerPainelAnalitico(role: Role): boolean {
   return role === "gerencia" || role === "coordenador" || role === "analista";
-}
-
-/** Aba/Dashboard "Analytics" (/analytics e /api/analytics/*): restrito à Gerência — não há um
- * papel "Administrador" separado neste sistema, "gerencia" é o papel de topo que cumpre esse
- * lugar. Mais restrita de propósito que podeVerPainelAnalitico (que a Auditoria de Planilha ainda
- * usa para Coordenador/Analista) — não reaproveitar essa função para o /analytics. */
-export function podeVerAnalytics(role: Role): boolean {
-  return role === "gerencia";
 }
 
 /** Relatórios gerais / insights de imobiliárias: Gerência e Coordenador. */

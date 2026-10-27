@@ -11,7 +11,6 @@ import {
   buscarRegrasAtivas,
 } from "./dynamicRuleEngine";
 import { NIVEL_POR_QUADRO } from "@/lib/server/tarefasManuais";
-import { recalcularPainelAnalytics } from "./painelAnalyticsService";
 import type { ClienteEnvolvido, EtapaHistorico, Importacao, NivelTarefa, OrigemTarefa, Quadro, Registro, SlaStatus, Tarefa } from "@/lib/types";
 
 // Teto de segurança: o documento do Firestore tem limite de 1 MB e cada tarefa copia o trajeto da pasta.
@@ -580,15 +579,6 @@ export async function executarAuditoriaDiaria(params: {
 
   for (const b of batches) {
     await b.commit();
-  }
-
-  // Painel analítico consolidado (/analytics): recalculado a cada importação, depois que os
-  // batches acima já confirmaram o novo estado. Nunca derruba a importação — ela já terminou com
-  // sucesso mesmo que este recálculo falhe; só o indicador "dados atualizados em" fica atrasado.
-  try {
-    await recalcularPainelAnalytics(db, importacaoId, linhas);
-  } catch (error) {
-    console.error("[auditEngine] falha ao recalcular o painel analítico:", error);
   }
 
   return resumo;

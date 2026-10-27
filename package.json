@@ -11,6 +11,7 @@
     "wipe:data": "node scripts/wipe-data.mjs",
     "normalizar:users": "node scripts/normalizar-users-ativo.mjs",
     "reconciliar:morada-vitoria": "node scripts/reconciliar-morada-vitoria-2051.mjs",
+    "preencher:responsavel": "node scripts/preencher-responsavel-tarefas.mjs",
     "deploy:rules": "node scripts/deploy-firestore-rules.mjs",
     "deploy:indexes": "node scripts/deploy-firestore-indexes.mjs"
   },
