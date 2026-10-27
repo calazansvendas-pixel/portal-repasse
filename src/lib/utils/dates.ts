@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfWeek, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 /** Converte um valor de célula do Excel (número serial, string ou Date) para ISO (yyyy-MM-dd). */
@@ -60,6 +60,17 @@ export function formatDateTimeBR(isoDateTime: string | null | undefined): string
 
 export function hojeISO(): string {
   return toISODateOnly(new Date());
+}
+
+/** Hoje menos N dias corridos, em ISO (yyyy-MM-dd) — usada pelos atalhos de período
+ * ("Últimos 7 dias" etc.) do filtro de atividades. */
+export function diasAtrasISO(dias: number): string {
+  return toISODateOnly(subDays(new Date(), dias));
+}
+
+/** Segunda-feira da semana atual, em ISO — atalho "Esta Semana" do filtro de atividades. */
+export function inicioDaSemanaISO(): string {
+  return toISODateOnly(startOfWeek(new Date(), { weekStartsOn: 1 }));
 }
 
 /** Lembrete Programado (ver Tarefa.lembreteAtivo/lembreteData): vencido quando a data marcada

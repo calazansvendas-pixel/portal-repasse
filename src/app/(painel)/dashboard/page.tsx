@@ -15,6 +15,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { TaskBoard } from "@/components/tarefas/TaskBoard";
 import { NovaTarefaModal } from "@/components/tarefas/NovaTarefaModal";
 import { BuscaTarefas, FILTROS_INICIAIS, FiltroStatusTarefas, FiltrosTarefas, aplicarFiltros } from "@/components/tarefas/FiltrosTarefas";
+import { ResumoPeriodoColaboradores } from "@/components/tarefas/ResumoPeriodoColaboradores";
 
 export default function DashboardPage() {
   const { profile } = useAuth();
@@ -79,6 +80,9 @@ export default function DashboardPage() {
                 )
               }
             />
+          )}
+          {mostrarFiltros && (filtros.dataInicio || filtros.dataFim) && (
+            <ResumoPeriodoColaboradores tarefas={visao.tarefas} />
           )}
           {semColunas ? (
             <p className="text-sm text-ink-muted">Nenhum quadro corresponde aos filtros selecionados.</p>

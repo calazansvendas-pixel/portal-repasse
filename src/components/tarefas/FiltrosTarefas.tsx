@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { CIDADES_FILTRO, normalize } from "@/lib/auth/roles";
-import { lembreteVencido } from "@/lib/utils/dates";
+import { diasAtrasISO, hojeISO, inicioDaSemanaISO, lembreteVencido } from "@/lib/utils/dates";
 import { somenteDigitos } from "@/lib/utils/cpf";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
-import type { Assistente, QuadroEscalonamento, Tarefa } from "@/lib/types";
+import type { Assistente, EtapaHistorico, NotaResolucao, QuadroEscalonamento, Tarefa } from "@/lib/types";
 
 /** Concluída "de verdade" para fins de filtro — um lembrete vencido reabre a tarefa mesmo que o
  * status ainda diga pending_validation/validated_done (ver TaskCard.tsx, mesmo critério). */
@@ -21,6 +21,45 @@ export interface FiltrosState {
   pessoa: string; // "todos" | "coordenador" | "analista" | "assistentes" | id de assistente
   status: FiltroStatus;
   busca: string; // nome do cliente OU CPF/CNPJ (com ou sem pontuação) — ver tarefaBateNaBusca
+  dataInicio: string; // yyyy-MM-dd; "" = sem piso (ver tarefaTeveAtividadeNoPeriodo)
+  dataFim: string; // yyyy-MM-dd; "" = sem teto
+}
+
+/** `data` pode vir como "yyyy-MM-dd" (EtapaHistorico) ou ISO datetime (NotaResolucao/resolvidoEm) —
+ * os 10 primeiros caracteres bastam nos dois casos, e a comparação lexicográfica desse prefixo
+ * bate com a cronológica (mesmo truque de lembreteVencido em dates.ts). */
+function dataNoIntervalo(dataISO: string | null | undefined, inicio: string, fim: string): boolean {
+  if (!dataISO) return false;
+  const data = dataISO.slice(0, 10);
+  if (inicio && data < inicio) return false;
+  if (fim && data > fim) return false;
+  return true;
+}
+
+/** Só conta como "movimentação de etapa" uma TROCA real (etapa diferente da entrada anterior) —
+ * o log diário repete a mesma etapa importação após importação enquanto a pasta não avança, e
+ * isso não é uma atividade nova. `historico` já vem ordenado cronologicamente (ver
+ * acumularHistorico em auditEngine.ts). */
+function teveMovimentacaoDeEtapa(historico: EtapaHistorico[], inicio: string, fim: string): boolean {
+  for (let i = 1; i < historico.length; i++) {
+    if (historico[i].etapa === historico[i - 1].etapa) continue;
+    if (dataNoIntervalo(historico[i].data, inicio, fim)) return true;
+  }
+  return false;
+}
+
+function teveNotaNoIntervalo(notas: NotaResolucao[], inicio: string, fim: string): boolean {
+  return notas.some((n) => dataNoIntervalo(n.data, inicio, fim));
+}
+
+/** A pasta teve alguma AÇÃO real registrada dentro do período: uma anotação de "O que foi feito",
+ * uma troca de etapa, ou a conclusão da tarefa — nunca só `atualizadoEm` (esse campo muda a cada
+ * importação, mesmo sem nenhuma ação humana, então usá-lo aqui inflaria o resultado). */
+function tarefaTeveAtividadeNoPeriodo(t: Tarefa, inicio: string, fim: string): boolean {
+  if (dataNoIntervalo(t.resolvidoEm, inicio, fim)) return true;
+  if (teveNotaNoIntervalo(t.historicoNotas ?? [], inicio, fim)) return true;
+  if (teveMovimentacaoDeEtapa(t.historicoEtapas ?? [], inicio, fim)) return true;
+  return false;
 }
 
 /** Nome e CPF podem bater: nome por inclusão normalizada, CPF só comparando dígitos (o usuário
@@ -96,7 +135,14 @@ export function FiltroStatusTarefas({
   );
 }
 
-export const FILTROS_INICIAIS: FiltrosState = { cidade: "", pessoa: "todos", status: "todas", busca: "" };
+export const FILTROS_INICIAIS: FiltrosState = {
+  cidade: "",
+  pessoa: "todos",
+  status: "todas",
+  busca: "",
+  dataInicio: "",
+  dataFim: "",
+};
 
 interface Visao {
   pracas: Assistente[];
@@ -105,7 +151,7 @@ interface Visao {
 }
 
 /** Aplica cidade + cargo/pessoa sobre o que o perfil já pode ver (o RBAC é decidido antes, em roles.ts). */
-export function aplicarFiltros(visao: Visao, { cidade, pessoa, status, busca }: FiltrosState): Visao {
+export function aplicarFiltros(visao: Visao, { cidade, pessoa, status, busca, dataInicio, dataFim }: FiltrosState): Visao {
   const { pracas, quadrosEscalonamento, tarefas } = visao;
   const termoNome = normalize(busca.trim());
   const termoCpf = somenteDigitos(busca);
@@ -141,8 +187,68 @@ export function aplicarFiltros(visao: Visao, { cidade, pessoa, status, busca }: 
       : status === "feitas"
         ? porCidade.filter(efetivamenteConcluida)
         : porCidade;
-  const tarefasF = busca.trim() ? porStatus.filter((t) => tarefaBateNaBusca(t, termoNome, termoCpf)) : porStatus;
+  const porPeriodo =
+    dataInicio || dataFim ? porStatus.filter((t) => tarefaTeveAtividadeNoPeriodo(t, dataInicio, dataFim)) : porStatus;
+  const tarefasF = busca.trim() ? porPeriodo.filter((t) => tarefaBateNaBusca(t, termoNome, termoCpf)) : porPeriodo;
   return { pracas: pracasF, quadrosEscalonamento: escalF, tarefas: tarefasF };
+}
+
+/** Atalhos rápidos de período — cada um já calcula "De"/"Até" prontos; digitar direto nos campos
+ * de data é o caminho "Personalizado" (nenhum atalho precisa ficar marcado para isso). */
+function FiltroPeriodoAtividade({
+  dataInicio,
+  dataFim,
+  onChange,
+}: {
+  dataInicio: string;
+  dataFim: string;
+  onChange: (dataInicio: string, dataFim: string) => void;
+}) {
+  const hoje = hojeISO();
+  const atalhos: { rotulo: string; inicio: string; fim: string }[] = [
+    { rotulo: "Esta semana", inicio: inicioDaSemanaISO(), fim: hoje },
+    { rotulo: "Últimos 7 dias", inicio: diasAtrasISO(6), fim: hoje },
+  ];
+
+  return (
+    <div className="flex w-full flex-col gap-1.5 sm:w-auto">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Atividade no período</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="date"
+          aria-label="De"
+          value={dataInicio}
+          max={dataFim || undefined}
+          onChange={(e) => onChange(e.target.value, dataFim)}
+          className="input-field w-auto"
+        />
+        <span className="text-xs text-ink-muted">até</span>
+        <input
+          type="date"
+          aria-label="Até"
+          value={dataFim}
+          min={dataInicio || undefined}
+          onChange={(e) => onChange(dataInicio, e.target.value)}
+          className="input-field w-auto"
+        />
+        {atalhos.map((a) => (
+          <button
+            key={a.rotulo}
+            type="button"
+            onClick={() => onChange(a.inicio, a.fim)}
+            className={cn(
+              "h-9 rounded-md px-3 text-xs font-medium transition-colors",
+              dataInicio === a.inicio && dataFim === a.fim
+                ? "bg-brand-primary text-white"
+                : "border border-border text-ink-secondary hover:bg-surface-soft dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+            )}
+          >
+            {a.rotulo}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function FiltrosTarefas({
@@ -160,7 +266,13 @@ export function FiltrosTarefas({
   acao?: ReactNode;
 }) {
   const cidades = CIDADES_FILTRO.filter((c) => pracas.includes(c.praca));
-  const ativo = valor.cidade !== "" || valor.pessoa !== "todos" || valor.status !== "todas" || valor.busca !== "";
+  const ativo =
+    valor.cidade !== "" ||
+    valor.pessoa !== "todos" ||
+    valor.status !== "todas" ||
+    valor.busca !== "" ||
+    valor.dataInicio !== "" ||
+    valor.dataFim !== "";
 
   return (
     <div className="surface-card mb-4 flex flex-wrap items-end gap-3 p-3 sm:mb-6 sm:gap-4 sm:p-4">
@@ -205,6 +317,12 @@ export function FiltrosTarefas({
             ))}
         </select>
       </label>
+
+      <FiltroPeriodoAtividade
+        dataInicio={valor.dataInicio}
+        dataFim={valor.dataFim}
+        onChange={(dataInicio, dataFim) => onChange({ ...valor, dataInicio, dataFim })}
+      />
 
       <div className="flex w-full flex-col gap-1.5 sm:w-auto">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Situação</span>
