@@ -61,10 +61,15 @@
   }
 }
 
-/* Relatório Executivo (ver RelatorioExecutivo.tsx): ao imprimir, some com tudo que não for o
- * conteúdo do relatório — sidebar, topbar e os próprios botões de ação do relatório (print:hidden) — mesmo
- * padrão clássico de "imprimir só este elemento", sem exigir que o layout saiba que o relatório existe. */
+/* Relatórios de impressão (ver RelatorioPainelImpressao.tsx e demais): ao imprimir, some com tudo
+ * que não for o conteúdo do relatório — sidebar, topbar e os próprios botões de ação do relatório
+ * (print:hidden) — mesmo padrão clássico de "imprimir só este elemento", sem exigir que o layout
+ * saiba que o relatório existe. */
 @media print {
+  @page {
+    margin: 14mm 12mm;
+  }
+
   body * {
     visibility: hidden;
   }
@@ -79,5 +84,15 @@
     left: 0;
     top: 0;
     width: 100%;
+  }
+
+  /* Paginação limpa: nunca corta uma linha de tabela ou um título de grupo no meio, entre páginas. */
+  #relatorio-executivo table {
+    border-collapse: collapse;
+  }
+
+  #relatorio-executivo tr,
+  #relatorio-executivo thead {
+    break-inside: avoid;
   }
 }

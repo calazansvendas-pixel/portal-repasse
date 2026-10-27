@@ -27,8 +27,9 @@ export interface FiltrosState {
 
 /** `data` pode vir como "yyyy-MM-dd" (EtapaHistorico) ou ISO datetime (NotaResolucao/resolvidoEm) —
  * os 10 primeiros caracteres bastam nos dois casos, e a comparação lexicográfica desse prefixo
- * bate com a cronológica (mesmo truque de lembreteVencido em dates.ts). */
-function dataNoIntervalo(dataISO: string | null | undefined, inicio: string, fim: string): boolean {
+ * bate com a cronológica (mesmo truque de lembreteVencido em dates.ts). Exportada para o
+ * Exportar Relatório (relatorioPainel.ts) usar exatamente o mesmo critério de "dentro do período". */
+export function dataNoIntervalo(dataISO: string | null | undefined, inicio: string, fim: string): boolean {
   if (!dataISO) return false;
   const data = dataISO.slice(0, 10);
   if (inicio && data < inicio) return false;

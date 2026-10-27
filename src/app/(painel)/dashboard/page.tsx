@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Plus } from "lucide-react";
+import { AlertTriangle, FileText, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import {
   pracasVisiveis,
@@ -9,6 +9,7 @@ import {
   quadrosParaBuscar,
   meuQuadroInterativo,
   destinatariosPermitidos,
+  CIDADES_FILTRO,
 } from "@/lib/auth/roles";
 import { useTarefasPorQuadros } from "@/lib/hooks/useTarefas";
 import { Topbar } from "@/components/layout/Topbar";
@@ -16,6 +17,10 @@ import { TaskBoard } from "@/components/tarefas/TaskBoard";
 import { NovaTarefaModal } from "@/components/tarefas/NovaTarefaModal";
 import { BuscaTarefas, FILTROS_INICIAIS, FiltroStatusTarefas, FiltrosTarefas, aplicarFiltros } from "@/components/tarefas/FiltrosTarefas";
 import { ResumoPeriodoColaboradores } from "@/components/tarefas/ResumoPeriodoColaboradores";
+import { RelatorioPainelImpressao } from "@/components/tarefas/RelatorioPainelImpressao";
+import { montarRelatorioPainel } from "@/lib/services/relatorioPainel";
+import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
+import type { Assistente } from "@/lib/types";
 
 export default function DashboardPage() {
   const { profile } = useAuth();
@@ -26,10 +31,41 @@ export default function DashboardPage() {
   const { tarefas, loading, erro } = useTarefasPorQuadros(quadrosBusca);
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
   const [novaTarefaAberta, setNovaTarefaAberta] = useState(false);
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
   const visao = useMemo(
     () => aplicarFiltros({ pracas, quadrosEscalonamento, tarefas }, filtros),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tarefas, filtros, profile]
+  );
+
+  // Rótulo do colaborador selecionado no filtro "Cargo/Pessoa" — null quando é "Todos" ou
+  // "Assistentes (visão conjunta)" (grupo, não um indivíduo). Usado tanto no resumo de filtros
+  // quanto como filtro ESTRITO de autoria no relatório (ver montarRelatorioPainel).
+  const colaboradorFiltroLabel = useMemo(() => {
+    if (filtros.pessoa === "todos" || filtros.pessoa === "assistentes") return null;
+    if (filtros.pessoa === "coordenador") return QUADRO_LABEL.coordenador;
+    if (filtros.pessoa === "analista") return QUADRO_LABEL.analista;
+    return ASSISTENTE_LABEL[filtros.pessoa as Assistente] ?? filtros.pessoa;
+  }, [filtros.pessoa]);
+
+  // Resumo legível dos filtros ATIVOS (fora do período, já mostrado em destaque no relatório) —
+  // alimenta o "Filtros aplicados" do Exportar Relatório, sempre em sincronia com o que está na tela.
+  const filtrosAplicadosResumo = useMemo(() => {
+    const resumo: string[] = [];
+    if (filtros.busca.trim()) resumo.push(`Busca: "${filtros.busca.trim()}"`);
+    if (filtros.cidade) {
+      const label = CIDADES_FILTRO.find((c) => c.chave === filtros.cidade)?.label ?? filtros.cidade;
+      resumo.push(`Cidade: ${label}`);
+    }
+    if (filtros.pessoa === "assistentes") resumo.push("Colaborador: Assistentes (visão conjunta)");
+    else if (colaboradorFiltroLabel) resumo.push(`Colaborador: ${colaboradorFiltroLabel}`);
+    if (filtros.status !== "todas") resumo.push(`Situação: ${filtros.status === "a_fazer" ? "A fazer" : "Realizadas"}`);
+    return resumo;
+  }, [filtros, colaboradorFiltroLabel]);
+
+  const relatorioPainel = useMemo(
+    () => montarRelatorioPainel(visao.tarefas, filtros.dataInicio, filtros.dataFim, filtrosAplicadosResumo, colaboradorFiltroLabel),
+    [visao.tarefas, filtros.dataInicio, filtros.dataFim, filtrosAplicadosResumo, colaboradorFiltroLabel]
   );
 
   if (!profile) return null;
@@ -72,12 +108,18 @@ export default function DashboardPage() {
               valor={filtros}
               onChange={setFiltros}
               acao={
-                destinatariosPermitidos(profile.role).length > 0 && (
-                  <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setNovaTarefaAberta(true)}>
-                    <Plus size={16} />
-                    Nova Tarefa
+                <>
+                  <button type="button" className="btn-secondary w-full sm:w-auto" onClick={() => setRelatorioAberto(true)}>
+                    <FileText size={16} />
+                    Exportar Relatório
                   </button>
-                )
+                  {destinatariosPermitidos(profile.role).length > 0 && (
+                    <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setNovaTarefaAberta(true)}>
+                      <Plus size={16} />
+                      Nova Tarefa
+                    </button>
+                  )}
+                </>
               }
             />
           )}
@@ -100,6 +142,10 @@ export default function DashboardPage() {
       )}
 
       {novaTarefaAberta && <NovaTarefaModal onFechar={() => setNovaTarefaAberta(false)} />}
+
+      {relatorioAberto && (
+        <RelatorioPainelImpressao relatorio={relatorioPainel} onFechar={() => setRelatorioAberto(false)} />
+      )}
     </div>
   );
 }
