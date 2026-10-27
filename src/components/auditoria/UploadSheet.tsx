@@ -6,10 +6,17 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import type { ResumoImportacao } from "@/lib/services/auditEngine";
 import { hojeISO } from "@/lib/utils/dates";
 
-export function UploadSheet() {
+export function UploadSheet({ onEnviandoChange }: { onEnviandoChange?: (enviando: boolean) => void }) {
   const { firebaseUser } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [enviando, setEnviando] = useState(false);
+  const [enviando, setEnviandoState] = useState(false);
+  // Avisa a página (ver AuditoriaPage) pra pausar os listeners onSnapshot da tabela/histórico
+  // enquanto a importação roda — sem isso, cada lote de escrita do motor de auditoria reordena a
+  // janela "mais recentes" dessas queries e gera leituras extras cobradas no plano Blaze.
+  function setEnviando(v: boolean) {
+    setEnviandoState(v);
+    onEnviandoChange?.(v);
+  }
   // Data a que a planilha se refere (padrão: hoje). Cada data é uma importação distinta,
   // então planilhas de dias diferentes se somam mesmo se enviadas no mesmo dia.
   const [dataPlanilha, setDataPlanilha] = useState(hojeISO());

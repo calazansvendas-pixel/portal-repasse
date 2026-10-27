@@ -9,9 +9,9 @@ import type { Importacao } from "@/lib/types";
 import { formatDateBR, formatDateTimeBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 
-export function HistoricoImportacoes() {
+export function HistoricoImportacoes({ pausado = false }: { pausado?: boolean }) {
   const { profile, firebaseUser } = useAuth();
-  const { importacoes, loading } = useImportacoes();
+  const { importacoes, loading } = useImportacoes(30, pausado);
   const podeExcluir = profile?.role === "gerencia";
 
   if (loading) return null;

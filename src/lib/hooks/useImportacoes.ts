@@ -5,12 +5,15 @@ import { collection, limit, onSnapshot, orderBy, query } from "firebase/firestor
 import { db } from "@/lib/firebase/client";
 import type { Importacao } from "@/lib/types";
 
-export function useImportacoes(max = 30) {
+/** `pausado`: mesmo motivo do useRegistros — desliga o listener durante a importação em
+ * andamento e reassina (uma única leitura de sincronização) quando ela termina. */
+export function useImportacoes(max = 30, pausado = false) {
   const [importacoes, setImportacoes] = useState<Importacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
+    if (pausado) return;
     const q = query(collection(db, "importacoes"), orderBy("id", "desc"), limit(max));
     const unsubscribe = onSnapshot(
       q,
@@ -25,7 +28,7 @@ export function useImportacoes(max = 30) {
       }
     );
     return () => unsubscribe();
-  }, [max]);
+  }, [max, pausado]);
 
   return { importacoes, loading, erro };
 }

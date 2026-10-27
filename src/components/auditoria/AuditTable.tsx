@@ -7,8 +7,8 @@ import { SLA_BADGE_CLASSES, SLA_LABEL } from "@/lib/utils/sla";
 import { formatDateBR, formatDateTimeBR } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 
-export function AuditTable() {
-  const { registros, loading } = useRegistros();
+export function AuditTable({ pausado = false }: { pausado?: boolean }) {
+  const { registros, loading } = useRegistros(300, pausado);
   const [busca, setBusca] = useState("");
   const [verConcluidas, setVerConcluidas] = useState(false);
 
