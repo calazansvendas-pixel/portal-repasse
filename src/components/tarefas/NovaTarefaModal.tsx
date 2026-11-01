@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { destinatariosPermitidos } from "@/lib/auth/roles";
+import { destinatariosPermitidos, quadroEfetivoDaTarefa } from "@/lib/auth/roles";
 import { criarTarefaManual, editarTarefa } from "@/lib/services/tarefasService";
 import { QUADRO_LABEL } from "@/lib/types";
 import type { Quadro, Tarefa } from "@/lib/types";
@@ -14,10 +14,11 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
   const editando = !!tarefa;
   const permitidos: Quadro[] = profile ? destinatariosPermitidos(profile.role) : [];
   // Ao editar, o destinatário atual sempre aparece na lista, mesmo se o editor não puder mais escolhê-lo.
+  const quadroAtual = tarefa ? quadroEfetivoDaTarefa(tarefa) : null;
   const destinatarios: Quadro[] =
-    tarefa && !permitidos.includes(tarefa.praca) ? [tarefa.praca, ...permitidos] : permitidos;
+    quadroAtual && !permitidos.includes(quadroAtual) ? [quadroAtual, ...permitidos] : permitidos;
   const [descricao, setDescricao] = useState(tarefa?.descricao ?? "");
-  const [destino, setDestino] = useState<Quadro | "">(tarefa?.praca ?? "");
+  const [destino, setDestino] = useState<Quadro | "">(quadroAtual ?? "");
   const [dataLimite, setDataLimite] = useState(tarefa?.dataLimite ?? "");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);

@@ -155,10 +155,10 @@ export function quadroEfetivoDaTarefa(t: {
   overrideManual?: boolean;
   responsavelNome?: string | null;
 }): Quadro {
-  if (t.overrideManual && t.quadro) return t.quadro;
-  if (t.pracaCustomizada) return t.pracaCustomizada;
-  if (t.praca !== "layza" && t.praca !== "eliane" && t.praca !== "catharina") return t.praca;
-  return assistenteDoNome(t.responsavelNome) ?? t.praca;
+  const base = (t.overrideManual && t.quadro) || t.pracaCustomizada || t.praca;
+  if (base !== "layza" && base !== "eliane" && base !== "catharina") return base;
+  // O responsável carimbado manda mesmo se `quadro`/`praca` vierem desatualizados.
+  return assistenteDoNome(t.responsavelNome) ?? base;
 }
 
 /** Quais praças (quadros de tarefas) o usuário pode enxergar. */

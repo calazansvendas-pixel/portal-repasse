@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
-import type { Role, Tarefa } from "@/lib/types";
+import { quadroEfetivoDaTarefa } from "@/lib/auth/roles";
+import type { Quadro, Role, Tarefa } from "@/lib/types";
 import {
   NIVEL_POR_QUADRO,
   autenticar,
@@ -36,6 +37,18 @@ async function carregarTarefa(
   return { ref, tarefa, ehGerencia };
 }
 
+/** Colaborador ativo dono do quadro — só quando é único; ambíguo/ausente = null (o quadro basta). */
+async function resolverColaboradorDoQuadro(quadro: Quadro): Promise<{ uid: string; nome: string } | null> {
+  const snap = await getAdminDb().collection("users").where("ativo", "==", true).get();
+  const donos = snap.docs.filter((d) => {
+    const u = d.data() as { role?: Role; praca?: string };
+    return quadro === "coordenador" || quadro === "analista" ? u.role === quadro : u.role === "assistente" && u.praca === quadro;
+  });
+  if (donos.length !== 1) return null;
+  const nome = (donos[0].data() as { nome?: string }).nome;
+  return nome ? { uid: donos[0].id, nome } : null;
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const auth = await autenticar(req);
@@ -56,15 +69,31 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       atribuidoPara?: unknown;
       dataLimite?: unknown;
     } | null;
-    const valido = validarDescricaoEDestino(auth.role, body?.descricao, body?.atribuidoPara, alvo.tarefa.praca);
+    const valido = validarDescricaoEDestino(auth.role, body?.descricao, body?.atribuidoPara, quadroEfetivoDaTarefa(alvo.tarefa));
     if (valido instanceof NextResponse) return valido;
     const dataLimite = lerDataLimite(body?.dataLimite);
     if (dataLimite instanceof NextResponse) return dataLimite;
 
     const manual = alvo.tarefa.origem === "manual";
+    const novoQuadro = valido.atribuidoPara;
+    const trocouColaborador = novoQuadro !== quadroEfetivoDaTarefa(alvo.tarefa);
+    const novoResponsavel = trocouColaborador ? await resolverColaboradorDoQuadro(novoQuadro) : null;
     await alvo.ref.update({
       descricao: valido.descricao,
-      praca: valido.atribuidoPara,
+      praca: novoQuadro,
+      // Troca de colaborador = atribuição manual explícita: o carimbo de responsável, o quadro e o
+      // override mudam juntos, para o card trocar de coluna na hora e as importações não reverterem.
+      ...(trocouColaborador
+        ? {
+            quadro: novoQuadro,
+            responsavelId: novoResponsavel?.uid ?? null,
+            responsavelNome: novoResponsavel?.nome ?? null,
+            overrideManual: true,
+            pracaCustomizada: novoQuadro,
+            responsavelCustomizadoId: novoResponsavel?.uid ?? null,
+            responsavelCustomizadoNome: novoResponsavel?.nome ?? null,
+          }
+        : {}),
       // O nível hierárquico só acompanha o destinatário nas avulsas; as automáticas mantêm o da regra.
       ...(manual ? { nivel: NIVEL_POR_QUADRO[valido.atribuidoPara] } : {}),
       ...(dataLimite !== undefined ? { dataLimite } : {}),
