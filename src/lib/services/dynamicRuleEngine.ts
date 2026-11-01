@@ -1,5 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import {
+  assistenteDoNome,
   cidadePertenceAPraca,
   codigoEtapa,
   normalize,
@@ -126,8 +127,9 @@ function resolverDestinoLinha(
     // A regra fixa Morada Vitória/2.051 -> Catharina já vem embutida neste resolve (roles.ts).
     const porEmpreendimento = resolveResponsavelPorEmpreendimento(linha.produto, linha.etapa, matrizEmpreendimentos);
     if (porEmpreendimento) {
+      // O nome manda: evita quadro "layza" com carimbo "Catharina" (e vice-versa).
       return {
-        quadro: porEmpreendimento.quadro,
+        quadro: assistenteDoNome(porEmpreendimento.colaboradorNome) ?? porEmpreendimento.quadro,
         responsavelId: porEmpreendimento.colaboradorId || null,
         responsavelNome: porEmpreendimento.colaboradorNome,
       };

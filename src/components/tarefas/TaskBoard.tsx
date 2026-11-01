@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Assistente, Quadro, QuadroEscalonamento, Role, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
+import { quadroEfetivoDaTarefa } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
 import { lembreteVencido } from "@/lib/utils/dates";
 import { slaExibido } from "@/lib/utils/sla";
@@ -41,7 +42,7 @@ export function TaskBoard({
     const assistentes: Coluna[] = pracas.map((praca) => ({
       chave: praca as Quadro,
       titulo: ASSISTENTE_LABEL[praca],
-      tarefas: ordenarPorSla(tarefas.filter((t) => t.praca === praca)),
+      tarefas: ordenarPorSla(tarefas.filter((t) => quadroEfetivoDaTarefa(t) === praca)),
       escalonamento: false,
     }));
 

@@ -135,6 +135,29 @@ export function resolveResponsavelPorEmpreendimento(
   return atribuicoes.find((a) => a.etapas.includes(codigo)) ?? null;
 }
 
+/** Qual assistente regional um nome de responsável designa ("Catharina", "Catarina", "Layza (Serra)",
+ * "Laiza"...) — null se o nome não é de nenhuma das três. Comparação pelo primeiro nome, normalizada. */
+export function assistenteDoNome(nome: string | null | undefined): Assistente | null {
+  const primeiro = normalize(nome ?? "").split(/[\s(]/)[0] ?? "";
+  if (primeiro === "layza" || primeiro === "laiza") return "layza";
+  if (primeiro === "eliane") return "eliane";
+  if (primeiro === "catharina" || primeiro === "catarina") return "catharina";
+  return null;
+}
+
+/** Quadro em que a tarefa deve aparecer: o responsável carimbado manda sobre `praca` (que vem da
+ * cidade) — um card "Responsável: Catharina" nunca fica na coluna da Layza só porque a pasta é de
+ * Serra. Override manual (pracaCustomizada) e quadros não-assistentes seguem `praca`. */
+export function quadroEfetivoDaTarefa(t: {
+  praca: Quadro;
+  pracaCustomizada?: Quadro | null;
+  responsavelNome?: string | null;
+}): Quadro {
+  if (t.pracaCustomizada) return t.pracaCustomizada;
+  if (t.praca !== "layza" && t.praca !== "eliane" && t.praca !== "catharina") return t.praca;
+  return assistenteDoNome(t.responsavelNome) ?? t.praca;
+}
+
 /** Quais praças (quadros de tarefas) o usuário pode enxergar. */
 export function pracasVisiveis(profile: UserProfile): Assistente[] {
   const todas: Assistente[] = ["layza", "eliane", "catharina"];
