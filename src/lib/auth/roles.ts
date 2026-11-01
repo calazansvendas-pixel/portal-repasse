@@ -151,8 +151,11 @@ export function assistenteDoNome(nome: string | null | undefined): Assistente | 
 export function quadroEfetivoDaTarefa(t: {
   praca: Quadro;
   pracaCustomizada?: Quadro | null;
+  quadro?: Quadro | null;
+  overrideManual?: boolean;
   responsavelNome?: string | null;
 }): Quadro {
+  if (t.overrideManual && t.quadro) return t.quadro;
   if (t.pracaCustomizada) return t.pracaCustomizada;
   if (t.praca !== "layza" && t.praca !== "eliane" && t.praca !== "catharina") return t.praca;
   return assistenteDoNome(t.responsavelNome) ?? t.praca;

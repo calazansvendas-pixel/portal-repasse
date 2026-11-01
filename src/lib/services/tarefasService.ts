@@ -244,6 +244,15 @@ export async function definirResponsavelCustomizado(
     pracaCustomizada: destino?.quadro ?? null,
     responsavelCustomizadoId: destino?.uid ?? null,
     responsavelCustomizadoNome: destino?.nome ?? null,
+    // Mantém o carimbo "Responsável: X" do card e quadroEfetivoDaTarefa em sincronia com o override:
+    // sem isso o card trocaria de coluna mas continuaria carimbado com o responsável antigo.
+    // Em "Automático" o carimbo é limpo; a próxima importação (ou reconciliar:roteamento) realinha.
+    responsavelId: destino?.uid ?? null,
+    responsavelNome: destino?.nome ?? null,
+    // `praca` continua sendo o campo lido pela query/índice do painel (useTarefasPorQuadros) — é ele
+    // que move o card de coluna; `quadro` e `overrideManual` o espelham de forma explícita.
+    quadro: destino ? destino.quadro : null,
+    overrideManual: Boolean(destino),
     ...(destino ? { praca: destino.quadro } : {}),
     atualizadoEm: agora,
     historicoNotas: arrayUnion(

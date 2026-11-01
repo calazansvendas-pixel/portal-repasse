@@ -200,6 +200,9 @@ export interface Tarefa {
   // a hierarquia normal (ver resolvePracaPorCidade/reconciliarTarefa). Definido, trava `praca` nesse
   // valor e sobrevive a importações futuras (reconciliarTarefa nunca reroteia por cima dele).
   pracaCustomizada?: Quadro | null;
+  // Espelho explícito do override acima, gravado junto por definirResponsavelCustomizado.
+  quadro?: Quadro | null;
+  overrideManual?: boolean;
   responsavelCustomizadoId?: string | null;
   responsavelCustomizadoNome?: string | null;
   // Lembrete Programado: definido ao concluir a tarefa ("Definir Lembrete" no modal de

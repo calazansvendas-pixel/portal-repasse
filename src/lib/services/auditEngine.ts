@@ -267,7 +267,7 @@ export async function executarAuditoriaDiaria(params: {
       } else {
         // Cartão com responsável fixado manualmente (Gerência): a importação NUNCA reroteia por
         // cima desse override, nem quando a regra normalmente trocaria de praça/nível.
-        const temOverrideManual = !!tarefaAtiva.data.pracaCustomizada;
+        const temOverrideManual = !!tarefaAtiva.data.pracaCustomizada || !!tarefaAtiva.data.overrideManual;
         update(tarefaRef, {
           cidade: dados.cidade,
           etapa: dados.etapa,

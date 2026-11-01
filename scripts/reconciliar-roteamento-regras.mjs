@@ -118,7 +118,7 @@ for (const doc of snap.docs) {
   const idRegra = /^DINAMICA::([^:]+)::/.exec(t.chaveRegra ?? "")?.[1];
   const regra = idRegra ? regras.get(idRegra) : null;
   if (!regra) continue; // agregadas/sem regra: nada a reatribuir por aqui
-  if (t.pracaCustomizada || t.responsavelCustomizadoId) {
+  if (t.pracaCustomizada || t.responsavelCustomizadoId || t.overrideManual) {
     console.log(`~ ${rotulo}: override manual — preservado`);
     continue;
   }
