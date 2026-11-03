@@ -203,6 +203,9 @@ export interface Tarefa {
   // Espelho explícito do override acima, gravado junto por definirResponsavelCustomizado.
   quadro?: Quadro | null;
   overrideManual?: boolean;
+  // Cópia excedente (mesma regra + pasta) arquivada por duplicidade — ver auditEngine.ts e
+  // scripts/limpar-tarefas-duplicadas.mjs.
+  duplicadaArquivada?: boolean;
   responsavelCustomizadoId?: string | null;
   responsavelCustomizadoNome?: string | null;
   // Lembrete Programado: definido ao concluir a tarefa ("Definir Lembrete" no modal de

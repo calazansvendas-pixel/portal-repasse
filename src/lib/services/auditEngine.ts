@@ -152,8 +152,18 @@ export async function executarAuditoriaDiaria(params: {
 
   const tarefasAtivasSnap = await db.collection("tarefas").where("status", "in", ATIVAS).get();
   const tarefasPorChave = new Map<string, { id: string; data: Tarefa }>();
+  // Duplicata exata (mesma chaveRegra = mesma regra + mesma pasta): sem isto o Map ficava só com a
+  // última lida e a outra virava um card "zumbi", que nenhuma importação mais reconcilia nem fecha.
+  // Fica a mais recentemente atualizada; as demais são arquivadas (ver `duplicadasParaArquivar`).
+  const duplicadasParaArquivar: string[] = [];
   tarefasAtivasSnap.forEach((doc) => {
     const data = doc.data() as Tarefa;
+    const existente = tarefasPorChave.get(data.chaveRegra);
+    if (existente) {
+      const novaEhMaisRecente = (data.atualizadoEm ?? "") > (existente.data.atualizadoEm ?? "");
+      duplicadasParaArquivar.push(novaEhMaisRecente ? existente.id : doc.id);
+      if (!novaEhMaisRecente) return;
+    }
     tarefasPorChave.set(data.chaveRegra, { id: doc.id, data });
   });
 
@@ -223,6 +233,10 @@ export async function executarAuditoriaDiaria(params: {
     proximoBatchSeNecessario();
     batch.update(ref, data);
     opsNoBatchAtual++;
+  }
+
+  for (const id of duplicadasParaArquivar) {
+    update(db.collection("tarefas").doc(id), { status: "validated_done", duplicadaArquivada: true, atualizadoEm: agora });
   }
 
   // Mesma blindagem de ação humana, agora incluindo regras dinâmicas com `exigeAcaoHumana`.
@@ -356,6 +370,10 @@ export async function executarAuditoriaDiaria(params: {
       };
       set(ref, tarefa, false);
       resumo.tarefasCriadas++;
+      // Idempotência dentro da própria importação: a planilha pode trazer a mesma pasta em mais de
+      // uma linha. Registrar a tarefa recém-criada faz a segunda ocorrência da MESMA chaveRegra
+      // atualizar este card em vez de criar um segundo.
+      tarefasPorChave.set(dados.chaveRegra, { id: ref.id, data: { ...tarefa, id: ref.id } as Tarefa });
     }
   }
 

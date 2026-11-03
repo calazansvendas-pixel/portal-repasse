@@ -11,6 +11,8 @@
     "wipe:data": "node scripts/wipe-data.mjs",
     "normalizar:users": "node scripts/normalizar-users-ativo.mjs",
     "reconciliar:morada-vitoria": "node scripts/reconciliar-morada-vitoria-2051.mjs",
+    "desativar:regras-clonadas": "node scripts/desativar-regras-clonadas.mjs",
+    "limpar:duplicadas": "node scripts/limpar-tarefas-duplicadas.mjs",
     "reconciliar:roteamento": "node scripts/reconciliar-roteamento-regras.mjs",
     "preencher:responsavel": "node scripts/preencher-responsavel-tarefas.mjs",
     "deploy:rules": "node scripts/deploy-firestore-rules.mjs",
