@@ -1,5 +1,7 @@
 // Tipos centrais do domínio do Portal de Repasse.
 
+import type { GatilhoRegistrado } from "@/lib/services/reaproveitamentoCard";
+
 export type Role = "gerencia" | "coordenador" | "analista" | "assistente";
 
 export type Assistente = "layza" | "eliane" | "catharina";
@@ -206,6 +208,9 @@ export interface Tarefa {
   // Cópia excedente (mesma regra + pasta) arquivada por duplicidade — ver auditEngine.ts e
   // scripts/limpar-tarefas-duplicadas.mjs.
   duplicadaArquivada?: boolean;
+  // Régua progressiva: gatilhos de OUTRAS regras (mesmo destino) absorvidos por este card em vez de
+  // abrir um segundo — ver reaproveitamentoCard.ts e auditEngine.ts.
+  gatilhosAcionados?: GatilhoRegistrado[];
   responsavelCustomizadoId?: string | null;
   responsavelCustomizadoNome?: string | null;
   // Lembrete Programado: definido ao concluir a tarefa ("Definir Lembrete" no modal de

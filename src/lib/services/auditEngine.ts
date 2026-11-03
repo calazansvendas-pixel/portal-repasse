@@ -1,6 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { LinhaPlanilha } from "./parseSheet";
 import { ehFimDeEsteira } from "./taskRouter";
+import { chaveDeReaproveitamento, registrarGatilho } from "./reaproveitamentoCard";
 import { resolvePracaPorCidade, type MatrizEmpreendimentos, type PracaOverrides } from "@/lib/auth/roles";
 import { calcularSlaStatus } from "@/lib/utils/sla";
 import { calcularDataLimiteAutomatica } from "@/lib/utils/prazos";
@@ -235,6 +236,14 @@ export async function executarAuditoriaDiaria(params: {
     opsNoBatchAtual++;
   }
 
+  // Régua progressiva (ver reaproveitamentoCard.ts): card ativo por pasta + etapa + destino. Uma
+  // segunda regra que dispare para o MESMO destino é absorvida por esse card, em vez de abrir outro.
+  const cardPorDestino = new Map<string, { id: string; data: Tarefa }>();
+  for (const t of tarefasPorChave.values()) {
+    const chave = chaveDeReaproveitamento({ ...t.data, quadro: t.data.praca });
+    if (chave && !cardPorDestino.has(chave)) cardPorDestino.set(chave, t);
+  }
+
   for (const id of duplicadasParaArquivar) {
     update(db.collection("tarefas").doc(id), { status: "validated_done", duplicadaArquivada: true, atualizadoEm: agora });
   }
@@ -320,6 +329,30 @@ export async function executarAuditoriaDiaria(params: {
       if (ultimaConclusao && ultimaConclusao.etapa === dados.etapa) {
         return;
       }
+      // Régua progressiva: já há um card ativo desta pasta/etapa para o MESMO destino (outra regra,
+      // outro prazo) — registra o gatilho nele e o mantém no topo, sem criar um segundo card.
+      const reaproveitavel = cardPorDestino.get(chaveDeReaproveitamento(dados) ?? "");
+      if (reaproveitavel && reaproveitavel.data.chaveRegra !== dados.chaveRegra) {
+        const idDaRegra = /^DINAMICA::([^:]+)::/.exec(dados.chaveRegra)?.[1] ?? null;
+        const regraDoGatilho = idDaRegra ? regrasDinamicasAtivas.find((r) => r.id === idDaRegra) : undefined;
+        const { gatilhos, novoRegistro } = registrarGatilho(reaproveitavel.data.gatilhosAcionados, {
+          chaveRegra: dados.chaveRegra,
+          regraId: idDaRegra,
+          dias: regraDoGatilho?.parametros.dias ?? null,
+          descricao: dados.tipoPendencia,
+          data: agora,
+        });
+        if (novoRegistro) {
+          // pending_validation: a assistente já marcou como feito — não reabre nem some o card, só anota.
+          const aindaAberto = reaproveitavel.data.status !== "pending_validation";
+          update(db.collection("tarefas").doc(reaproveitavel.id), {
+            gatilhosAcionados: gatilhos,
+            ...(aindaAberto ? { atualizadoEm: agora, slaStatus: dados.slaStatus } : {}),
+          });
+          reaproveitavel.data.gatilhosAcionados = gatilhos;
+        }
+        return;
+      }
       const ref = db.collection("tarefas").doc();
       const tarefa: Omit<Tarefa, "id"> = {
         chaveRegra: dados.chaveRegra,
@@ -373,7 +406,10 @@ export async function executarAuditoriaDiaria(params: {
       // Idempotência dentro da própria importação: a planilha pode trazer a mesma pasta em mais de
       // uma linha. Registrar a tarefa recém-criada faz a segunda ocorrência da MESMA chaveRegra
       // atualizar este card em vez de criar um segundo.
-      tarefasPorChave.set(dados.chaveRegra, { id: ref.id, data: { ...tarefa, id: ref.id } as Tarefa });
+      const novoCard = { id: ref.id, data: { ...tarefa, id: ref.id } as Tarefa };
+      tarefasPorChave.set(dados.chaveRegra, novoCard);
+      const chaveDestino = chaveDeReaproveitamento(dados);
+      if (chaveDestino && !cardPorDestino.has(chaveDestino)) cardPorDestino.set(chaveDestino, novoCard);
     }
   }
 
