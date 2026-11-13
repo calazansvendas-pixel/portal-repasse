@@ -14,23 +14,32 @@ export const runtime = "nodejs";
 /**
  * Editar/excluir uma tarefa.
  *  - Gerência ("God Mode"): qualquer tarefa, em qualquer status — automática ou avulsa.
+ *  - Coordenação: EDITA (descrição, destino, data limite) qualquer tarefa, inclusive as geradas pela
+ *    auditoria; excluir continua só com a Gerência.
  *  - Quem criou uma tarefa avulsa: só ela, e a edição só enquanto pendente.
  */
 async function carregarTarefa(
   id: string,
   uid: string,
-  role: Role
+  role: Role,
+  acao: "editar" | "excluir"
 ): Promise<{ ref: FirebaseFirestore.DocumentReference; tarefa: Tarefa; ehGerencia: boolean } | NextResponse> {
   const ref = getAdminDb().collection("tarefas").doc(id);
   const snap = await ref.get();
   if (!snap.exists) return NextResponse.json({ erro: "Tarefa não encontrada." }, { status: 404 });
 
   const tarefa = snap.data() as Tarefa;
-  const ehGerencia = role === "gerencia";
+  // "ehGerencia" aqui = edição irrestrita (qualquer status): Gerência e, ao editar, a Coordenação.
+  const ehGerencia = role === "gerencia" || (acao === "editar" && role === "coordenador");
   const criadorDaAvulsa = tarefa.origem === "manual" && tarefa.criadaPor === uid;
   if (!ehGerencia && !criadorDaAvulsa) {
     return NextResponse.json(
-      { erro: "Somente a Gerência, ou quem criou a tarefa avulsa, pode alterá-la." },
+      {
+        erro:
+          acao === "editar"
+            ? "Somente a Gerência, a Coordenação ou quem criou a tarefa avulsa pode editá-la."
+            : "Somente a Gerência, ou quem criou a tarefa avulsa, pode excluí-la.",
+      },
       { status: 403 }
     );
   }
@@ -54,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const auth = await autenticar(req);
     if (auth instanceof NextResponse) return auth;
 
-    const alvo = await carregarTarefa(params.id, auth.uid, auth.role);
+    const alvo = await carregarTarefa(params.id, auth.uid, auth.role, "editar");
     if (alvo instanceof NextResponse) return alvo;
 
     if (!alvo.ehGerencia && alvo.tarefa.status !== "pendente") {
@@ -114,7 +123,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const auth = await autenticar(req);
     if (auth instanceof NextResponse) return auth;
 
-    const alvo = await carregarTarefa(params.id, auth.uid, auth.role);
+    const alvo = await carregarTarefa(params.id, auth.uid, auth.role, "excluir");
     if (alvo instanceof NextResponse) return alvo;
 
     // Cascata: leva junto qualquer subcoleção da tarefa, sem deixar documentos órfãos.

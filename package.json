@@ -14,6 +14,7 @@
     "desativar:regras-clonadas": "node scripts/desativar-regras-clonadas.mjs",
     "testar:reaproveitamento": "node scripts/testar-reaproveitamento-card.mjs",
     "reativar:regras": "node scripts/reativar-regras.mjs",
+    "preencher:produto": "node scripts/preencher-produto-tarefas.mjs",
     "limpar:duplicadas": "node scripts/limpar-tarefas-duplicadas.mjs",
     "reconciliar:roteamento": "node scripts/reconciliar-roteamento-regras.mjs",
     "preencher:responsavel": "node scripts/preencher-responsavel-tarefas.mjs",

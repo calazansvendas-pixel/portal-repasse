@@ -135,7 +135,9 @@ export function TaskCard({
 
   const ehGerencia = profile?.role === "gerencia";
   const criadorDaAvulsa = isManual && !!firebaseUser && tarefa.criadaPor === firebaseUser.uid;
-  const podeEditarExcluir = ehGerencia || criadorDaAvulsa;
+  // Editar: Gerência, Coordenação (inclusive cards da auditoria) ou o criador da avulsa. Excluir: sem a Coordenação.
+  const podeEditar = ehGerencia || profile?.role === "coordenador" || criadorDaAvulsa;
+  const podeExcluir = ehGerencia || criadorDaAvulsa;
   // Reverter: Gerência (God Mode), o dono do quadro (clique por engano) ou a gestão auditando cards das assistentes.
   const podeReverter =
     !!profile &&
@@ -151,7 +153,7 @@ export function TaskCard({
   const notasCard = notasDe(tarefa, !isAgregado);
 
   const itensMenu: ItemMenu[] = [];
-  if (podeEditarExcluir) itensMenu.push({ rotulo: "Editar", icone: Pencil, onClick: () => setModal("editar") });
+  if (podeEditar) itensMenu.push({ rotulo: "Editar", icone: Pencil, onClick: () => setModal("editar") });
   // Reassociar o cartão a outro responsável (ou devolver ao "Automático") — não se aplica a um
   // cliente individual dentro de um gargalo: a praça é da tarefa agregada inteira, não do cliente.
   if (ehGerencia && !gargalo) {
@@ -176,7 +178,7 @@ export function TaskCard({
   } else if (ehGerencia && concluida) {
     itensMenu.push({ rotulo: "Voltar para ativa", icone: Undo2, onClick: () => reverterTarefa(tarefa) });
   }
-  if (podeEditarExcluir && !gargalo) itensMenu.push({ rotulo: "Excluir", icone: Trash2, onClick: () => setModal("excluir"), perigo: true });
+  if (podeExcluir && !gargalo) itensMenu.push({ rotulo: "Excluir", icone: Trash2, onClick: () => setModal("excluir"), perigo: true });
 
   async function confirmarConclusao(nota: string, lembrete: LembreteInput | null) {
     if (!firebaseUser) return;

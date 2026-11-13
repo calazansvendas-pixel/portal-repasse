@@ -18,6 +18,7 @@ function efetivamenteConcluida(t: Tarefa): boolean {
 
 export interface FiltrosState {
   cidade: string; // "" = todas; senão a chave de CIDADES_FILTRO
+  empreendimento: string; // "" = todos; senão normalize(nome do empreendimento) — ver opcoesEmpreendimento
   pessoa: string; // "todos" | "coordenador" | "analista" | "assistentes" | id de assistente
   status: FiltroStatus;
   busca: string; // nome do cliente OU CPF/CNPJ (com ou sem pontuação) — ver tarefaBateNaBusca
@@ -88,9 +89,18 @@ const OPCOES_STATUS: { valor: FiltroStatus; rotulo: string }[] = [
 
 /** Campo de busca por nome do cliente ou CPF/CNPJ (com ou sem pontuação) — visível para todos os
  * perfis, inclusive Assistente (que não tem a barra de filtros completa). */
-export function BuscaTarefas({ valor, onChange }: { valor: string; onChange: (novo: string) => void }) {
+export function BuscaTarefas({
+  valor,
+  onChange,
+  className,
+}: {
+  valor: string;
+  onChange: (novo: string) => void;
+  /** Largura no desktop; padrão sm:w-72 (a barra de filtros usa sm:w-full para caber no grid). */
+  className?: string;
+}) {
   return (
-    <label className="relative flex w-full flex-col gap-1.5 sm:w-72">
+    <label className={cn("relative flex w-full flex-col gap-1.5", className ?? "sm:w-72")}>
       <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Buscar</span>
       <div className="relative">
         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
@@ -138,12 +148,35 @@ export function FiltroStatusTarefas({
 
 export const FILTROS_INICIAIS: FiltrosState = {
   cidade: "",
+  empreendimento: "",
   pessoa: "todos",
   status: "todas",
   busca: "",
   dataInicio: "",
   dataFim: "",
 };
+
+export interface OpcaoEmpreendimento {
+  chave: string; // normalize(nome) — o valor do select e o critério de comparação
+  rotulo: string; // nome como veio da planilha
+}
+
+/** Empreendimentos únicos das tarefas carregadas, em ordem alfabética. Com cidade escolhida, só os
+ * das pastas daquela cidade. Tarefas sem `produto` (avulsas, agregadas, anteriores ao campo) não
+ * geram opção. Recebe as tarefas ANTES de aplicarFiltros, senão a lista encolheria a cada escolha. */
+export function opcoesEmpreendimento(tarefas: Tarefa[], cidade: string): OpcaoEmpreendimento[] {
+  const porChave = new Map<string, string>();
+  for (const t of tarefas) {
+    const nome = t.produto?.trim();
+    if (!nome) continue;
+    if (cidade && !normalize(t.cidade ?? "").includes(cidade)) continue;
+    const chave = normalize(nome);
+    if (!porChave.has(chave)) porChave.set(chave, nome);
+  }
+  return [...porChave.entries()]
+    .map(([chave, rotulo]) => ({ chave, rotulo }))
+    .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+}
 
 interface Visao {
   pracas: Assistente[];
@@ -152,7 +185,10 @@ interface Visao {
 }
 
 /** Aplica cidade + cargo/pessoa sobre o que o perfil já pode ver (o RBAC é decidido antes, em roles.ts). */
-export function aplicarFiltros(visao: Visao, { cidade, pessoa, status, busca, dataInicio, dataFim }: FiltrosState): Visao {
+export function aplicarFiltros(
+  visao: Visao,
+  { cidade, empreendimento, pessoa, status, busca, dataInicio, dataFim }: FiltrosState
+): Visao {
   const { pracas, quadrosEscalonamento, tarefas } = visao;
   const termoNome = normalize(busca.trim());
   const termoCpf = somenteDigitos(busca);
@@ -182,12 +218,15 @@ export function aplicarFiltros(visao: Visao, { cidade, pessoa, status, busca, da
   }
 
   const porCidade = cidade ? tarefas.filter((t) => t.origem === "manual" || normalize(t.cidade ?? "").includes(cidade)) : tarefas;
+  const porEmpreendimento = empreendimento
+    ? porCidade.filter((t) => normalize((t.produto ?? "").trim()) === empreendimento)
+    : porCidade;
   const porStatus =
     status === "a_fazer"
-      ? porCidade.filter((t) => !efetivamenteConcluida(t))
+      ? porEmpreendimento.filter((t) => !efetivamenteConcluida(t))
       : status === "feitas"
-        ? porCidade.filter(efetivamenteConcluida)
-        : porCidade;
+        ? porEmpreendimento.filter(efetivamenteConcluida)
+        : porEmpreendimento;
   const porPeriodo =
     dataInicio || dataFim ? porStatus.filter((t) => tarefaTeveAtividadeNoPeriodo(t, dataInicio, dataFim)) : porStatus;
   const tarefasF = busca.trim() ? porPeriodo.filter((t) => tarefaBateNaBusca(t, termoNome, termoCpf)) : porPeriodo;
@@ -255,20 +294,25 @@ function FiltroPeriodoAtividade({
 export function FiltrosTarefas({
   pracas,
   quadrosEscalonamento,
+  tarefas,
   valor,
   onChange,
   acao,
 }: {
   pracas: Assistente[];
   quadrosEscalonamento: QuadroEscalonamento[];
+  /** Tarefas carregadas, ANTES dos filtros — origem das opções de Empreendimento. */
+  tarefas: Tarefa[];
   valor: FiltrosState;
   onChange: (novo: FiltrosState) => void;
   /** Ação extra ao lado dos filtros (ex: botão "Nova Tarefa"). */
   acao?: ReactNode;
 }) {
   const cidades = CIDADES_FILTRO.filter((c) => pracas.includes(c.praca));
+  const empreendimentos = opcoesEmpreendimento(tarefas, valor.cidade);
   const ativo =
     valor.cidade !== "" ||
+    valor.empreendimento !== "" ||
     valor.pessoa !== "todos" ||
     valor.status !== "todas" ||
     valor.busca !== "" ||
@@ -276,71 +320,97 @@ export function FiltrosTarefas({
     valor.dataFim !== "";
 
   return (
-    <div className="surface-card mb-4 flex flex-wrap items-end gap-3 p-3 sm:mb-6 sm:gap-4 sm:p-4">
-      <BuscaTarefas valor={valor.busca} onChange={(busca) => onChange({ ...valor, busca })} />
+    <div className="surface-card mb-4 flex flex-col gap-3 p-3 sm:mb-6 sm:gap-4 sm:p-4">
+      {/* 1 coluna no celular, 2 no tablet, 4 no desktop. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+        <BuscaTarefas valor={valor.busca} onChange={(busca) => onChange({ ...valor, busca })} className="sm:w-full" />
 
-      <label className="flex w-full flex-col gap-1.5 sm:w-56">
-        <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Cidade</span>
-        <select
-          className="input-field"
-          value={valor.cidade}
-          onChange={(e) => onChange({ ...valor, cidade: e.target.value })}
-        >
-          <option value="">Todas as cidades</option>
-          {cidades.map((c) => (
-            <option key={c.chave} value={c.chave}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex w-full flex-col gap-1.5 sm:w-64">
-        <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Cargo / Pessoa</span>
-        <select
-          className="input-field"
-          value={valor.pessoa}
-          onChange={(e) => onChange({ ...valor, pessoa: e.target.value })}
-        >
-          <option value="todos">Mostrar todos</option>
-          {quadrosEscalonamento.includes("coordenador") && (
-            <option value="coordenador">{QUADRO_LABEL.coordenador}</option>
-          )}
-          {quadrosEscalonamento.includes("analista") && (
-            <option value="analista">{QUADRO_LABEL.analista}</option>
-          )}
-          {pracas.length > 1 && <option value="assistentes">Assistentes (visão conjunta)</option>}
-          {pracas.length > 1 &&
-            pracas.map((p) => (
-              <option key={p} value={p}>
-                {ASSISTENTE_LABEL[p]}
+        <label className="flex w-full flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Cidade</span>
+          <select
+            className="input-field"
+            value={valor.cidade}
+            onChange={(e) => {
+              const cidade = e.target.value;
+              // Mudou a cidade: o empreendimento escolhido só sobrevive se também existir nela.
+              const aindaExiste = opcoesEmpreendimento(tarefas, cidade).some((o) => o.chave === valor.empreendimento);
+              onChange({ ...valor, cidade, empreendimento: aindaExiste ? valor.empreendimento : "" });
+            }}
+          >
+            <option value="">Todas as cidades</option>
+            {cidades.map((c) => (
+              <option key={c.chave} value={c.chave}>
+                {c.label}
               </option>
             ))}
-        </select>
-      </label>
+          </select>
+        </label>
 
-      <FiltroPeriodoAtividade
-        dataInicio={valor.dataInicio}
-        dataFim={valor.dataFim}
-        onChange={(dataInicio, dataFim) => onChange({ ...valor, dataInicio, dataFim })}
-      />
+        <label className="flex w-full flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Empreendimento</span>
+          <select
+            className="input-field"
+            value={valor.empreendimento}
+            onChange={(e) => onChange({ ...valor, empreendimento: e.target.value })}
+          >
+            <option value="">Todos os empreendimentos</option>
+            {empreendimentos.map((o) => (
+              <option key={o.chave} value={o.chave}>
+                {o.rotulo}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <div className="flex w-full flex-col gap-1.5 sm:w-auto">
-        <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Situação</span>
-        <FiltroStatusTarefas valor={valor.status} onChange={(status) => onChange({ ...valor, status })} />
+        <label className="flex w-full flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Cargo / Pessoa</span>
+          <select
+            className="input-field"
+            value={valor.pessoa}
+            onChange={(e) => onChange({ ...valor, pessoa: e.target.value })}
+          >
+            <option value="todos">Mostrar todos</option>
+            {quadrosEscalonamento.includes("coordenador") && (
+              <option value="coordenador">{QUADRO_LABEL.coordenador}</option>
+            )}
+            {quadrosEscalonamento.includes("analista") && (
+              <option value="analista">{QUADRO_LABEL.analista}</option>
+            )}
+            {pracas.length > 1 && <option value="assistentes">Assistentes (visão conjunta)</option>}
+            {pracas.length > 1 &&
+              pracas.map((p) => (
+                <option key={p} value={p}>
+                  {ASSISTENTE_LABEL[p]}
+                </option>
+              ))}
+          </select>
+        </label>
       </div>
 
-      {ativo && (
-        <button
-          type="button"
-          onClick={() => onChange(FILTROS_INICIAIS)}
-          className="btn-secondary w-full sm:w-auto"
-        >
-          <X size={16} />
-          Limpar filtros
-        </button>
-      )}
-      {acao}
+      <div className="flex flex-wrap items-end gap-3 sm:gap-4">
+        <FiltroPeriodoAtividade
+          dataInicio={valor.dataInicio}
+          dataFim={valor.dataFim}
+          onChange={(dataInicio, dataFim) => onChange({ ...valor, dataInicio, dataFim })}
+        />
+
+        <div className="flex w-full flex-col gap-1.5 sm:w-auto">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Situação</span>
+          <FiltroStatusTarefas valor={valor.status} onChange={(status) => onChange({ ...valor, status })} />
+        </div>
+
+        {ativo && (
+          <button
+            type="button"
+            onClick={() => onChange(FILTROS_INICIAIS)}
+            className="btn-secondary w-full sm:w-auto"
+          >
+            <X size={16} />
+            Limpar filtros
+          </button>
+        )}
+        {acao}
+      </div>
     </div>
   );
 }

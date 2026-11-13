@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { Avisos } from "@/components/ui/Avisos";
 
 export default function PainelLayout({ children }: { children: React.ReactNode }) {
   const { firebaseUser, profile, loading, semPerfil, signOut } = useAuth();
@@ -59,6 +60,7 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
         <Sidebar profile={profile} />
         <main className="min-w-0 flex-1">{children}</main>
       </div>
+      <Avisos />
     </div>
   );
 }

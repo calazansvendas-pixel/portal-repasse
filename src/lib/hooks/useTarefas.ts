@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import type { EtapaHistorico, Quadro, QuadroEscalonamento, Tarefa } from "@/lib/types";
 import { normalizarTarefa } from "@/lib/utils/normalizarTarefa";
+import {
+  assinarEdicoesOtimistas,
+  lerEdicoesOtimistas,
+  lerEdicoesOtimistasNoServidor,
+  mesclarEdicoesOtimistas,
+} from "@/lib/store/edicoesOtimistas";
 
 // Inclui "validated_done": as assistentes precisam ver o histórico do que já foi confirmado pela
 // planilha, não só o que está aguardando confirmação (ver aba "Feitas" em FiltrosTarefas.tsx).
@@ -22,6 +28,9 @@ export function useTarefasPorQuadros(quadros: Quadro[]) {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const quadrosKey = quadros.slice().sort().join(",");
+  // Edições feitas no modal "Editar Tarefa" aparecem na hora, antes do PATCH/onSnapshot voltarem.
+  const edicoesPendentes = useSyncExternalStore(assinarEdicoesOtimistas, lerEdicoesOtimistas, lerEdicoesOtimistasNoServidor);
+  const tarefasComEdicoes = useMemo(() => mesclarEdicoesOtimistas(tarefas, edicoesPendentes), [tarefas, edicoesPendentes]);
 
   useEffect(() => {
     if (quadros.length === 0) {
@@ -62,5 +71,5 @@ export function useTarefasPorQuadros(quadros: Quadro[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quadrosKey]);
 
-  return { tarefas, loading, erro };
+  return { tarefas: tarefasComEdicoes, loading, erro };
 }

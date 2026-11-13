@@ -15,7 +15,7 @@ import { useTarefasPorQuadros } from "@/lib/hooks/useTarefas";
 import { Topbar } from "@/components/layout/Topbar";
 import { TaskBoard } from "@/components/tarefas/TaskBoard";
 import { NovaTarefaModal } from "@/components/tarefas/NovaTarefaModal";
-import { BuscaTarefas, FILTROS_INICIAIS, FiltroStatusTarefas, FiltrosTarefas, aplicarFiltros } from "@/components/tarefas/FiltrosTarefas";
+import { BuscaTarefas, FILTROS_INICIAIS, FiltroStatusTarefas, FiltrosTarefas, aplicarFiltros, opcoesEmpreendimento } from "@/components/tarefas/FiltrosTarefas";
 import { ResumoPeriodoColaboradores } from "@/components/tarefas/ResumoPeriodoColaboradores";
 import { RelatorioPainelImpressao } from "@/components/tarefas/RelatorioPainelImpressao";
 import { montarRelatorioPainel } from "@/lib/services/relatorioPainel";
@@ -57,11 +57,15 @@ export default function DashboardPage() {
       const label = CIDADES_FILTRO.find((c) => c.chave === filtros.cidade)?.label ?? filtros.cidade;
       resumo.push(`Cidade: ${label}`);
     }
+    if (filtros.empreendimento) {
+      const rotulo = opcoesEmpreendimento(tarefas, "").find((o) => o.chave === filtros.empreendimento)?.rotulo;
+      resumo.push(`Empreendimento: ${rotulo ?? filtros.empreendimento}`);
+    }
     if (filtros.pessoa === "assistentes") resumo.push("Colaborador: Assistentes (visão conjunta)");
     else if (colaboradorFiltroLabel) resumo.push(`Colaborador: ${colaboradorFiltroLabel}`);
     if (filtros.status !== "todas") resumo.push(`Situação: ${filtros.status === "a_fazer" ? "A fazer" : "Realizadas"}`);
     return resumo;
-  }, [filtros, colaboradorFiltroLabel]);
+  }, [filtros, colaboradorFiltroLabel, tarefas]);
 
   const relatorioPainel = useMemo(
     () => montarRelatorioPainel(visao.tarefas, filtros.dataInicio, filtros.dataFim, filtrosAplicadosResumo, colaboradorFiltroLabel),
@@ -105,6 +109,7 @@ export default function DashboardPage() {
             <FiltrosTarefas
               pracas={pracas}
               quadrosEscalonamento={quadrosEscalonamento}
+              tarefas={tarefas}
               valor={filtros}
               onChange={setFiltros}
               acao={

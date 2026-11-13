@@ -102,6 +102,7 @@ interface DadosParaReconciliar {
   // passa a conter — ou deixa de conter — pendência complexa).
   reroteavel?: boolean;
   cidade: string;
+  produto?: string | null; // empreendimento da pasta — só tarefas por linha
   quadro: Quadro;
   imobiliaria: string;
   etapa: string;
@@ -293,6 +294,7 @@ export async function executarAuditoriaDiaria(params: {
         const temOverrideManual = !!tarefaAtiva.data.pracaCustomizada || !!tarefaAtiva.data.overrideManual;
         update(tarefaRef, {
           cidade: dados.cidade,
+          ...(dados.produto ? { produto: dados.produto } : {}),
           etapa: dados.etapa,
           prazoEtapa: dados.prazoEtapa,
           slaStatus: dados.slaStatus,
@@ -367,6 +369,7 @@ export async function executarAuditoriaDiaria(params: {
         cpfCnpj: dados.cpfCnpj ?? null,
         dataEntrada: dados.dataEntrada ?? null,
         cidade: dados.cidade,
+        produto: dados.produto ?? null,
         praca: dados.quadro,
         responsavelId: dados.responsavelId ?? null,
         responsavelNome: dados.responsavelNome ?? null,
@@ -486,6 +489,7 @@ export async function executarAuditoriaDiaria(params: {
       dataEntrada: linha.dataEntrada,
       historicoPasta,
       cidade: linha.cidade,
+      produto: linha.produto ?? null,
       imobiliaria: linha.responsavel,
       etapa: linha.etapa,
       prazoEtapa: linha.prazoEtapa,

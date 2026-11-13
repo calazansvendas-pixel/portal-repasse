@@ -156,6 +156,10 @@ export interface Tarefa {
   cpfCnpj?: string | null; // CPF/CNPJ do 1º Proponente — vazio em tarefas agregadas/avulsas
   dataEntrada?: string | null; // ISO — "Data Inclusão"/"Data da venda", base da linha do tempo do card
   cidade: string;
+  // Empreendimento da pasta (coluna "Empreendimento" da planilha), copiado do registro para o
+  // filtro por Empreendimento do painel. Ausente nas agregadas/avulsas e nas tarefas anteriores a
+  // este campo até a próxima importação (ou scripts/preencher-produto-tarefas.mjs).
+  produto?: string | null;
   // Quadro PRINCIPAL onde a tarefa vive (assistente regional, ou diretamente
   // "coordenador"/"analista" para tarefas táticas/analíticas nativas). O nome
   // do campo ficou "praca" por compatibilidade com o índice do Firestore já

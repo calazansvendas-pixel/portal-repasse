@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { destinatariosPermitidos, quadroEfetivoDaTarefa } from "@/lib/auth/roles";
 import { criarTarefaManual, editarTarefa } from "@/lib/services/tarefasService";
+import { aplicarEdicaoOtimista, confirmarEdicaoOtimista, reverterEdicaoOtimista } from "@/lib/store/edicoesOtimistas";
+import { avisar } from "@/lib/store/avisos";
 import { QUADRO_LABEL } from "@/lib/types";
 import type { Quadro, Tarefa } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
@@ -17,6 +19,7 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
   const quadroAtual = tarefa ? quadroEfetivoDaTarefa(tarefa) : null;
   const destinatarios: Quadro[] =
     quadroAtual && !permitidos.includes(quadroAtual) ? [quadroAtual, ...permitidos] : permitidos;
+  // Mesmo sem perfil carregado ou com um quadro fora da lista, o select sempre abre no valor atual.
   const [descricao, setDescricao] = useState(tarefa?.descricao ?? "");
   const [destino, setDestino] = useState<Quadro | "">(quadroAtual ?? "");
   const [dataLimite, setDataLimite] = useState(tarefa?.dataLimite ?? "");
@@ -24,15 +27,71 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
   const [erro, setErro] = useState<string | null>(null);
 
   const podeEnviar = descricao.trim().length > 0 && destino !== "" && !enviando;
+  // Em vez de só esmaecer o botão, diz o que falta (e a tarefa da auditoria não é exceção: só estes
+  // campos e o envio em andamento desabilitam "Salvar Alterações").
+  const motivoBloqueio = enviando
+    ? null
+    : descricao.trim().length === 0
+      ? "Preencha a descrição da tarefa."
+      : destino === ""
+        ? "Selecione para quem atribuir."
+        : null;
+
+  /** Edição otimista: o card muda na tela e o modal fecha na hora; o PATCH segue em segundo plano e,
+   * se falhar, a tela volta ao que era e um aviso explica o motivo. */
+  function salvarEdicao(original: Tarefa, usuario: NonNullable<typeof firebaseUser>, novoDestino: Quadro) {
+    const mudouDestino = novoDestino !== quadroAtual;
+    aplicarEdicaoOtimista(
+      original.id,
+      {
+        descricao: descricao.trim(),
+        dataLimite: dataLimite || null,
+        // Troca de colaborador: o servidor resolve a pessoa do quadro; até lá o carimbo antigo sai
+        // (senão o responsável antigo seguraria o card na coluna de origem — ver quadroEfetivoDaTarefa).
+        ...(mudouDestino
+          ? {
+              praca: novoDestino,
+              quadro: novoDestino,
+              pracaCustomizada: novoDestino,
+              overrideManual: true,
+              responsavelId: null,
+              responsavelNome: null,
+              responsavelCustomizadoId: null,
+              responsavelCustomizadoNome: null,
+            }
+          : {}),
+      },
+      original.atualizadoEm
+    );
+    const campos = { descricao, atribuidoPara: novoDestino, dataLimite };
+    onFechar();
+    void (async () => {
+      try {
+        await editarTarefa(original.id, campos, await usuario.getIdToken());
+        confirmarEdicaoOtimista(original.id);
+      } catch (e) {
+        console.error("[NovaTarefaModal] falha ao salvar a edição:", e);
+        reverterEdicaoOtimista(original.id);
+        avisar(`Não foi possível salvar a edição da tarefa: ${e instanceof Error ? e.message : "erro desconhecido"}. Nada foi alterado.`);
+      }
+    })();
+  }
 
   async function criar() {
-    if (!firebaseUser || destino === "") return;
+    if (destino === "") return;
+    if (!firebaseUser) {
+      setErro("Sua sessão expirou. Entre novamente para salvar.");
+      return;
+    }
+    if (tarefa) {
+      salvarEdicao(tarefa, firebaseUser, destino);
+      return;
+    }
     setEnviando(true);
     setErro(null);
     try {
       const token = await firebaseUser.getIdToken();
-      if (tarefa) await editarTarefa(tarefa.id, { descricao, atribuidoPara: destino, dataLimite }, token);
-      else await criarTarefaManual(descricao, destino, dataLimite, token);
+      await criarTarefaManual(descricao, destino, dataLimite, token);
       onFechar();
     } catch (e) {
       console.error("[NovaTarefaModal] falha ao salvar:", e);
@@ -87,7 +146,15 @@ export function NovaTarefaModal({ onFechar, tarefa }: { onFechar: () => void; ta
           />
         </label>
 
-        {erro && <p className="text-xs text-status-danger">{erro}</p>}
+        {erro && (
+          <div
+            role="alert"
+            className="rounded-md border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger"
+          >
+            {erro}
+          </div>
+        )}
+        {motivoBloqueio && <p className="text-xs text-ink-muted">{motivoBloqueio}</p>}
       </div>
 
       <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
