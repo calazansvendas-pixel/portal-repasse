@@ -3,7 +3,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { autenticar } from "@/lib/server/tarefasManuais";
 import { parseWorkbookBuffer } from "@/lib/services/parseSheet";
 import { executarAuditoriaDiaria } from "@/lib/services/auditEngine";
-import { podeImportarPlanilha } from "@/lib/auth/roles";
+import { temPermissao } from "@/lib/auth/cargos";
 import { dataDeCalendarioValida, hojeISO } from "@/lib/utils/dates";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await autenticar(req);
     if (auth instanceof NextResponse) return auth;
-    if (!podeImportarPlanilha(auth.role)) {
+    if (!temPermissao(auth.perfil, "importarPlanilhas")) {
       return NextResponse.json(
         { erro: "Seu perfil não tem permissão para importar planilhas." },
         { status: 403 }

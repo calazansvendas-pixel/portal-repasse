@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { AlertTriangle, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, Pencil, Trash2, UserCog, Undo2 } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, Pencil, Trash2, UserCog, Undo2 } from "lucide-react";
 import type { ClienteEnvolvido, EtapaHistorico, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
@@ -20,6 +20,7 @@ import {
   type LembreteInput,
 } from "@/lib/services/tarefasService";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { temPermissao } from "@/lib/auth/cargos";
 import { meuQuadroInterativo, resolvePracaPorCidade, type PracaOverrides } from "@/lib/auth/roles";
 import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { useColaboradores } from "@/lib/hooks/useColaboradores";
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils/cn";
 import { ConfirmarExclusaoModal, DetalhesTarefaModal, EditarLembreteModal, NotaConclusaoModal } from "./ModaisTarefa";
 import { MenuTarefa, type ItemMenu } from "./MenuTarefa";
 import { NovaTarefaModal } from "./NovaTarefaModal";
+import { TransferirTarefaModal } from "./TransferirTarefaModal";
 import { ListaClientesEnvolvidos } from "./ClientesEnvolvidos";
 import { HistoricoNotas, ObservacaoChecklist, TrajetoPasta, dataUltimaPlanilha, notasDe } from "./partesCard";
 
@@ -102,8 +104,10 @@ export function TaskCard({
 }) {
   const { firebaseUser, profile } = useAuth();
   const { overrides: pracaOverrides } = useMapeamentoPracas();
-  const { colaboradores } = useColaboradores(profile?.role === "gerencia");
-  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | "editarLembrete" | null>(null);
+  // Reatribuir o responsável: Gerência (a única que as regras do Firestore deixam gravar) com a permissão.
+  const podeTransferir = !!profile && profile.role === "gerencia" && temPermissao(profile, "transferirTarefas");
+  const { colaboradores } = useColaboradores(podeTransferir);
+  const [modal, setModal] = useState<"nota" | "detalhes" | "editar" | "excluir" | "editarLembrete" | "transferir" | null>(null);
   // Número do cliente cujo check completa a tarefa agregada (pede a nota opcional antes de gravar).
   const [clientePendente, setClientePendente] = useState<string | null>(null);
   const [expandido, setExpandido] = useState(false);
@@ -154,6 +158,11 @@ export function TaskCard({
 
   const itensMenu: ItemMenu[] = [];
   if (podeEditar) itensMenu.push({ rotulo: "Editar", icone: Pencil, onClick: () => setModal("editar") });
+  // Permissão "Transferir" (Assistente, Analista, Coordenação): move um cartão ativo que a pessoa
+  // enxerga. A Gerência usa "Ver detalhes / Responsável", abaixo.
+  if (!ehGerencia && !gargalo && !concluida && !!profile && temPermissao(profile, "transferirTarefas")) {
+    itensMenu.push({ rotulo: "Transferir", icone: ArrowLeftRight, onClick: () => setModal("transferir") });
+  }
   // Reassociar o cartão a outro responsável (ou devolver ao "Automático") — não se aplica a um
   // cliente individual dentro de um gargalo: a praça é da tarefa agregada inteira, não do cliente.
   if (ehGerencia && !gargalo) {
@@ -305,7 +314,7 @@ export function TaskCard({
             podeReverter={podeReverter}
             onReverter={reverter}
             onFechar={() => setModal(null)}
-            podeAlterarResponsavel={ehGerencia}
+            podeAlterarResponsavel={podeTransferir}
             colaboradores={colaboradores}
             pracaOverrides={pracaOverrides}
             onAlterarResponsavel={alterarResponsavel}
@@ -316,6 +325,7 @@ export function TaskCard({
         )}
         {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
         {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
+        {modal === "transferir" && <TransferirTarefaModal tarefa={tarefa} onFechar={() => setModal(null)} />}
         {modal === "editarLembrete" && (
           <EditarLembreteModal tarefa={tarefa} onSalvar={salvarEdicaoLembrete} onCancelar={() => setModal(null)} />
         )}
@@ -557,7 +567,7 @@ export function TaskCard({
           podeReverter={podeReverter}
           onReverter={reverter}
           onFechar={() => setModal(null)}
-          podeAlterarResponsavel={ehGerencia}
+          podeAlterarResponsavel={podeTransferir}
           colaboradores={colaboradores}
           pracaOverrides={pracaOverrides}
           onAlterarResponsavel={alterarResponsavel}
@@ -568,6 +578,7 @@ export function TaskCard({
       )}
       {modal === "editar" && <NovaTarefaModal tarefa={gargalo?.pai ?? tarefa} onFechar={() => setModal(null)} />}
       {modal === "excluir" && <ConfirmarExclusaoModal onConfirmar={excluir} onCancelar={() => setModal(null)} />}
+      {modal === "transferir" && <TransferirTarefaModal tarefa={tarefa} onFechar={() => setModal(null)} />}
       {modal === "editarLembrete" && (
         <EditarLembreteModal tarefa={tarefa} onSalvar={salvarEdicaoLembrete} onCancelar={() => setModal(null)} />
       )}

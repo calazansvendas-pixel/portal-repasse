@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { ChevronLeft, ChevronRight, LayoutDashboard, Search, UploadCloud, Workflow } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutDashboard, Search, ShieldCheck, UploadCloud, Workflow } from "lucide-react";
+import { nomeDoCargo, temPermissao } from "@/lib/auth/cargos";
 import type { UserProfile } from "@/lib/types";
 import { ROLE_LABEL, ASSISTENTE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
@@ -20,12 +21,16 @@ interface NavItem {
 function navItemsPara(profile: UserProfile): NavItem[] {
   const items: NavItem[] = [{ href: "/dashboard", label: "Painel", icon: LayoutDashboard }];
 
-  if (profile.role === "gerencia" || profile.role === "coordenador" || profile.role === "analista") {
+  const acompanhaOperacao = profile.role === "gerencia" || profile.role === "coordenador" || profile.role === "analista";
+  if (acompanhaOperacao || temPermissao(profile, "importarPlanilhas")) {
     items.push({ href: "/auditoria", label: "Auditoria de Planilha", icon: UploadCloud });
-    items.push({ href: "/auditoria/cliente", label: "Dossiê do Cliente", icon: Search });
   }
-  if (profile.role === "gerencia") {
+  if (acompanhaOperacao) items.push({ href: "/auditoria/cliente", label: "Dossiê do Cliente", icon: Search });
+  if (temPermissao(profile, "editarMotorRegras") || temPermissao(profile, "editarParametros")) {
     items.push({ href: "/motor-regras", label: "Motor de Regras", icon: Workflow });
+  }
+  if (temPermissao(profile, "gerenciarUsuarios")) {
+    items.push({ href: "/painel-administrador", label: "Painel do Administrador", icon: ShieldCheck });
   }
 
   return items;
@@ -57,10 +62,11 @@ export function Sidebar({ profile }: { profile: UserProfile }) {
     });
   }
 
+  const cargo = nomeDoCargo(profile.cargo);
   const subtitulo =
     profile.role === "assistente" && profile.praca
-      ? ASSISTENTE_LABEL[profile.praca]
-      : ROLE_LABEL[profile.role];
+      ? [cargo, ASSISTENTE_LABEL[profile.praca]].filter(Boolean).join(" · ")
+      : cargo ?? ROLE_LABEL[profile.role];
 
   return (
     <aside

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Assistente, Quadro, QuadroEscalonamento, Role, Tarefa } from "@/lib/types";
+import type { Assistente, Quadro, QuadroNativo, Role, Tarefa } from "@/lib/types";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
 import { quadroEfetivoDaTarefa } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
@@ -30,15 +30,15 @@ export function TaskBoard({
   loading: boolean;
   /** Quadros em que o usuário atual pode marcar/desmarcar o checkbox. */
   meusQuadros?: Quadro[];
-  /** Quadros de Coordenador/Analista visíveis (tarefas nativas + escalonadas). */
-  quadrosEscalonamento?: QuadroEscalonamento[];
+  /** Quadros de Gerência/Coordenador/Analista visíveis (tarefas nativas + escalonadas). */
+  quadrosEscalonamento?: QuadroNativo[];
 }) {
   // Ordem hierárquica de cima para baixo:
-  //  1) quadro do próprio usuário (Coordenador ou Analista; a Gerência não tem
-  //     quadro próprio, então o do Coordenador ocupa o topo para ela);
+  //  0) quadro da liderança (só a Gerência);
+  //  1) quadro do Coordenador (ou o da própria Analista logada);
   //  2) quadro da Analista, se não for a própria logada (evita duplicar);
   //  3) grid das assistentes.
-  const { topo, meio, assistentes } = useMemo(() => {
+  const { lideranca, topo, meio, assistentes } = useMemo(() => {
     const assistentes: Coluna[] = pracas.map((praca) => ({
       chave: praca as Quadro,
       titulo: ASSISTENTE_LABEL[praca],
@@ -50,7 +50,7 @@ export function TaskBoard({
       chave: quadro as Quadro,
       titulo: QUADRO_LABEL[quadro],
       tarefas: ordenarPorSla(
-        tarefas.filter((t) => t.praca === quadro || t.escalonadoPara?.includes(quadro))
+        tarefas.filter((t) => t.praca === quadro || (quadro !== "gerencia" && t.escalonadoPara?.includes(quadro)))
       ),
       escalonamento: true,
     }));
@@ -59,6 +59,7 @@ export function TaskBoard({
     const coordenador = escalonadas.find((c) => c.chave === "coordenador") ?? null;
 
     return {
+      lideranca: escalonadas.find((c) => c.chave === "gerencia") ?? null,
       topo: role === "analista" ? analista : coordenador,
       meio: role === "analista" ? null : analista,
       assistentes,
@@ -131,6 +132,9 @@ export function TaskBoard({
       )}
 
       <div className="flex flex-col gap-8">
+        {lideranca && (
+          <ColunaTarefas coluna={lideranca} interativo={meusQuadros.includes(lideranca.chave)} etapasSelecionadas={etapasSelecionadas} />
+        )}
         {topo && (
           <ColunaTarefas coluna={topo} interativo={meusQuadros.includes(topo.chave)} etapasSelecionadas={etapasSelecionadas} />
         )}

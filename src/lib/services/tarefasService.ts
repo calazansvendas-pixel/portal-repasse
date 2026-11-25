@@ -18,6 +18,7 @@ const CARGO_MENSAGEM: Record<Role, string> = {
   analista: "Analista",
   coordenador: "Coordenação",
   gerencia: "Gerência",
+  corretor: "Corretor",
 };
 
 /**
@@ -299,6 +300,11 @@ export async function editarTarefa(
   idToken: string
 ) {
   await chamarTarefa("PATCH", `/api/tarefas/${encodeURIComponent(id)}`, idToken, campos);
+}
+
+/** Transfere a tarefa para outro quadro (permissão "transferirTarefas", conferida no servidor). */
+export async function transferirTarefa(id: string, destino: Quadro, idToken: string) {
+  await chamarTarefa("POST", `/api/tarefas/${encodeURIComponent(id)}/transferir`, idToken, { destino });
 }
 
 /** Exclusão definitiva (hard delete). */

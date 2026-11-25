@@ -3,24 +3,20 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { statusDoPerfil } from "@/lib/auth/cargos";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Avisos } from "@/components/ui/Avisos";
 
 export default function PainelLayout({ children }: { children: React.ReactNode }) {
-  const { firebaseUser, profile, loading, semPerfil, signOut } = useAuth();
+  const { firebaseUser, profile, loading } = useAuth();
   const router = useRouter();
 
+  // Mesmo rigor do firestore.rules: só `ativo === true` entra (campo ausente também não). Sem sessão,
+  // sem perfil, pendente, pausado ou excluído: o painel não abre e o /login mostra a tela certa.
+  const liberado = !!firebaseUser && !!profile && profile.ativo === true && statusDoPerfil(profile) === "ativo";
   useEffect(() => {
-    if (!loading && !firebaseUser) router.replace("/login");
-  }, [loading, firebaseUser, router]);
-
-  // Perfil desativado: encerra a sessão e manda para o login (o app não deve continuar aberto).
-  // Mesmo rigor do firestore.rules: só `ativo === true` mantém a sessão (campo ausente também encerra).
-  const inativo = !!profile && profile.ativo !== true;
-  useEffect(() => {
-    if (!inativo) return;
-    signOut().finally(() => router.replace("/login?inativo=1"));
-  }, [inativo, signOut, router]);
+    if (!loading && !liberado) router.replace("/login");
+  }, [loading, liberado, router]);
 
   if (loading) {
     return (
@@ -30,29 +26,7 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  if (!firebaseUser) return null;
-
-  if (semPerfil) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-soft px-4 dark:bg-[#12140F]">
-        <div className="surface-card max-w-sm p-8 text-center">
-          <h1 className="mb-2 text-lg font-bold text-ink-primary dark:text-white">
-            Conta sem perfil configurado
-          </h1>
-          <p className="mb-4 text-sm text-ink-secondary dark:text-white/60">
-            Seu login foi reconhecido, mas nenhum perfil de acesso (função) foi encontrado para
-            este usuário. Peça à gerência para cadastrar seu perfil na coleção{" "}
-            <code>users</code>.
-          </p>
-          <button className="btn-secondary" onClick={() => signOut()}>
-            Sair
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!profile || inativo) return null;
+  if (!liberado || !profile) return null;
 
   return (
     <div className="min-h-screen bg-surface-soft dark:bg-[#12140F]">

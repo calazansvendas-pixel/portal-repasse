@@ -7,7 +7,7 @@ import { CIDADES_FILTRO, normalize } from "@/lib/auth/roles";
 import { diasAtrasISO, hojeISO, inicioDaSemanaISO, lembreteVencido } from "@/lib/utils/dates";
 import { somenteDigitos } from "@/lib/utils/cpf";
 import { ASSISTENTE_LABEL, QUADRO_LABEL } from "@/lib/types";
-import type { Assistente, EtapaHistorico, NotaResolucao, QuadroEscalonamento, Tarefa } from "@/lib/types";
+import type { Assistente, EtapaHistorico, NotaResolucao, QuadroNativo, Tarefa } from "@/lib/types";
 
 /** Concluída "de verdade" para fins de filtro — um lembrete vencido reabre a tarefa mesmo que o
  * status ainda diga pending_validation/validated_done (ver TaskCard.tsx, mesmo critério). */
@@ -180,7 +180,7 @@ export function opcoesEmpreendimento(tarefas: Tarefa[], cidade: string): OpcaoEm
 
 interface Visao {
   pracas: Assistente[];
-  quadrosEscalonamento: QuadroEscalonamento[];
+  quadrosEscalonamento: QuadroNativo[];
   tarefas: Tarefa[];
 }
 
@@ -203,7 +203,7 @@ export function aplicarFiltros(
       pracasF = pracaDaCidade && pracas.includes(pracaDaCidade) ? [pracaDaCidade] : [];
       escalF = [];
     }
-  } else if (pessoa === "coordenador" || pessoa === "analista") {
+  } else if (pessoa === "gerencia" || pessoa === "coordenador" || pessoa === "analista") {
     pracasF = [];
     escalF = quadrosEscalonamento.filter((q) => q === pessoa);
   } else if (pessoa === "assistentes") {
@@ -300,7 +300,7 @@ export function FiltrosTarefas({
   acao,
 }: {
   pracas: Assistente[];
-  quadrosEscalonamento: QuadroEscalonamento[];
+  quadrosEscalonamento: QuadroNativo[];
   /** Tarefas carregadas, ANTES dos filtros — origem das opções de Empreendimento. */
   tarefas: Tarefa[];
   valor: FiltrosState;
@@ -370,6 +370,7 @@ export function FiltrosTarefas({
             onChange={(e) => onChange({ ...valor, pessoa: e.target.value })}
           >
             <option value="todos">Mostrar todos</option>
+            {quadrosEscalonamento.includes("gerencia") && <option value="gerencia">{QUADRO_LABEL.gerencia}</option>}
             {quadrosEscalonamento.includes("coordenador") && (
               <option value="coordenador">{QUADRO_LABEL.coordenador}</option>
             )}

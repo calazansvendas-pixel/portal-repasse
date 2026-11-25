@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { podeConfigurarRegrasAuditoria } from "@/lib/auth/roles";
+import { temPermissao } from "@/lib/auth/cargos";
 import { autenticar } from "@/lib/server/tarefasManuais";
 import type { Assistente, Role } from "@/lib/types";
 
@@ -13,20 +13,25 @@ export interface Colaborador {
   praca?: Assistente;
 }
 
-/** Lista de colaboradores ativos, para o seletor de "destino fixo" do Motor de Regras. Gerência apenas. */
+/** Lista de colaboradores ativos, para o seletor de "destino fixo" do Motor de Regras. */
 export async function GET(req: NextRequest) {
   try {
     const auth = await autenticar(req);
     if (auth instanceof NextResponse) return auth;
-    if (!podeConfigurarRegrasAuditoria(auth.role)) {
+    // Alimenta os seletores do Motor de Regras, dos mapeamentos e do responsável de um cartão.
+    const usa = (["editarMotorRegras", "editarParametros", "transferirTarefas"] as const).some((p) => temPermissao(auth.perfil, p));
+    if (!usa) {
       return NextResponse.json({ erro: "Sem permissão." }, { status: 403 });
     }
 
     const snap = await getAdminDb().collection("users").where("ativo", "==", true).get();
-    const colaboradores: Colaborador[] = snap.docs.map((d) => {
-      const data = d.data() as { nome?: string; role?: Role; praca?: Assistente };
-      return { uid: d.id, nome: data.nome ?? d.id, role: data.role ?? "assistente", praca: data.praca };
-    });
+    const colaboradores: Colaborador[] = snap.docs
+      .map((d) => {
+        const data = d.data() as { nome?: string; role?: Role; praca?: Assistente };
+        return { uid: d.id, nome: data.nome ?? d.id, role: data.role ?? "assistente", praca: data.praca };
+      })
+      // Corretores não têm quadro de tarefas: não podem ser destino de regra nem responsável.
+      .filter((c) => c.role !== "corretor");
     return NextResponse.json({ colaboradores });
   } catch (error) {
     console.error("[colaboradores] erro:", error);

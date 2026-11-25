@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, FileText, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { temPermissao } from "@/lib/auth/cargos";
 import {
   pracasVisiveis,
   quadrosEscalonamentoVisiveis,
@@ -43,6 +44,7 @@ export default function DashboardPage() {
   // quanto como filtro ESTRITO de autoria no relatório (ver montarRelatorioPainel).
   const colaboradorFiltroLabel = useMemo(() => {
     if (filtros.pessoa === "todos" || filtros.pessoa === "assistentes") return null;
+    if (filtros.pessoa === "gerencia") return QUADRO_LABEL.gerencia;
     if (filtros.pessoa === "coordenador") return QUADRO_LABEL.coordenador;
     if (filtros.pessoa === "analista") return QUADRO_LABEL.analista;
     return ASSISTENTE_LABEL[filtros.pessoa as Assistente] ?? filtros.pessoa;
@@ -103,6 +105,13 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-end gap-3">
               <BuscaTarefas valor={filtros.busca} onChange={(busca) => setFiltros({ ...filtros, busca })} />
               <FiltroStatusTarefas valor={filtros.status} onChange={(status) => setFiltros({ ...filtros, status })} />
+              {/* Permissão individual de exportar também vale para quem não tem a barra completa. */}
+              {temPermissao(profile, "exportarRelatorios") && (
+                <button type="button" className="btn-secondary w-full sm:w-auto" onClick={() => setRelatorioAberto(true)}>
+                  <FileText size={16} />
+                  Exportar Relatório
+                </button>
+              )}
             </div>
           )}
           {mostrarFiltros && (
@@ -114,10 +123,12 @@ export default function DashboardPage() {
               onChange={setFiltros}
               acao={
                 <>
-                  <button type="button" className="btn-secondary w-full sm:w-auto" onClick={() => setRelatorioAberto(true)}>
-                    <FileText size={16} />
-                    Exportar Relatório
-                  </button>
+                  {temPermissao(profile, "exportarRelatorios") && (
+                    <button type="button" className="btn-secondary w-full sm:w-auto" onClick={() => setRelatorioAberto(true)}>
+                      <FileText size={16} />
+                      Exportar Relatório
+                    </button>
+                  )}
                   {destinatariosPermitidos(profile.role).length > 0 && (
                     <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setNovaTarefaAberta(true)}>
                       <Plus size={16} />

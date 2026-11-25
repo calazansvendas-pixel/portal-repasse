@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { podeVerDossieCliente } from "@/lib/auth/roles";
 import { autenticar } from "@/lib/server/tarefasManuais";
-import { buscarCandidatosDossie, lerDossieCliente } from "@/lib/server/dossieCliente";
+import { buscarCandidatosDossie, lerDossieCliente, listarClientesDossie } from "@/lib/server/dossieCliente";
 
 export const runtime = "nodejs";
 
 const MIN_CARACTERES_BUSCA = 3;
 
 /**
- * Dossiê do Cliente: `?termo=` busca pastas por nome/CPF (lista de candidatos);
+ * Dossiê do Cliente: `?lista=1` traz os clientes do campo pesquisável; `?termo=` busca pastas por
+ * nome/CPF (lista de candidatos);
  * `?numero=` traz a pasta completa (registro + tarefas) para a linha do tempo.
  */
 export async function GET(req: NextRequest) {
@@ -21,6 +22,9 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    if (searchParams.get("lista")) {
+      return NextResponse.json({ clientes: await listarClientesDossie(getAdminDb()) });
+    }
     const numero = searchParams.get("numero")?.trim();
     const termo = searchParams.get("termo")?.trim();
 

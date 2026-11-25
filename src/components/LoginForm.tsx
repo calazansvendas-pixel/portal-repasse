@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { AuthAlerta, AuthCampo, AuthCard, AuthLayout, AuthTitulo, CampoSenha } from "@/components/auth/AuthLayout";
 
 const ERROS_AMIGAVEIS: Record<string, string> = {
-  "auth/invalid-credential": "E-mail ou senha incorretos.",
+  "auth/invalid-credential": "E-mail ou senha inválidos. Confira os dados e tente novamente.",
+  "auth/wrong-password": "E-mail ou senha inválidos. Confira os dados e tente novamente.",
+  "auth/user-not-found": "E-mail ou senha inválidos. Confira os dados e tente novamente.",
   "auth/invalid-email": "E-mail inválido.",
-  "auth/user-disabled": "Este usuário está desativado. Fale com a gerência.",
-  "auth/too-many-requests": "Muitas tentativas. Aguarde um momento e tente novamente.",
+  "auth/user-disabled": "Este usuário foi desativado.",
+  "auth/too-many-requests": "Muitas tentativas seguidas — aguarde um pouco e tente de novo.",
 };
 
 export function LoginForm() {
@@ -19,94 +20,84 @@ export function LoginForm() {
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  // Redirecionado do painel porque o perfil foi desativado.
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("inativo") === "1") {
-      setErro("Seu acesso foi desativado. Fale com a gerência.");
-    }
-  }, []);
-  const router = useRouter();
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  function limparAvisos() {
     setErro(null);
+    setInfo(null);
+  }
+
+  async function entrar(e: FormEvent) {
+    e.preventDefault();
+    limparAvisos();
+    if (!email.trim() || !senha) return setErro("Preencha e-mail e senha.");
     setCarregando(true);
     try {
+      // A página de login decide o destino: painel, ou a tela de status da conta.
       await signInWithEmailAndPassword(auth, email.trim(), senha);
-      router.replace("/dashboard");
     } catch (err) {
       const code = (err as { code?: string })?.code ?? "";
       setErro(ERROS_AMIGAVEIS[code] ?? "Não foi possível entrar. Tente novamente.");
-    } finally {
       setCarregando(false);
     }
   }
 
+  async function redefinirSenha() {
+    limparAvisos();
+    const destino = email.trim();
+    if (!destino) return setErro('Digite seu e-mail no campo acima e clique em "Esqueci minha senha" novamente.');
+    try {
+      await sendPasswordResetEmail(auth, destino);
+      setInfo(`Enviamos um link de redefinição de senha para ${destino}.`);
+    } catch (err) {
+      setErro(
+        (err as { code?: string })?.code === "auth/invalid-email"
+          ? "E-mail inválido."
+          : "Não foi possível enviar o e-mail de recuperação agora. Tente novamente em instantes."
+      );
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-soft px-4 dark:bg-[#12140F]">
-      <div className="w-full max-w-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <Image
-            src="/logos/logo-morar-verde.png"
-            alt="Morar Construtora e Incorporadora"
-            width={140}
-            height={40}
-            priority
-            className="h-9 w-auto object-contain"
-          />
-          <ThemeToggle />
-        </div>
+    <AuthLayout>
+      <AuthCard>
+        <AuthTitulo comIcone titulo="Bem-vindo(a) de volta" subtitulo="Entre com seu e-mail e senha para acessar sua conta." />
+        {erro && <AuthAlerta tipo="erro">{erro}</AuthAlerta>}
+        {info && <AuthAlerta tipo="ok">{info}</AuthAlerta>}
 
-        <form onSubmit={handleSubmit} className="surface-card p-8">
-          <h1 className="mb-1 text-2xl font-bold text-ink-primary dark:text-white">
-            Portal de Repasse
-          </h1>
-          <p className="mb-6 text-sm text-ink-secondary dark:text-white/60">
-            Entre com sua conta corporativa para acessar seus painéis e tarefas.
-          </p>
-
-          <label className="mb-1 block text-sm font-medium text-ink-primary dark:text-white">
-            E-mail
-          </label>
-          <input
-            type="email"
-            required
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input-field mb-4"
-            placeholder="voce@morar.com.br"
-          />
-
-          <label className="mb-1 block text-sm font-medium text-ink-primary dark:text-white">
-            Senha
-          </label>
-          <input
-            type="password"
-            required
-            autoComplete="current-password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            className="input-field mb-2"
-            placeholder="••••••••"
-          />
-
-          {erro && (
-            <p className="mb-2 rounded-md border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
-              {erro}
-            </p>
-          )}
-
-          <button type="submit" disabled={carregando} className="btn-primary mt-4 w-full">
+        <form onSubmit={entrar} noValidate className="flex flex-col gap-4">
+          <AuthCampo rotulo="E-mail">
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input-field"
+              placeholder="voce@imobiliaria.com.br"
+            />
+          </AuthCampo>
+          <div>
+            <AuthCampo rotulo="Senha">
+              <CampoSenha autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="••••••••" />
+            </AuthCampo>
+            <div className="mt-1.5 flex justify-end">
+              <button type="button" onClick={redefinirSenha} className="text-xs font-semibold text-brand-primary hover:underline">
+                Esqueci minha senha
+              </button>
+            </div>
+          </div>
+          <button type="submit" disabled={carregando} className="btn-primary w-full font-bold">
             {carregando ? "Entrando…" : "Entrar"}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-xs text-ink-muted">
-          Acesso restrito à equipe Morar. Problemas para entrar? Fale com a coordenação.
+        <p className="mt-5 text-center text-xs text-ink-secondary dark:text-white/60">
+          Ainda não tem conta?{" "}
+          <Link href="/cadastro" className="font-semibold text-brand-primary hover:underline">
+            Criar conta
+          </Link>
         </p>
-      </div>
-    </div>
+      </AuthCard>
+    </AuthLayout>
   );
 }

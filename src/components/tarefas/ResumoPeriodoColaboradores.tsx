@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { QUADRO_LABEL } from "@/lib/types";
 import type { Quadro, Tarefa } from "@/lib/types";
 
-const ORDEM_QUADRO: Quadro[] = ["layza", "eliane", "catharina", "coordenador", "analista"];
+const ORDEM_QUADRO: Quadro[] = ["layza", "eliane", "catharina", "coordenador", "analista", "gerencia"];
 
 /**
  * Resumo leve "quantas pastas cada colaborador trabalhou no período" — nenhuma consulta nova ao

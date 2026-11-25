@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { podeVerDossieCliente, resolvePracaPorCidade } from "@/lib/auth/roles";
-import { useDossieCliente } from "@/lib/hooks/useDossieCliente";
+import { useDossieCliente, useListaClientes } from "@/lib/hooks/useDossieCliente";
+import { ComboboxClientes } from "@/components/auditoria/ComboboxClientes";
 import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { Topbar } from "@/components/layout/Topbar";
 import { montarLinhaDoTempo } from "@/lib/utils/dossieTimeline";
@@ -39,6 +40,7 @@ export default function DossieClientePage() {
   const { profile } = useAuth();
   const podeVer = !!profile && podeVerDossieCliente(profile.role);
   const { candidatos, dossie, loading, erro, buscar, abrir, limpar } = useDossieCliente();
+  const lista = useListaClientes(podeVer);
   const { overrides: pracaOverrides } = useMapeamentoPracas();
   const [termo, setTermo] = useState("");
 
@@ -70,17 +72,22 @@ export default function DossieClientePage() {
       </p>
 
       <form onSubmit={handleBuscar} className="surface-card flex flex-wrap items-end gap-3 p-3 sm:gap-4 sm:p-4">
-        <label className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-[320px]">
+        <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-auto sm:min-w-[320px] sm:flex-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Nome ou CPF/CNPJ</span>
-          <input
-            type="text"
-            className="input-field"
-            placeholder="Ex.: Jorge Luiz Gomes Moreira ou 123.456.789-00"
-            value={termo}
-            onChange={(e) => setTermo(e.target.value)}
+          <ComboboxClientes
+            clientes={lista.clientes}
+            carregando={lista.carregando}
+            erro={lista.erro}
+            texto={termo}
+            onTexto={setTermo}
+            onEscolher={(c) => abrir(c.numero)}
+            onLimpar={limpar}
+            onAbrir={() => {
+              if (lista.erro) lista.recarregar();
+            }}
           />
-        </label>
-        <button type="submit" className="btn-primary flex h-11 items-center gap-2 px-5" disabled={loading}>
+        </div>
+        <button type="submit" className="btn-primary flex items-center gap-2 px-5" disabled={loading}>
           <Search size={16} />
           Buscar
         </button>
@@ -133,7 +140,7 @@ export default function DossieClientePage() {
 
       {!loading && !dossie && candidatos.length === 0 && !erro && (
         <div className="surface-card p-8 text-center text-sm text-ink-muted">
-          Busque por nome ou CPF/CNPJ para abrir o dossiê de uma pasta.
+          Escolha um cliente na lista ou busque por nome ou CPF/CNPJ para abrir o dossiê.
         </div>
       )}
 

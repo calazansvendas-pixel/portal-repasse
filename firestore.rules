@@ -31,10 +31,18 @@ service cloud.firestore {
       return logado() && perfilAtivo() && minhaRole() == 'gerencia';
     }
 
-    // --- users: cada um lê o próprio perfil (mesmo inativo, para o app conseguir encerrar a
-    // sessão); o de outros só gestor ativo. Escrita só via Admin SDK/console. ---
+    // Permissão individual gravada pelo Painel do Administrador (users/{uid}.permissoesEfetivas).
+    // Perfis sem o campo mantêm o comportamento anterior: só a Gerência tem a permissão.
+    function temPermissao(chave) {
+      return logado() && perfilAtivo() &&
+        meuPerfil().get('permissoesEfetivas', {}).get(chave, minhaRole() == 'gerencia') == true;
+    }
+
+    // --- users: cada um lê SÓ o próprio perfil (mesmo inativo, para o app mostrar a tela de status).
+    // A lista de colaboradores e toda escrita passam pelas rotas de API (Admin SDK).
+    // "usuarios_privado" (CPF, nascimento, telefone) não tem regra: o cliente nunca lê nem grava. ---
     match /users/{uid} {
-      allow read: if logado() && (request.auth.uid == uid || papelGestor());
+      allow read: if logado() && request.auth.uid == uid;
       allow write: if false;
     }
 
@@ -65,18 +73,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // --- regras_auditoria: Motor de Regras Dinâmicas (No-Code). Configuração restrita à
-    // Gerência — mesmo nível de confiança do God Mode nas tarefas. ---
+    // --- regras_auditoria: Motor de Regras Dinâmicas (No-Code). Exige a permissão
+    // "editarMotorRegras" (por padrão, a Gerência). ---
     match /regras_auditoria/{regraId} {
-      allow read, write: if souGerencia();
+      allow read, write: if temPermissao('editarMotorRegras');
     }
 
     // --- configuracoes: ajustes operacionais (ex.: mapeamento de praças). Leitura para
     // qualquer usuário ativo — os cards/Dossiê de qualquer papel precisam resolver o
-    // responsável da cidade; escrita (a configuração em si) só Gerência. ---
+    // responsável da cidade; escrita exige "editarParametros". O padrão de permissões por cargo
+    // só é gravado pela API — senão quem edita parâmetros poderia se dar mais acesso. ---
     match /configuracoes/{docId} {
       allow read: if logado() && perfilAtivo();
-      allow write: if souGerencia();
+      allow write: if docId != 'permissoesCargos' && temPermissao('editarParametros');
     }
 
     // --- tarefas: o campo "praca" guarda o Quadro (regional OU "coordenador"/"analista"
@@ -102,7 +111,11 @@ service cloud.firestore {
       // Gerência/Coordenador/Analista: auditoria humana — só podem DEVOLVER uma
       // tarefa de assistente para "pendente" (nunca concluir nem editar outros campos).
       allow update: if logado() && (
-        souGerencia() ||
+        (souGerencia() &&
+          (temPermissao('transferirTarefas') ||
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+              ['praca', 'pracaCustomizada', 'quadro', 'responsavelId', 'responsavelCustomizadoId']
+            ))) ||
         (souDonoDoQuadro(resource.data.praca) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(
             ['status', 'resolvidoPor', 'resolvidoEm', 'etapaNoMomentoResolucao',

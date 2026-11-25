@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Montserrat, Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/AuthContext";
@@ -19,9 +19,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Portal de Repasse — Morar",
+  title: "Portal de Repasse",
   description: "Gestão da esteira comercial imobiliária Morar Construtora e Incorporadora.",
 };
+
+// Os ícones (favicon.ico, icon.png e apple-icon.png em src/app) viram <link> automaticamente.
+export const viewport: Viewport = { themeColor: "#006B3F" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

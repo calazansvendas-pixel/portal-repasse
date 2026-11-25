@@ -28,6 +28,7 @@ const CARGO_LABEL_PESSOA: Record<Role, string> = {
   analista: "Analista",
   coordenador: "Coordenação",
   gerencia: "Gerência",
+  corretor: "Corretor",
 };
 
 /** Quadro/coluna do colaborador — igual ao que já existe hoje para os 5 destinos fixos do painel.

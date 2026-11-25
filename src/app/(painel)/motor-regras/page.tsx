@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AlertTriangle, Copy, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { podeConfigurarRegrasAuditoria, PRACAS_FILTRO_UI } from "@/lib/auth/roles";
+import { PRACAS_FILTRO_UI } from "@/lib/auth/roles";
+import { temPermissao } from "@/lib/auth/cargos";
 import { useRegrasAuditoria } from "@/lib/hooks/useRegrasAuditoria";
 import {
   alternarRegraAtiva,
@@ -25,8 +26,10 @@ import { cn } from "@/lib/utils/cn";
 
 export default function MotorDeRegrasPage() {
   const { profile, firebaseUser } = useAuth();
-  const podeVer = !!profile && podeConfigurarRegrasAuditoria(profile.role);
-  const { regras, loading, erro } = useRegrasAuditoria(podeVer);
+  const podeRegras = !!profile && temPermissao(profile, "editarMotorRegras");
+  const podeParametros = !!profile && temPermissao(profile, "editarParametros");
+  const podeVer = podeRegras || podeParametros;
+  const { regras, loading, erro } = useRegrasAuditoria(podeRegras);
   const [modalAberto, setModalAberto] = useState(false);
   // null com o modal aberto = criando uma regra nova; preenchido = editando esta regra.
   const [regraEditando, setRegraEditando] = useState<RegraAuditoria | null>(null);
@@ -112,14 +115,20 @@ export default function MotorDeRegrasPage() {
           Matriz de Responsabilidades: configure aqui os gatilhos que geram tarefas automaticamente, sem precisar de
           um desenvolvedor. As importações já aplicam estas regras às pastas.
         </p>
-        <button type="button" className="btn-primary shrink-0" onClick={abrirCriacao}>
-          <Plus size={16} />
-          Criar Nova Regra
-        </button>
+        {podeRegras && (
+          <button type="button" className="btn-primary shrink-0" onClick={abrirCriacao}>
+            <Plus size={16} />
+            Criar Nova Regra
+          </button>
+        )}
       </div>
 
-      <MapeamentoPracas />
-      <MapeamentoEmpreendimentos />
+      {podeParametros && (
+        <>
+          <MapeamentoPracas />
+          <MapeamentoEmpreendimentos />
+        </>
+      )}
 
       {erro && (
         <div className="flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger">

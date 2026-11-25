@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { quadroEfetivoDaTarefa } from "@/lib/auth/roles";
-import type { Quadro, Role, Tarefa } from "@/lib/types";
+import { temPermissao } from "@/lib/auth/cargos";
+import type { Role, Tarefa } from "@/lib/types";
 import {
   NIVEL_POR_QUADRO,
   autenticar,
+  camposDeTransferencia,
   lerDataLimite,
   validarDescricaoEDestino,
 } from "@/lib/server/tarefasManuais";
@@ -46,18 +48,6 @@ async function carregarTarefa(
   return { ref, tarefa, ehGerencia };
 }
 
-/** Colaborador ativo dono do quadro — só quando é único; ambíguo/ausente = null (o quadro basta). */
-async function resolverColaboradorDoQuadro(quadro: Quadro): Promise<{ uid: string; nome: string } | null> {
-  const snap = await getAdminDb().collection("users").where("ativo", "==", true).get();
-  const donos = snap.docs.filter((d) => {
-    const u = d.data() as { role?: Role; praca?: string };
-    return quadro === "coordenador" || quadro === "analista" ? u.role === quadro : u.role === "assistente" && u.praca === quadro;
-  });
-  if (donos.length !== 1) return null;
-  const nome = (donos[0].data() as { nome?: string }).nome;
-  return nome ? { uid: donos[0].id, nome } : null;
-}
-
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const auth = await autenticar(req);
@@ -86,23 +76,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const manual = alvo.tarefa.origem === "manual";
     const novoQuadro = valido.atribuidoPara;
     const trocouColaborador = novoQuadro !== quadroEfetivoDaTarefa(alvo.tarefa);
-    const novoResponsavel = trocouColaborador ? await resolverColaboradorDoQuadro(novoQuadro) : null;
+    const propria = manual && alvo.tarefa.criadaPor === auth.uid;
+    if (trocouColaborador && !propria && !temPermissao(auth.perfil, "transferirTarefas")) {
+      return NextResponse.json(
+        { erro: "Seu perfil não tem permissão para transferir tarefas de outros colaboradores." },
+        { status: 403 }
+      );
+    }
     await alvo.ref.update({
       descricao: valido.descricao,
       praca: novoQuadro,
-      // Troca de colaborador = atribuição manual explícita: o carimbo de responsável, o quadro e o
-      // override mudam juntos, para o card trocar de coluna na hora e as importações não reverterem.
-      ...(trocouColaborador
-        ? {
-            quadro: novoQuadro,
-            responsavelId: novoResponsavel?.uid ?? null,
-            responsavelNome: novoResponsavel?.nome ?? null,
-            overrideManual: true,
-            pracaCustomizada: novoQuadro,
-            responsavelCustomizadoId: novoResponsavel?.uid ?? null,
-            responsavelCustomizadoNome: novoResponsavel?.nome ?? null,
-          }
-        : {}),
+      ...(trocouColaborador ? await camposDeTransferencia(novoQuadro) : {}),
       // O nível hierárquico só acompanha o destinatário nas avulsas; as automáticas mantêm o da regra.
       ...(manual ? { nivel: NIVEL_POR_QUADRO[valido.atribuidoPara] } : {}),
       ...(dataLimite !== undefined ? { dataLimite } : {}),

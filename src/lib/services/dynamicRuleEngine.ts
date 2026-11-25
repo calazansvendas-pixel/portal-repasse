@@ -26,9 +26,9 @@ import type { EtapaHistorico, Quadro, Registro, Tarefa } from "@/lib/types";
  * (ela olha as próprias tarefas do sistema, não a planilha). `auditEngine.ts` chama os três
  * "adaptadores" no fim do arquivo, cada um no ponto do motor em que o contexto certo já existe.
  *
- * Limitações conhecidas (mantidas desde a Fase 2): uma regra com `cargoDestino: "gerencia"` nunca
- * gera tarefa (a Gerência não tem quadro/coluna própria no painel); categorias agregadas com
- * `cargoDestino: "assistente"` também não geram, porque o agrupamento não aponta uma única praça
+ * Regras com `cargoDestino: "gerencia"` (ou destino fixo numa pessoa da Gerência) vão para o quadro
+ * "gerencia", o da liderança. Limitação conhecida: categorias agregadas com
+ * `cargoDestino: "assistente"` não geram tarefa, porque o agrupamento não aponta uma única praça
  * com segurança.
  */
 
@@ -119,8 +119,9 @@ function resolverDestinoLinha(
   matrizEmpreendimentos?: MatrizEmpreendimentos | null
 ): DestinoLinha | null {
   if (regra.destinoTipo === "pessoa") {
-    return regra.pessoaQuadro
-      ? { quadro: regra.pessoaQuadro, responsavelId: regra.pessoaId ?? null, responsavelNome: regra.pessoaNome ?? null }
+    const quadroDaPessoa = quadroDoDestinoFixo(regra);
+    return quadroDaPessoa
+      ? { quadro: quadroDaPessoa, responsavelId: regra.pessoaId ?? null, responsavelNome: regra.pessoaNome ?? null }
       : null;
   }
   if (regra.cargoDestino === "assistente") {
@@ -137,14 +138,24 @@ function resolverDestinoLinha(
     const quadro = resolvePracaPorCidade(linha.cidade, pracaOverrides);
     return quadro ? { quadro } : null;
   }
-  if (regra.cargoDestino === "coordenador" || regra.cargoDestino === "analista") return { quadro: regra.cargoDestino };
-  return null; // "gerencia": sem quadro próprio no painel.
+  const quadro = quadroDoCargo(regra);
+  return quadro ? { quadro } : null;
+}
+
+/** Cargos que têm uma coluna única no painel. */
+function quadroDoCargo(regra: RegraAuditoria): Quadro | null {
+  const cargo = regra.cargoDestino;
+  return cargo === "coordenador" || cargo === "analista" || cargo === "gerencia" ? cargo : null;
+}
+
+/** Destino "pessoa": o quadro gravado na regra. Pessoas da Gerência são gravadas sem quadro. */
+function quadroDoDestinoFixo(regra: RegraAuditoria): Quadro | null {
+  return regra.pessoaQuadro ?? (regra.cargoDestino === "gerencia" ? "gerencia" : null);
 }
 
 function quadroParaAgregado(regra: RegraAuditoria): Quadro | null {
-  if (regra.destinoTipo === "pessoa") return regra.pessoaQuadro ?? null;
-  if (regra.cargoDestino === "coordenador" || regra.cargoDestino === "analista") return regra.cargoDestino;
-  return null; // "assistente"/"gerencia": agregado não aponta uma única praça com segurança.
+  if (regra.destinoTipo === "pessoa") return quadroDoDestinoFixo(regra);
+  return quadroDoCargo(regra); // "assistente": agregado não aponta uma única praça com segurança.
 }
 
 // ---------------------------------------------------------------------------

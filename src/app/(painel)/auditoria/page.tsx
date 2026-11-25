@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { podeImportarPlanilha, podeVerRelatoriosGerais, podeVerPainelAnalitico } from "@/lib/auth/roles";
+import { podeVerRelatoriosGerais, podeVerPainelAnalitico } from "@/lib/auth/roles";
+import { temPermissao } from "@/lib/auth/cargos";
 import { Topbar } from "@/components/layout/Topbar";
 import { UploadSheet } from "@/components/auditoria/UploadSheet";
 import { AuditTable } from "@/components/auditoria/AuditTable";
@@ -17,7 +18,10 @@ export default function AuditoriaPage() {
   const [importando, setImportando] = useState(false);
   if (!profile) return null;
 
-  const podeVerPagina = podeVerRelatoriosGerais(profile.role) || podeVerPainelAnalitico(profile.role);
+  const podeImportar = temPermissao(profile, "importarPlanilhas");
+  // As tabelas leem as pastas direto do Firestore: só os perfis que as regras liberam.
+  const podeVerTabelas = podeVerRelatoriosGerais(profile.role) || podeVerPainelAnalitico(profile.role);
+  const podeVerPagina = podeVerTabelas || podeImportar;
   if (!podeVerPagina) {
     return (
       <div>
@@ -30,9 +34,13 @@ export default function AuditoriaPage() {
   return (
     <div className="flex flex-col gap-5">
       <Topbar titulo="Auditoria de Planilha" />
-      {podeImportarPlanilha(profile.role) && <UploadSheet onEnviandoChange={setImportando} />}
-      <AuditTable pausado={importando} />
-      <HistoricoImportacoes pausado={importando} />
+      {podeImportar && <UploadSheet onEnviandoChange={setImportando} />}
+      {podeVerTabelas && (
+        <>
+          <AuditTable pausado={importando} />
+          <HistoricoImportacoes pausado={importando} />
+        </>
+      )}
     </div>
   );
 }

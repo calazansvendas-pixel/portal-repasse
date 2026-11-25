@@ -1,8 +1,11 @@
 // Tipos centrais do domínio do Portal de Repasse.
 
 import type { GatilhoRegistrado } from "@/lib/services/reaproveitamentoCard";
+import type { CargoId, MapaPermissoes, PermissoesParciais, StatusConta } from "@/lib/auth/cargos";
 
-export type Role = "gerencia" | "coordenador" | "analista" | "assistente";
+// Perfil operacional do portal (o que as regras do Firestore e o roteamento leem). O cargo oficial
+// fica em UserProfile.cargo (ver lib/auth/cargos.ts). "corretor" ainda não tem módulos no portal.
+export type Role = "gerencia" | "coordenador" | "analista" | "assistente" | "corretor";
 
 export type Assistente = "layza" | "eliane" | "catharina";
 
@@ -14,7 +17,11 @@ export type QuadroEscalonamento = "coordenador" | "analista";
 /** Todo quadro de tarefas existente no sistema: as 3 praças regionais + os
  * quadros nativos do Coordenador e da Analista (que agora também recebem
  * tarefas geradas diretamente para eles, não só escalonamentos). */
-export type Quadro = Assistente | QuadroEscalonamento;
+export type Quadro = Assistente | QuadroNativo;
+
+/** Colunas que não são de praça: as de escalonamento e a da liderança (Gerência), que recebe as
+ * tarefas das regras destinadas à Gerência. */
+export type QuadroNativo = QuadroEscalonamento | "gerencia";
 
 /** Nível hierárquico que originou a tarefa (ver taskRouter.ts). */
 export type NivelTarefa = "operacional" | "analitico" | "tatico";
@@ -33,6 +40,19 @@ export interface UserProfile {
   praca?: Assistente;
   ativo: boolean;
   criadoEm: string; // ISO date
+  // Campos da padronização Morar — todos opcionais: perfis antigos não os têm. Cadastros ainda
+  // "pendente" não têm `role` (e têm ativo: false), por isso não recebem nenhum acesso.
+  cargo?: CargoId;
+  cargoPretendido?: CargoId;
+  status?: StatusConta;
+  recusado?: boolean;
+  imobiliaria?: string;
+  superiorId?: string | null;
+  superiorEmail?: string | null;
+  superiorNome?: string | null;
+  superiorCargo?: string | null;
+  permissoesIndividuais?: PermissoesParciais;
+  permissoesEfetivas?: MapaPermissoes;
 }
 
 export type SlaStatus = "no_prazo" | "atencao" | "urgente" | "estourado";
@@ -249,6 +269,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   coordenador: "Coordenador",
   analista: "Analista",
   assistente: "Assistente Regional",
+  corretor: "Corretor",
 };
 
 export const ASSISTENTE_LABEL: Record<Assistente, string> = {
@@ -257,10 +278,14 @@ export const ASSISTENTE_LABEL: Record<Assistente, string> = {
   catharina: "Catharina (Fátima e Camburi)",
 };
 
+/** Destinos de uma transferência. A coluna da Gerência só recebe o que as regras destinam a ela. */
+export const QUADROS_TRANSFERIVEIS: Quadro[] = ["layza", "eliane", "catharina", "coordenador", "analista"];
+
 export const QUADRO_LABEL: Record<Quadro, string> = {
   layza: "Layza (Serra)",
   eliane: "Eliane (Vila Velha)",
   catharina: "Catharina (Fátima e Camburi)",
   coordenador: "Paulo (Coordenador)",
   analista: "Andressa (Analista)",
+  gerencia: "Gerência",
 };

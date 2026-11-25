@@ -33,6 +33,7 @@ const CARGO_LABEL: Record<Role, string> = {
   analista: "Analista",
   coordenador: "Coordenação",
   gerencia: "Gerência",
+  corretor: "Corretor",
 };
 
 /**

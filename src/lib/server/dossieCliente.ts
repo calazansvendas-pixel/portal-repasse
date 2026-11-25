@@ -1,5 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { normalize } from "@/lib/auth/roles";
+import { agruparClientes, type ClienteDossie, type PastaResumo } from "@/lib/utils/buscaClientes";
 import type { Registro, Tarefa } from "@/lib/types";
 
 // Mesmo teto de leitura do relatório de imobiliárias: uma única consulta, sem índice dedicado
@@ -54,6 +55,16 @@ export async function buscarCandidatosDossie(db: Firestore, termoBruto: string):
     if (candidatos.length >= MAX_CANDIDATOS) break;
   }
   return candidatos;
+}
+
+/** Lista do campo pesquisável: um item por cliente, em ordem alfabética (mesmo teto da busca). */
+export async function listarClientesDossie(db: Firestore): Promise<ClienteDossie[]> {
+  const snap = await db
+    .collection("registros")
+    .select("clienteNome", "cpfCnpj", "produto", "etapa", "arquivada", "atualizadoEm")
+    .limit(LIMITE_BUSCA)
+    .get();
+  return agruparClientes(snap.docs.map((d) => ({ ...(d.data() as Omit<PastaResumo, "numero">), numero: d.id })));
 }
 
 export interface DossieCompleto {

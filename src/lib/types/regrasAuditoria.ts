@@ -103,4 +103,5 @@ export const CARGO_DESTINO_LABEL: Record<Role, string> = {
   analista: "Analista",
   coordenador: "Coordenador",
   gerencia: "Gerente",
+  corretor: "Corretor",
 };

@@ -11,6 +11,7 @@ import {
 import { onAuthStateChanged, signOut as firebaseSignOut, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
+import { EMAIL_DONO, statusDoPerfil } from "@/lib/auth/cargos";
 import type { UserProfile } from "@/lib/types";
 
 interface AuthContextValue {
@@ -19,6 +20,8 @@ interface AuthContextValue {
   loading: boolean;
   // true quando há sessão de auth mas nenhum documento em /users/{uid} (conta não provisionada)
   semPerfil: boolean;
+  /** Por que o acesso de Dono ainda não foi ativado (ex.: e-mail sem confirmação). */
+  avisoDono: string | null;
   signOut: () => Promise<void>;
 }
 
@@ -26,17 +29,18 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [profileLoading, setProfileLoading] = useState(true);
+  // O perfil guarda de QUEM ele é: enquanto não for do usuário atual, ainda está carregando.
+  const [lido, setLido] = useState<{ uid: string; profile: UserProfile | null } | null>(null);
+  const [dono, setDono] = useState<{ uid: string; aviso: string | null } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setAuthLoading(false);
       if (!user) {
-        setProfile(null);
-        setProfileLoading(false);
+        setLido(null);
+        setDono(null);
       }
     });
     return () => unsubscribe();
@@ -44,31 +48,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!firebaseUser) return;
-    setProfileLoading(true);
-    const ref = doc(db, "users", firebaseUser.uid);
+    const uid = firebaseUser.uid;
+    const ref = doc(db, "users", uid);
     const unsubscribe = onSnapshot(
       ref,
-      (snap) => {
-        setProfile(snap.exists() ? ({ uid: snap.id, ...snap.data() } as UserProfile) : null);
-        setProfileLoading(false);
-      },
-      () => {
-        setProfile(null);
-        setProfileLoading(false);
-      }
+      (snap) => setLido({ uid, profile: snap.exists() ? ({ uid: snap.id, ...snap.data() } as UserProfile) : null }),
+      () => setLido({ uid, profile: null })
     );
     return () => unsubscribe();
   }, [firebaseUser]);
+
+  const perfilCarregado = !!firebaseUser && lido?.uid === firebaseUser.uid;
+  const profile = perfilCarregado ? lido!.profile : null;
+
+  // Dono do aplicativo: se o perfil ainda não está como Dono ativo, o servidor provisiona (só com
+  // o e-mail confirmado). Uma tentativa por sessão.
+  const precisaDono =
+    perfilCarregado &&
+    firebaseUser!.email?.toLowerCase() === EMAIL_DONO &&
+    !(profile?.cargo === "dono" && statusDoPerfil(profile) === "ativo");
+  const donoResolvido = !!firebaseUser && dono?.uid === firebaseUser.uid;
+
+  useEffect(() => {
+    if (!precisaDono || donoResolvido || !firebaseUser) return;
+    const uid = firebaseUser.uid;
+    firebaseUser
+      .getIdToken(true) // token novo: reflete a confirmação de e-mail recém-feita
+      .then((token) => fetch("/api/conta/dono", { method: "POST", headers: { Authorization: `Bearer ${token}` } }))
+      .then(async (res) => {
+        const json = await res.json().catch(() => null);
+        setDono({ uid, aviso: res.ok ? null : json?.erro ?? "Não foi possível ativar o acesso de Dono." });
+      })
+      .catch(() => setDono({ uid, aviso: "Não foi possível ativar o acesso de Dono. Tente novamente." }));
+  }, [precisaDono, donoResolvido, firebaseUser]);
+
+  const loading = authLoading || (!!firebaseUser && !perfilCarregado) || (precisaDono && !donoResolvido);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       firebaseUser,
       profile,
-      loading: authLoading || profileLoading,
-      semPerfil: !authLoading && !!firebaseUser && !profileLoading && !profile,
+      loading,
+      semPerfil: !loading && !!firebaseUser && !profile,
+      avisoDono: precisaDono ? dono?.aviso ?? null : null,
       signOut: () => firebaseSignOut(auth),
     }),
-    [firebaseUser, profile, authLoading, profileLoading]
+    [firebaseUser, profile, loading, precisaDono, dono]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

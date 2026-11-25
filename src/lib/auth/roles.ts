@@ -1,4 +1,4 @@
-import type { Assistente, Quadro, QuadroEscalonamento, Role, UserProfile } from "@/lib/types";
+import type { Assistente, Quadro, QuadroNativo, Role, UserProfile } from "@/lib/types";
 
 /** Cidades oferecidas no filtro de /tarefas e mapeamento padrão de praça: a checagem é feita por
  * inclusão normalizada (minúsculas, sem acento), então "Bairro de Fátima" bate com "fatima". A
@@ -178,12 +178,13 @@ export function pracasVisiveis(profile: UserProfile): Assistente[] {
 
 /**
  * Colunas de Coordenador/Analista visíveis no quadro de tarefas de cada perfil.
- * Gerência e Coordenador enxergam as duas; a Analista enxerga só a própria
+ * Gerência enxerga a da liderança e as duas; o Coordenador, as duas; a Analista, só a própria
  * (nunca o quadro do Coordenador); assistentes não têm essas colunas.
  */
-export function quadrosEscalonamentoVisiveis(profile: UserProfile): QuadroEscalonamento[] {
+export function quadrosEscalonamentoVisiveis(profile: UserProfile): QuadroNativo[] {
   switch (profile.role) {
     case "gerencia":
+      return ["gerencia", "coordenador", "analista"];
     case "coordenador":
       return ["coordenador", "analista"];
     case "analista":
@@ -220,11 +221,13 @@ export function quadrosParaBuscar(profile: UserProfile): Quadro[] {
 /**
  * Em qual(is) quadro(s) o usuário pode efetivamente marcar/desmarcar o
  * checkbox de uma tarefa. Só o dono de um quadro pode resolvê-lo:
- * assistente no seu próprio, Coordenador no dele, Analista no dela.
- * Gerência nunca interage — só observa (god mode é leitura, não ação).
+ * assistente no seu próprio, Coordenador no dele, Analista no dela e a Gerência no da liderança
+ * (nos demais ela só observa e usa o menu do cartão).
  */
 export function meuQuadroInterativo(profile: UserProfile): Quadro[] {
   switch (profile.role) {
+    case "gerencia":
+      return ["gerencia"];
     case "assistente":
       return profile.praca ? [profile.praca] : [];
     case "coordenador":
