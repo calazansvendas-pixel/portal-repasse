@@ -37,7 +37,7 @@ export function MatrizPermissoes({ usuarios, todos, eu, admin }: { usuarios: Usu
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1120px] border-collapse text-xs">
+      <table className="w-full min-w-[1220px] border-collapse text-xs">
         <thead>
           <tr className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">
             <th rowSpan={2} className="sticky left-0 z-10 bg-surface px-4 py-2 text-left sm:px-5 dark:bg-[#1B1E17]">

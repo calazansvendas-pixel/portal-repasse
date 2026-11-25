@@ -6,7 +6,7 @@
 //   2. o que foi salvo para o cargo em "Editar Permissões do Cargo";
 //   3. permissão individual ligada (quem recebeu "Importar" continua vendo a Auditoria);
 //   4. chave de menu individual do colaborador.
-// Por cima de tudo: o Dono vê sempre os cinco, e nenhum menu abre sem o requisito da própria tela.
+// Por cima de tudo: o Dono vê sempre todos, e nenhum menu abre sem o requisito da própria tela.
 import {
   calcularPermissoes,
   ehCargo,
@@ -24,7 +24,11 @@ export const MENUS = [
   { id: "dossie", nome: "Dossiê do Cliente", curto: "Ver Dossiê", rota: "/auditoria/cliente" },
   { id: "motor_regras", nome: "Motor de Regras", curto: "Ver Motor de Regras", rota: "/motor-regras" },
   { id: "painel_admin", nome: "Painel do Administrador", curto: "Ver Painel Admin", rota: "/painel-administrador" },
+  { id: "organograma", nome: "Organograma", curto: "Ver Organograma", rota: "/organograma" },
 ] as const;
+
+/** Quem recebe o Organograma de fábrica; os demais, só por cargo ou chave individual. */
+const CARGOS_COM_ORGANOGRAMA = ["dono", "administrador", "gerente_vendas_interno", "gerente_vendas_externo"];
 
 export type MenuId = (typeof MENUS)[number]["id"];
 export type MapaMenus = Record<MenuId, boolean>;
@@ -48,6 +52,7 @@ export function motivoIndisponivel(menu: MenuId, role: Role | null | undefined, 
     case "auditoria":
       return acompanhaOperacao(role) || permissoes.importarPlanilhas ? null : 'Precisa da permissão "Importar Planilhas"';
     case "dossie":
+    case "organograma":
       return role === "corretor" ? "Corretores não acessam dados de todos os clientes" : null;
     case "motor_regras":
       return permissoes.editarMotorRegras || permissoes.editarParametros ? null : 'Precisa da permissão "Regras" ou "Parâmetros"';
@@ -62,8 +67,10 @@ export function menuTravado(cargo: string | null | undefined, menu: MenuId): boo
   return cargo === "dono" || (menu === "painel_admin" && permissaoTravada(cargo, "gerenciarUsuarios"));
 }
 
-function padraoDeFabrica(role: Role | null | undefined, permissoes: Permissoes): MapaMenus {
+function padraoDeFabrica({ cargo, role }: BaseMenus, permissoes: Permissoes): MapaMenus {
   return {
+    // Gerência antiga, sem cargo oficial, equivale a Gerente.
+    organograma: cargo ? CARGOS_COM_ORGANOGRAMA.includes(cargo) : role === "gerencia",
     painel: true,
     auditoria: role === "gerencia" || permissoes.importarPlanilhas,
     dossie: acompanhaOperacao(role),
@@ -88,7 +95,7 @@ export function calcularMenus(
   permissoes: Permissoes = calcularPermissoes(p, salvas)
 ): MapaMenus {
   const mapa: MapaMenus = {
-    ...padraoDeFabrica(p.role, permissoes),
+    ...padraoDeFabrica(p, permissoes),
     ...(ehCargo(p.cargo) ? menusSalvos[p.cargo] : {}),
   };
   const ligadas = p.permissoesIndividuais ?? {};

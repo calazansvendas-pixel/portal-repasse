@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { ChevronLeft, ChevronRight, LayoutDashboard, Search, ShieldCheck, UploadCloud, Workflow } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutDashboard, Network, Search, ShieldCheck, UploadCloud, Workflow } from "lucide-react";
 import { nomeDoCargo } from "@/lib/auth/cargos";
 import { menusVisiveis, type MenuId } from "@/lib/auth/menus";
 import type { UserProfile } from "@/lib/types";
@@ -19,6 +19,7 @@ const ICONES: Record<MenuId, typeof LayoutDashboard> = {
   dossie: Search,
   motor_regras: Workflow,
   painel_admin: ShieldCheck,
+  organograma: Network,
 };
 
 export function Sidebar({ profile }: { profile: UserProfile }) {
@@ -102,7 +103,7 @@ export function Sidebar({ profile }: { profile: UserProfile }) {
                   : "text-ink-secondary hover:bg-surface-soft dark:text-white/70 dark:hover:bg-white/5"
               )}
             >
-              <Icon size={18} />
+              <Icon size={18} className="shrink-0" />
               <span className={cn(recolhida && "lg:hidden")}>{item.label}</span>
             </Link>
           );

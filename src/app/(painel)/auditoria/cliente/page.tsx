@@ -14,6 +14,7 @@ import { temMenu } from "@/lib/auth/menus";
 import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { useBaseDossie, useDossieCliente } from "@/lib/hooks/useDossieCliente";
 import { SuperfiltrosDossie } from "@/components/auditoria/SuperfiltrosDossie";
+import { ChecklistsDoDossie } from "@/components/organograma/ChecklistsDoDossie";
 import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { Topbar } from "@/components/layout/Topbar";
 import { montarLinhaDoTempo } from "@/lib/utils/dossieTimeline";
@@ -98,6 +99,8 @@ export default function DossieClientePage() {
               <Campo label="Etapa atual" valor={dossie.registro.etapa || "—"} />
             </div>
           </div>
+
+          <ChecklistsDoDossie key={dossie.registro.numero} registro={dossie.registro} />
 
           <div className="surface-card p-4 sm:p-5">
             <h3 className="mb-4 text-sm font-bold text-ink-primary dark:text-white">Linha do tempo</h3>

@@ -88,6 +88,16 @@ service cloud.firestore {
       allow write: if docId != 'permissoesCargos' && temPermissao('editarParametros');
     }
 
+    // --- organograma_etapas e checklists_clientes: só as rotas de API (Admin SDK) leem e gravam.
+    // Assim o autor e o horário de cada marcação vêm do servidor e o acesso segue o menu liberado. ---
+    match /organograma_etapas/{docId} {
+      allow read, write: if false;
+    }
+
+    match /checklists_clientes/{numero} {
+      allow read, write: if false;
+    }
+
     // --- tarefas: o campo "praca" guarda o Quadro (regional OU "coordenador"/"analista"
     // nativo). Cada um só marca/desmarca o checkbox no PRÓPRIO quadro — assistente na sua
     // praça, Coordenador em "coordenador", Analista em "analista". Gerência só observa. ---

@@ -13,6 +13,7 @@ export function Modal({
   rodape,
   children,
   tituloAriaLabel,
+  largo = false,
 }: {
   titulo: string | ReactNode;
   onClose: () => void;
@@ -23,6 +24,8 @@ export function Modal({
   children: ReactNode;
   // Para ReactNode no titulo, fornecer a versão em texto para aria-label.
   tituloAriaLabel?: string;
+  // Formulários extensos (editor do Organograma).
+  largo?: boolean;
 }) {
   const id = useRef(Symbol("modal"));
   // O onClose costuma ser uma arrow nova a cada render: guardá-lo em ref evita re-registrar o
@@ -74,7 +77,7 @@ export function Modal({
           role="dialog"
           aria-modal="true"
           aria-label={tituloAriaLabel ?? (typeof titulo === "string" ? titulo : "")}
-          className={`surface-card w-full max-w-lg overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6 ${alturaMaxima}`}
+          className={`surface-card w-full ${largo ? "max-w-3xl" : "max-w-lg"} overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6 ${alturaMaxima}`}
           onClick={(e) => e.stopPropagation()}
         >
           <h2 className="mb-4 break-words text-base font-bold text-ink-primary dark:text-white">{titulo}</h2>
