@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AlertTriangle, ChevronDown, Copy, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { PRACAS_FILTRO_UI, codigoEtapa } from "@/lib/auth/roles";
@@ -185,14 +185,18 @@ interface AcoesRegra {
   onExcluir: (id: string, nome: string) => Promise<void>;
 }
 
-function GradeRegras({ regras, ...acoes }: { regras: RegraAuditoria[] } & AcoesRegra) {
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {regras.map((r) => (
-        <CardRegra key={r.id} regra={r} {...acoes} />
-      ))}
-    </div>
-  );
+// Quantas colunas cada etapa ocupa (1 a 3, conforme a quantidade de regras). Em telas médias o
+// máximo são 2; no celular, 1.
+const LARGURA_DA_ETAPA = { 1: "", 2: "md:col-span-2", 3: "md:col-span-2 lg:col-span-3" } as const;
+const COLUNAS_DAS_REGRAS = {
+  1: "grid-cols-1",
+  2: "grid-cols-1 md:grid-cols-2",
+  3: "grid-cols-1 md:grid-cols-2 lg:grid-cols-3",
+} as const;
+
+/** Grade das etapas de um bloco: etapas com poucas regras ficam lado a lado, na ordem do funil. */
+function GradeEtapas({ children }: { children: ReactNode }) {
+  return <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{children}</div>;
 }
 
 function GrupoEtapa({
@@ -201,18 +205,31 @@ function GrupoEtapa({
   regras,
   ...acoes
 }: { codigo: string | null; nome: string; regras: RegraAuditoria[] } & AcoesRegra) {
+  const colunas = Math.min(Math.max(regras.length, 1), 3) as 1 | 2 | 3;
   return (
-    <div data-etapa={codigo ?? "geral"} className="flex flex-col gap-2">
-      <h3 className="flex flex-wrap items-center gap-2 text-sm font-bold text-ink-primary dark:text-white">
+    // Subgrid: títulos e cards de etapas vizinhas ficam na mesma altura.
+    <div
+      data-etapa={codigo ?? "geral"}
+      className={cn("row-span-2 grid min-w-0 grid-cols-1 gap-y-2 [grid-template-rows:subgrid]", LARGURA_DA_ETAPA[colunas])}
+    >
+      <h3 className="flex items-baseline gap-2 self-start text-sm font-bold text-ink-primary dark:text-white">
         {codigo && (
-          <span className="rounded-md bg-brand-primary px-2 py-0.5 font-display tabular-nums text-white">{codigo}</span>
+          <span className="shrink-0 rounded-md bg-brand-primary px-2 py-0.5 font-display tabular-nums text-white">{codigo}</span>
         )}
-        <span className="min-w-0 break-words">{nome}</span>
-        <span className="text-xs font-semibold text-ink-muted">
-          {regras.length} regra{regras.length === 1 ? "" : "s"}
+        <span className="min-w-0 break-words">
+          {nome}{" "}
+          <span className="ml-1 whitespace-nowrap text-xs font-semibold text-ink-muted">
+            {regras.length} regra{regras.length === 1 ? "" : "s"}
+          </span>
         </span>
       </h3>
-      {regras.length > 0 && <GradeRegras regras={regras} {...acoes} />}
+      {regras.length > 0 && (
+        <div className={cn("grid gap-4", COLUNAS_DAS_REGRAS[colunas])}>
+          {regras.map((r) => (
+            <CardRegra key={r.id} regra={r} {...acoes} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -257,25 +274,29 @@ function RegrasPorBloco({
           <h2 className="text-base font-bold text-ink-primary dark:text-white">
             Bloco {b.n} — {b.nome}
           </h2>
-          {b.etapas.map((e) => (
-            <GrupoEtapa key={e.codigo} codigo={e.codigo} nome={e.nome} regras={porEtapa.get(e.codigo) ?? []} {...acoes} />
-          ))}
+          <GradeEtapas>
+            {b.etapas.map((e) => (
+              <GrupoEtapa key={e.codigo} codigo={e.codigo} nome={e.nome} regras={porEtapa.get(e.codigo) ?? []} {...acoes} />
+            ))}
+          </GradeEtapas>
         </section>
       ))}
 
       {(gerais.length > 0 || outras.length > 0) && (
         <section data-bloco="gerais" className="mt-4 flex flex-col gap-3 border-t border-border pt-5 dark:border-white/10">
           <h2 className="text-base font-bold text-ink-primary dark:text-white">Regras Gerais / Outras Etapas</h2>
-          {gerais.length > 0 && <GrupoEtapa codigo={null} nome="Sem etapa específica" regras={gerais} {...acoes} />}
-          {outras.map((codigo) => (
-            <GrupoEtapa
-              key={codigo}
-              codigo={codigo}
-              nome={etapas.find((e) => e.codigo === codigo)?.nome ?? "Etapa fora dos blocos"}
-              regras={porEtapa.get(codigo) ?? []}
-              {...acoes}
-            />
-          ))}
+          <GradeEtapas>
+            {gerais.length > 0 && <GrupoEtapa codigo={null} nome="Sem etapa específica" regras={gerais} {...acoes} />}
+            {outras.map((codigo) => (
+              <GrupoEtapa
+                key={codigo}
+                codigo={codigo}
+                nome={etapas.find((e) => e.codigo === codigo)?.nome ?? "Etapa fora dos blocos"}
+                regras={porEtapa.get(codigo) ?? []}
+                {...acoes}
+              />
+            ))}
+          </GradeEtapas>
         </section>
       )}
     </div>
@@ -296,7 +317,7 @@ function CardRegra({
   onExcluir: (id: string, nome: string) => Promise<void>;
 }) {
   return (
-    <div className={cn("surface-card flex flex-col gap-3 p-4", !regra.ativo && "opacity-60")}>
+    <div className={cn("surface-card flex h-full min-w-0 flex-col gap-3 p-4", !regra.ativo && "opacity-60")}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-ink-primary dark:text-white">{regra.nomeRegra}</p>
