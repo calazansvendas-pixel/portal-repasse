@@ -399,14 +399,21 @@ function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[
   if (!quadro || !limite) return [];
   const dimensao = regra.parametros.dimensao ?? "etapa";
 
-  // Nome com prefixo numérico (ex.: "0.99 - Pasta completa") amarra a regra a UMA etapa
-  // específica — filtra estritamente por ela, nunca mistura pastas de outras etapas sob o
-  // rótulo desta regra (bug: uma regra da 0.99 varria a planilha inteira e gerava um card por
-  // etapa encontrada, inclusive 0.01, todos rotulados com o nome da regra da 0.99).
-  const etapaAlvo = dimensao === "etapa" ? etapaAlvoDoNome(regra.nomeRegra) : null;
+  // "Etapa específica" (opcional) da regra: só o código conta ("5.04" ou "5.04 - Emissão"), comparado
+  // inteiro — "2.05" não pega a "2.051".
+  const etapaDaRegra = codigoEtapa(regra.parametros.etapa?.trim() ?? "");
+  const naEtapaDaRegra = (l: LinhaPlanilha) => normalize(codigoEtapa(l.etapa)) === normalize(etapaDaRegra);
+
+  // Agrupando por etapa, a regra fica amarrada a UMA etapa: a específica ou, sem ela, o prefixo
+  // numérico do nome (ex.: "0.99 - Pasta completa") — filtra estritamente por ela, nunca mistura
+  // pastas de outras etapas sob o rótulo desta regra (bug: uma regra da 0.99 varria a planilha
+  // inteira e gerava um card por etapa encontrada, inclusive 0.01, todos com o nome da regra da 0.99).
+  const etapaAlvo = dimensao === "etapa" ? etapaDaRegra || etapaAlvoDoNome(regra.nomeRegra) : null;
 
   if (etapaAlvo) {
-    const grupo = todasLinhas.filter((l) => !ehFimDeEsteira(l.etapa) && codigoEtapa(l.etapa) === etapaAlvo);
+    const grupo = todasLinhas.filter(
+      (l) => !ehFimDeEsteira(l.etapa) && normalize(codigoEtapa(l.etapa)) === normalize(etapaAlvo)
+    );
     // Sempre emite — mesmo com 0 pastas — para que reconciliarTarefa feche uma tarefa antiga se
     // a contagem cair a zero; condicaoAtiva: false nunca CRIA uma tarefa nova (ver auditEngine.ts).
     return [
@@ -429,11 +436,14 @@ function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[
     ];
   }
 
-  // Sem prefixo no nome: comportamento histórico — varre todas as etapas presentes na planilha e
-  // sinaliza gargalo em qualquer uma que bater o limite (a regra não é sobre uma etapa específica).
+  // Sem etapa específica nem prefixo no nome: varre todas as etapas e sinaliza gargalo em qualquer
+  // grupo que bater o limite. Por imobiliária/produto COM etapa específica, o filtro vem antes do
+  // agrupamento, e a chave do card carrega a etapa (não colide com o card de "todas as etapas").
+  const prefixoChave = etapaDaRegra ? `etapa:${normalize(etapaDaRegra)}::` : "";
   const grupos = new Map<string, LinhaPlanilha[]>();
   for (const linha of todasLinhas) {
     if (ehFimDeEsteira(linha.etapa)) continue; // pasta já concluída não é gargalo
+    if (etapaDaRegra && !naEtapaDaRegra(linha)) continue;
     const valor = dimensao === "etapa" ? linha.etapa : dimensao === "imobiliaria" ? linha.responsavel : linha.produto;
     const chave = valor?.trim();
     if (!chave) continue;
@@ -443,17 +453,17 @@ function avaliarVolumeGargalo(regra: RegraAuditoria, todasLinhas: LinhaPlanilha[
   const especs: AvaliacaoDinamica[] = [];
   for (const [valor, grupo] of grupos) {
     especs.push({
-      chaveRegra: `DINAMICA::${regra.id}::${normalize(valor)}`,
+      chaveRegra: `DINAMICA::${regra.id}::${prefixoChave}${normalize(valor)}`,
       origem: "agregado",
       quadro,
       numerosRelacionados: grupo.map((l) => l.numero),
       nomesRelacionados: nomesDoGrupo(grupo),
       cpfsRelacionados: cpfsDoGrupo(grupo),
       imobiliaria: dimensao === "imobiliaria" ? valor : "",
-      etapa: dimensao === "etapa" ? valor : "",
+      etapa: dimensao === "etapa" ? valor : etapaDaRegra,
       tipoPendencia: regra.nomeRegra,
       descricao: substituirVariaveis(regra.textoTarefa, {
-        etapa: dimensao === "etapa" ? valor : "",
+        etapa: dimensao === "etapa" ? valor : etapaDaRegra,
         imobiliaria: dimensao === "imobiliaria" ? valor : "",
         produto: dimensao === "produto" ? valor : "",
         quantidade: String(grupo.length),

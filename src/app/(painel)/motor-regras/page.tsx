@@ -275,7 +275,11 @@ function CardRegra({
         )}
         {regra.parametros.dias !== undefined && <span>Dias: {regra.parametros.dias}</span>}
         {regra.parametros.quantidade !== undefined && <span>Quantidade: {regra.parametros.quantidade}</span>}
-        {regra.parametros.etapa && <span>Etapa: {regra.parametros.etapa}</span>}
+        {regra.categoriaGatilho === "volume_gargalo" ? (
+          <span>Etapa: {etapaDoGargalo(regra)}</span>
+        ) : (
+          regra.parametros.etapa && <span>Etapa: {regra.parametros.etapa}</span>
+        )}
         {regra.parametros.palavraChave && <span>Palavra-chave: &quot;{regra.parametros.palavraChave}&quot;</span>}
         {regra.parametros.dimensao && <span>Agrupado por: {regra.parametros.dimensao}</span>}
         {regra.parametros.subtipoConformidade && <span>Verificação: {regra.parametros.subtipoConformidade}</span>}
@@ -305,6 +309,16 @@ function CardRegra({
 }
 
 const PREFIXO_NUMERICO_NOME = /^(\d+\.\d+)/;
+
+/** Etapa monitorada por uma regra de Volume e Gargalos, como o motor a aplica: a preenchida; sem ela,
+ * o prefixo numérico do nome (só no agrupamento por etapa); sem nenhum dos dois, todas. */
+function etapaDoGargalo(regra: RegraAuditoria): string {
+  const preenchida = regra.parametros.etapa?.trim();
+  if (preenchida) return preenchida;
+  const doNome = regra.nomeRegra.trim().match(PREFIXO_NUMERICO_NOME)?.[1];
+  if (doNome && (regra.parametros.dimensao ?? "etapa") === "etapa") return `${doNome} (pelo nome da regra)`;
+  return "Todas";
+}
 
 /** `parametros.etapa` como número (ex.: "0.80" -> 0.8); null quando a regra não tem etapa. */
 function valorEtapa(etapa: string | undefined): number | null {

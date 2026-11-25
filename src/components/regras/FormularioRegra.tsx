@@ -12,6 +12,7 @@ import {
   type RegraAuditoria,
 } from "@/lib/types/regrasAuditoria";
 import { Modal } from "@/components/ui/Modal";
+import { CampoEtapaGargalo } from "@/components/regras/CampoEtapaGargalo";
 import { useColaboradores } from "@/lib/hooks/useColaboradores";
 import type { Colaborador } from "@/app/api/colaboradores/route";
 import { PRACAS_FILTRO_UI } from "@/lib/auth/roles";
@@ -145,7 +146,15 @@ export function FormularioRegra({
     setEnviando(true);
     setErro(null);
     try {
-      await onSalvar(regra);
+      // Etapa específica de "Volume e Gargalos" é opcional: grava sem espaços, e em branco não grava
+      // o campo (= todas as etapas).
+      const parametros = { ...regra.parametros };
+      if (regra.categoriaGatilho === "volume_gargalo") {
+        const etapa = parametros.etapa?.trim();
+        if (etapa) parametros.etapa = etapa;
+        else delete parametros.etapa;
+      }
+      await onSalvar({ ...regra, parametros });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Falha ao salvar a regra.");
       setEnviando(false);
@@ -284,6 +293,17 @@ export function FormularioRegra({
                   <option value="produto">Produto</option>
                 </select>
               </label>
+            )}
+            {regra.categoriaGatilho === "volume_gargalo" && (
+              <CampoEtapaGargalo
+                valor={regra.parametros.etapa ?? ""}
+                onChange={(etapa) => setParametro("etapa", etapa)}
+                etapaDoNome={
+                  (regra.parametros.dimensao ?? "etapa") === "etapa"
+                    ? regra.nomeRegra.trim().match(/^(\d+\.\d+)/)?.[1] ?? null
+                    : null
+                }
+              />
             )}
             {camposParametro.includes("subtipoConformidade") && (
               <label className="flex flex-col gap-1.5">

@@ -51,6 +51,8 @@ export const CATEGORIA_GATILHO_DESCRICAO: Record<CategoriaGatilho, string> = {
 export interface ParametrosRegra {
   dias?: number;
   quantidade?: number;
+  /** Código da etapa. Em "volume_gargalo" é opcional: preenchida, só as pastas nessa etapa entram
+   * na contagem; ausente = todas (salvo nome de regra com prefixo numérico, ver dynamicRuleEngine). */
   etapa?: string;
   palavraChave?: string;
   /** Só em "volume_gargalo": o que agrupa o acúmulo. */
