@@ -2,6 +2,7 @@
 
 import type { GatilhoRegistrado } from "@/lib/services/reaproveitamentoCard";
 import type { CargoId, MapaPermissoes, PermissoesParciais, StatusConta } from "@/lib/auth/cargos";
+import type { MapaMenus, MenusParciais } from "@/lib/auth/menus";
 
 // Perfil operacional do portal (o que as regras do Firestore e o roteamento leem). O cargo oficial
 // fica em UserProfile.cargo (ver lib/auth/cargos.ts). "corretor" ainda não tem módulos no portal.
@@ -53,6 +54,10 @@ export interface UserProfile {
   superiorCargo?: string | null;
   permissoesIndividuais?: PermissoesParciais;
   permissoesEfetivas?: MapaPermissoes;
+  /** Chaves de menu ligadas/desligadas só para esta pessoa (prevalecem sobre o cargo). */
+  menusPermitidos?: MenusParciais;
+  /** Menus que valem agora, gravados pelo painel (cargo + individual + requisitos). */
+  menusEfetivos?: MapaMenus;
 }
 
 export type SlaStatus = "no_prazo" | "atencao" | "urgente" | "estourado";

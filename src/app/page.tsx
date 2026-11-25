@@ -3,15 +3,17 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { primeiraRota } from "@/lib/auth/menus";
 
 export default function RootPage() {
-  const { firebaseUser, loading } = useAuth();
+  const { firebaseUser, profile, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
-    router.replace(firebaseUser ? "/dashboard" : "/login");
-  }, [loading, firebaseUser, router]);
+    const inicio = (profile && primeiraRota(profile)) || "/dashboard";
+    router.replace(firebaseUser ? inicio : "/login");
+  }, [loading, firebaseUser, profile, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-soft">

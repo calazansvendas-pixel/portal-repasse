@@ -1,7 +1,8 @@
-/** Avisos rápidos (toast) — por enquanto só erros que acontecem em segundo plano. */
+/** Avisos rápidos (toast): erros em segundo plano e informações discretas. */
 export interface Aviso {
   id: number;
   mensagem: string;
+  tom: "erro" | "info";
 }
 
 const SEM_AVISOS: readonly Aviso[] = [];
@@ -29,8 +30,8 @@ export function fecharAviso(id: number) {
 }
 
 /** Mostra o aviso por alguns segundos (ou até a pessoa fechar). */
-export function avisar(mensagem: string, duracaoMs = 10000) {
+export function avisar(mensagem: string, duracaoMs = 10000, tom: Aviso["tom"] = "erro") {
   const id = proximoId++;
-  publicar([...avisos, { id, mensagem }]);
+  publicar([...avisos, { id, mensagem, tom }]);
   setTimeout(() => fecharAviso(id), duracaoMs);
 }

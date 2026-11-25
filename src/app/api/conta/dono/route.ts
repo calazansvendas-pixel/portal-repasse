@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { EMAIL_DONO, NOME_DONO, calcularPermissoes } from "@/lib/auth/cargos";
+import { calcularMenus } from "@/lib/auth/menus";
 import { respostaDeErro } from "@/lib/server/usuarios";
 
 export const runtime = "nodejs";
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
         superiorNome: null,
         superiorCargo: null,
         permissoesEfetivas: calcularPermissoes({ cargo: "dono", role: "gerencia" }),
+        menusEfetivos: calcularMenus({ cargo: "dono", role: "gerencia" }),
         criadoEm: atual?.criadoEm ?? agora,
         atualizadoEm: agora,
       },

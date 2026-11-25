@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { podeVerDossieCliente } from "@/lib/auth/roles";
+import { temMenu } from "@/lib/auth/menus";
 import { autenticar } from "@/lib/server/tarefasManuais";
 import { lerBaseDossie, lerDossieCliente } from "@/lib/server/dossieCliente";
 
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await autenticar(req);
     if (auth instanceof NextResponse) return auth;
-    if (!podeVerDossieCliente(auth.role)) {
+    if (!temMenu(auth.perfil, "dossie")) {
       return NextResponse.json({ erro: "Sem permissão." }, { status: 403 });
     }
 

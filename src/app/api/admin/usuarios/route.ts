@@ -4,7 +4,7 @@ import { visiveisPara } from "@/lib/auth/acoesUsuario";
 import {
   COLECAO_PRIVADA,
   autenticarGestor,
-  lerPermissoesPorCargo,
+  lerPadroesDosCargos,
   lerUsuarios,
   respostaDeErro,
   type DadosPrivados,
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const auth = await autenticarGestor(req);
     if (auth instanceof NextResponse) return auth;
 
-    const [todos, permissoesPorCargo] = await Promise.all([lerUsuarios(), lerPermissoesPorCargo()]);
+    const [todos, padroes] = await Promise.all([lerUsuarios(), lerPadroesDosCargos()]);
     const visiveis = visiveisPara(auth.perfil, todos);
     const db = getAdminDb();
     const privados = visiveis.length
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const porUid = new Map(privados.map((d) => [d.id, d.data() as Partial<DadosPrivados> | undefined]));
     const usuarios: UsuarioPainel[] = visiveis.map((u) => ({ ...u, ...porUid.get(u.uid) }));
 
-    return NextResponse.json({ usuarios, permissoesPorCargo });
+    return NextResponse.json({ usuarios, permissoesPorCargo: padroes.permissoes, menusPorCargo: padroes.menus });
   } catch (error) {
     return respostaDeErro("admin/usuarios", error);
   }

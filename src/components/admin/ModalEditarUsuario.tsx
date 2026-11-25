@@ -16,6 +16,14 @@ import {
   temPermissao,
   type PermissoesParciais,
 } from "@/lib/auth/cargos";
+import {
+  MENUS,
+  calcularMenus,
+  menuTravado,
+  motivoIndisponivel,
+  temMenu,
+  type MenusParciais,
+} from "@/lib/auth/menus";
 import { ASSISTENTE_LABEL, ROLE_LABEL } from "@/lib/types";
 import type { UsuarioPainel } from "@/lib/server/usuarios";
 import type { UserProfile } from "@/lib/types";
@@ -52,6 +60,8 @@ export function ModalEditarUsuario({
   const [superiorId, setSuperiorId] = useState(usuario.superiorId ?? "");
   const [individuais, setIndividuais] = useState<PermissoesParciais>(usuario.permissoesIndividuais ?? {});
   const [mexeuPermissoes, setMexeuPermissoes] = useState(false);
+  const [menusIndividuais, setMenusIndividuais] = useState<MenusParciais>(usuario.menusPermitidos ?? {});
+  const [mexeuMenus, setMexeuMenus] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -59,6 +69,11 @@ export function ModalEditarUsuario({
   const permissoes = calcularPermissoes(
     { cargo: cargo || null, role: roleFinal, permissoesIndividuais: individuais },
     admin.permissoesPorCargo
+  );
+  const menus = calcularMenus(
+    { cargo: cargo || null, role: roleFinal, permissoesIndividuais: individuais, menusPermitidos: menusIndividuais },
+    admin.permissoesPorCargo,
+    admin.menusPorCargo
   );
   const superiores = superioresPossiveis(usuario.uid, todos);
   const superiorForaDaLista = !!usuario.superiorId && !superiores.some((s) => s.uid === usuario.superiorId);
@@ -83,6 +98,7 @@ export function ModalEditarUsuario({
         praca: roleFinal === "assistente" ? praca : null,
         superiorId: superiorId || null,
         ...(mexeuPermissoes ? { permissoesIndividuais: individuais } : {}),
+        ...(mexeuMenus ? { menusPermitidos: menusIndividuais } : {}),
       },
       false
     );
@@ -173,7 +189,7 @@ export function ModalEditarUsuario({
           )}
         </div>
 
-        {proprio && <p className="text-[11px] text-ink-muted">Você não pode trocar o próprio cargo, superior ou permissões.</p>}
+        {proprio && <p className="text-[11px] text-ink-muted">Você não pode trocar o próprio cargo, superior, permissões ou menus.</p>}
         {roleFinal && (
           <p className="text-[11px] text-ink-muted">
             Perfil operacional no portal: <b>{ROLE_LABEL[roleFinal]}</b>
@@ -214,6 +230,49 @@ export function ModalEditarUsuario({
                     onChange={(ligado) => {
                       setIndividuais((atual) => ({ ...atual, [p.id]: ligado }));
                       setMexeuPermissoes(true);
+                    }}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </fieldset>
+
+        <fieldset className="border-t border-border pt-4 dark:border-white/10" disabled={proprio}>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <legend className="float-left text-xs font-bold uppercase tracking-wide text-ink-muted">Menus visíveis na barra lateral</legend>
+            {!proprio && Object.keys(menusIndividuais).length > 0 && (
+              <button
+                type="button"
+                className="text-xs font-semibold text-brand-primary hover:underline"
+                onClick={() => {
+                  setMenusIndividuais({});
+                  setMexeuMenus(true);
+                }}
+              >
+                Herdar do cargo
+              </button>
+            )}
+          </div>
+          <ul className="clear-both flex flex-col gap-2">
+            {MENUS.map((m) => {
+              const travado = menuTravado(cargo, m.id);
+              const motivo = motivoIndisponivel(m.id, roleFinal, permissoes);
+              const semDireito = !menus[m.id] && !temMenu(eu, m.id);
+              return (
+                <li key={m.id} className="flex items-center justify-between gap-3 text-xs text-ink-primary dark:text-white">
+                  <span>
+                    {m.curto}
+                    {motivo && <span className="block text-[11px] text-ink-muted">{motivo}</span>}
+                  </span>
+                  <Interruptor
+                    rotulo={m.curto}
+                    ligado={menus[m.id]}
+                    desabilitado={proprio || travado || !!motivo || semDireito}
+                    titulo={travado ? "Sempre liberado para este cargo" : (motivo ?? (semDireito ? "Você não tem esse menu para liberar" : undefined))}
+                    onChange={(ligado) => {
+                      setMenusIndividuais((atual) => ({ ...atual, [m.id]: ligado }));
+                      setMexeuMenus(true);
                     }}
                   />
                 </li>

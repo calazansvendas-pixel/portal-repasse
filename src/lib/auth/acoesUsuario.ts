@@ -16,6 +16,7 @@ import {
   type PermissoesParciais,
   type PermissoesPorCargo,
 } from "./cargos";
+import { MENUS, calcularMenus, temMenu, type MenusParciais, type MenusPorCargo } from "./menus";
 import { lerDadosPessoais, type DadosPessoais } from "@/lib/utils/cadastro";
 
 export type AcaoUsuario =
@@ -28,8 +29,9 @@ export type AcaoUsuario =
       praca?: string | null;
       superiorId?: string | null;
       permissoesIndividuais?: PermissoesParciais;
+      menusPermitidos?: MenusParciais;
     }
-  | { tipo: "permissoes"; permissoesIndividuais: PermissoesParciais };
+  | { tipo: "permissoes"; permissoesIndividuais: PermissoesParciais; menusPermitidos?: MenusParciais };
 
 export interface Plano {
   /** Campos a gravar em users/{uid}; null = apagar o campo. */
@@ -117,13 +119,33 @@ function limparPermissoes(novas: PermissoesParciais): PermissoesParciais {
   return limpo;
 }
 
+/** Mesmas travas das permissões: ninguém mexe no próprio menu nem libera o que não enxerga. */
+function validarMenus(ator: UserProfile, alvo: UserProfile, novos: MenusParciais): string | null {
+  if (alvo.uid === ator.uid) return "Você não pode alterar os próprios menus.";
+  for (const { id, nome } of MENUS) {
+    const valor = novos[id];
+    if (valor === undefined) continue;
+    if (typeof valor !== "boolean") return "Menu inválido.";
+    const mudou = valor !== alvo.menusPermitidos?.[id];
+    if (mudou && valor && !temMenu(ator, id)) return `Você não pode liberar o menu "${nome}" porque não tem acesso a ele.`;
+  }
+  return null;
+}
+
+function limparMenus(novos: MenusParciais): MenusParciais {
+  const limpo: MenusParciais = {};
+  for (const { id } of MENUS) if (typeof novos[id] === "boolean") limpo[id] = novos[id];
+  return limpo;
+}
+
 export function planejarAcao(
   ator: UserProfile,
   alvo: UserProfile,
   todos: UserProfile[],
   acao: AcaoUsuario,
   salvas: PermissoesPorCargo,
-  agora: string
+  agora: string,
+  menusSalvos: MenusPorCargo = {}
 ): Resultado {
   const trava = travaDoAlvo(ator, alvo, todos);
   if (trava) return falha(trava);
@@ -177,6 +199,11 @@ export function planejarAcao(
       const erro = validarPermissoes(ator, alvo, acao.permissoesIndividuais);
       if (erro) return falha(erro);
       perfil.permissoesIndividuais = limparPermissoes(acao.permissoesIndividuais);
+      if (acao.menusPermitidos) {
+        const erroMenus = validarMenus(ator, alvo, acao.menusPermitidos);
+        if (erroMenus) return falha(erroMenus);
+        perfil.menusPermitidos = limparMenus(acao.menusPermitidos);
+      }
       break;
     }
     case "editar": {
@@ -228,6 +255,11 @@ export function planejarAcao(
         if (erro) return falha(erro);
         perfil.permissoesIndividuais = limparPermissoes(acao.permissoesIndividuais);
       }
+      if (acao.menusPermitidos && !proprio) {
+        const erro = validarMenus(ator, alvo, acao.menusPermitidos);
+        if (erro) return falha(erro);
+        perfil.menusPermitidos = limparMenus(acao.menusPermitidos);
+      }
       break;
     }
     default:
@@ -236,8 +268,11 @@ export function planejarAcao(
 
   // Recalcula o efetivo (é o que a interface e as regras do Firestore consultam).
   const depois = { ...alvo, ...perfil } as UserProfile;
-  const mexeuEmAcesso = ["cargo", "permissoesIndividuais"].some((campo) => campo in perfil);
-  if (mexeuEmAcesso) perfil.permissoesEfetivas = calcularPermissoes(depois, salvas);
+  const mexeuEmAcesso = ["cargo", "permissoesIndividuais", "menusPermitidos"].some((campo) => campo in perfil);
+  if (mexeuEmAcesso) {
+    perfil.permissoesEfetivas = calcularPermissoes(depois, salvas);
+    perfil.menusEfetivos = calcularMenus(depois, salvas, menusSalvos);
+  }
   perfil.atualizadoEm = agora;
   return { ok: true, plano: { perfil, privado } };
 }

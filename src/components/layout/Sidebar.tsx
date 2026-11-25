@@ -5,40 +5,25 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight, LayoutDashboard, Search, ShieldCheck, UploadCloud, Workflow } from "lucide-react";
-import { nomeDoCargo, temPermissao } from "@/lib/auth/cargos";
+import { nomeDoCargo } from "@/lib/auth/cargos";
+import { menusVisiveis, type MenuId } from "@/lib/auth/menus";
 import type { UserProfile } from "@/lib/types";
 import { ROLE_LABEL, ASSISTENTE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 
 const CHAVE_RECOLHIDA = "sidebar-recolhida";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-}
-
-function navItemsPara(profile: UserProfile): NavItem[] {
-  const items: NavItem[] = [{ href: "/dashboard", label: "Painel", icon: LayoutDashboard }];
-
-  const acompanhaOperacao = profile.role === "gerencia" || profile.role === "coordenador" || profile.role === "analista";
-  if (acompanhaOperacao || temPermissao(profile, "importarPlanilhas")) {
-    items.push({ href: "/auditoria", label: "Auditoria de Planilha", icon: UploadCloud });
-  }
-  if (acompanhaOperacao) items.push({ href: "/auditoria/cliente", label: "Dossiê do Cliente", icon: Search });
-  if (temPermissao(profile, "editarMotorRegras") || temPermissao(profile, "editarParametros")) {
-    items.push({ href: "/motor-regras", label: "Motor de Regras", icon: Workflow });
-  }
-  if (temPermissao(profile, "gerenciarUsuarios")) {
-    items.push({ href: "/painel-administrador", label: "Painel do Administrador", icon: ShieldCheck });
-  }
-
-  return items;
-}
+const ICONES: Record<MenuId, typeof LayoutDashboard> = {
+  painel: LayoutDashboard,
+  auditoria: UploadCloud,
+  dossie: Search,
+  motor_regras: Workflow,
+  painel_admin: ShieldCheck,
+};
 
 export function Sidebar({ profile }: { profile: UserProfile }) {
   const pathname = usePathname();
-  const items = navItemsPara(profile);
+  const items = menusVisiveis(profile).map((m) => ({ href: m.rota, label: m.nome, icon: ICONES[m.id] }));
   // Só afeta o layout em telas >= lg (o nav mobile já é compacto por conta própria).
   const [recolhida, setRecolhida] = useState(false);
 

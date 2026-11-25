@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { avisar } from "@/lib/store/avisos";
 import type { AcaoUsuario } from "@/lib/auth/acoesUsuario";
 import type { CargoId, PermissoesParciais, PermissoesPorCargo } from "@/lib/auth/cargos";
+import type { MenusParciais, MenusPorCargo } from "@/lib/auth/menus";
 import type { UsuarioPainel } from "@/lib/server/usuarios";
 
 /** Dados e ações do Painel do Administrador (tudo passa pelas rotas /api/admin). */
@@ -12,6 +13,7 @@ export function useAdmin(habilitado: boolean) {
   const { firebaseUser } = useAuth();
   const [usuarios, setUsuarios] = useState<UsuarioPainel[]>([]);
   const [permissoesPorCargo, setPermissoesPorCargo] = useState<PermissoesPorCargo>({});
+  const [menusPorCargo, setMenusPorCargo] = useState<MenusPorCargo>({});
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export function useAdmin(habilitado: boolean) {
       const json = await chamar("/api/admin/usuarios", "GET");
       setUsuarios(json.usuarios);
       setPermissoesPorCargo(json.permissoesPorCargo);
+      setMenusPorCargo(json.menusPorCargo ?? {});
       setErro(null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível carregar os usuários.");
@@ -73,9 +76,9 @@ export function useAdmin(habilitado: boolean) {
   );
 
   const salvarPermissoesDoCargo = useCallback(
-    async (cargo: CargoId, permissoes: PermissoesParciais): Promise<string | null> => {
+    async (cargo: CargoId, permissoes: PermissoesParciais, menus: MenusParciais): Promise<string | null> => {
       try {
-        await chamar("/api/admin/permissoes-cargo", "PUT", { cargo, permissoes });
+        await chamar("/api/admin/permissoes-cargo", "PUT", { cargo, permissoes, menus });
         await recarregar();
         return null;
       } catch (e) {
@@ -85,7 +88,7 @@ export function useAdmin(habilitado: boolean) {
     [chamar, recarregar]
   );
 
-  return { usuarios, permissoesPorCargo, carregando, erro, ocupado, recarregar, agir, salvarPermissoesDoCargo };
+  return { usuarios, permissoesPorCargo, menusPorCargo, carregando, erro, ocupado, recarregar, agir, salvarPermissoesDoCargo };
 }
 
 export type Admin = ReturnType<typeof useAdmin>;

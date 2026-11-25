@@ -10,7 +10,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { temPermissao } from "@/lib/auth/cargos";
-import { podeVerDossieCliente, resolvePracaPorCidade } from "@/lib/auth/roles";
+import { temMenu } from "@/lib/auth/menus";
+import { resolvePracaPorCidade } from "@/lib/auth/roles";
 import { useBaseDossie, useDossieCliente } from "@/lib/hooks/useDossieCliente";
 import { SuperfiltrosDossie } from "@/components/auditoria/SuperfiltrosDossie";
 import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
@@ -35,7 +36,7 @@ function formatarDataEvento(data: string): string {
 
 export default function DossieClientePage() {
   const { profile } = useAuth();
-  const podeVer = !!profile && podeVerDossieCliente(profile.role);
+  const podeVer = !!profile && temMenu(profile, "dossie");
   const { dossie, loading, erro, abrir, limpar } = useDossieCliente();
   const base = useBaseDossie(podeVer);
   const { overrides: pracaOverrides } = useMapeamentoPracas();

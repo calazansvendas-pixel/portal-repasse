@@ -4,7 +4,8 @@ import { useState } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { enxergaTodos } from "@/lib/auth/acoesUsuario";
-import { CARGOS, cargosAcumulados, statusDoPerfil, temPermissao, type StatusConta } from "@/lib/auth/cargos";
+import { CARGOS, cargosAcumulados, statusDoPerfil, type StatusConta } from "@/lib/auth/cargos";
+import { temMenu } from "@/lib/auth/menus";
 import { Topbar } from "@/components/layout/Topbar";
 import { useAdmin } from "@/components/admin/useAdmin";
 import { Pendentes } from "@/components/admin/Pendentes";
@@ -20,7 +21,7 @@ const LEGADO = "legado";
 
 export default function PainelAdministradorPage() {
   const { profile } = useAuth();
-  const podeVer = !!profile && temPermissao(profile, "gerenciarUsuarios");
+  const podeVer = !!profile && temMenu(profile, "painel_admin");
   const admin = useAdmin(podeVer);
   const [busca, setBusca] = useState("");
   const [cargo, setCargo] = useState("");
@@ -139,11 +140,11 @@ export default function PainelAdministradorPage() {
         {excluidos.filter(passa).length ? tabela(excluidos.filter(passa)) : vazio("Nenhuma conta excluída ou recusada.")}
       </Secao>
 
-      <Secao titulo="Permissões de Edição por Colaborador" descricao="Quem pode editar ou acessar cada módulo crítico. Cada chave grava na hora.">
+      <Secao titulo="Permissões de Edição por Colaborador" descricao="O que cada pessoa pode editar e quais menus enxerga. Cada chave grava na hora.">
         <MatrizPermissoes usuarios={[...ativos, ...pausados].filter(passa)} todos={usuarios} eu={profile} admin={admin} />
       </Secao>
       {enxergaTodos(profile) && (
-        <Secao titulo="Editar Permissões do Cargo" descricao="Padrão de acesso de cada cargo.">
+        <Secao titulo="Editar Permissões do Cargo" descricao="Padrão de acesso e de menus de cada cargo.">
           <PermissoesDoCargo usuarios={usuarios} eu={profile} admin={admin} />
         </Secao>
       )}

@@ -5,7 +5,7 @@ import { dadosDoSuperior, planejarAcao, type AcaoUsuario } from "@/lib/auth/acoe
 import {
   COLECAO_PRIVADA,
   autenticarGestor,
-  lerPermissoesPorCargo,
+  lerPadroesDosCargos,
   lerUsuarios,
   respostaDeErro,
 } from "@/lib/server/usuarios";
@@ -22,11 +22,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { uid: strin
     const acao = (await req.json().catch(() => null)) as AcaoUsuario | null;
     if (!acao?.tipo) return NextResponse.json({ erro: "Ação inválida." }, { status: 400 });
 
-    const [todos, salvas] = await Promise.all([lerUsuarios(), lerPermissoesPorCargo()]);
+    const [todos, padroes] = await Promise.all([lerUsuarios(), lerPadroesDosCargos()]);
     const alvo = todos.find((u) => u.uid === params.uid);
     if (!alvo) return NextResponse.json({ erro: "Usuário não encontrado." }, { status: 404 });
 
-    const resultado = planejarAcao(auth.perfil, alvo, todos, acao, salvas, new Date().toISOString());
+    const resultado = planejarAcao(auth.perfil, alvo, todos, acao, padroes.permissoes, new Date().toISOString(), padroes.menus);
     if (!resultado.ok) return NextResponse.json({ erro: resultado.erro }, { status: resultado.status });
     const { perfil, privado } = resultado.plano;
 

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { autenticar, type Autenticado } from "@/lib/server/tarefasManuais";
-import { temPermissao, type PermissoesPorCargo } from "@/lib/auth/cargos";
+import type { PermissoesPorCargo } from "@/lib/auth/cargos";
+import { temMenu, type MenusPorCargo } from "@/lib/auth/menus";
 import type { DadosPessoais } from "@/lib/utils/cadastro";
 import type { UserProfile } from "@/lib/types";
 
@@ -15,11 +16,12 @@ export const DOC_PERMISSOES_CARGO = "configuracoes/permissoesCargos";
 export type DadosPrivados = Pick<DadosPessoais, "telefone" | "cpf" | "creci" | "dataNascimento">;
 export type UsuarioPainel = UserProfile & Partial<DadosPrivados>;
 
-/** Quem chama precisa estar ativo e ter a permissão de gerenciar usuários. */
+/** Quem chama precisa estar ativo, poder gerenciar usuários e ter o menu do painel liberado. */
 export async function autenticarGestor(req: NextRequest): Promise<Autenticado | NextResponse> {
   const auth = await autenticar(req);
   if (auth instanceof NextResponse) return auth;
-  if (!temPermissao(auth.perfil, "gerenciarUsuarios")) {
+  // O menu já embute a permissão "gerenciarUsuarios" como requisito.
+  if (!temMenu(auth.perfil, "painel_admin")) {
     return NextResponse.json({ erro: "Seu perfil não pode gerenciar usuários." }, { status: 403 });
   }
   return auth;
@@ -33,9 +35,13 @@ export async function lerUsuarios(): Promise<UserProfile[]> {
   });
 }
 
-export async function lerPermissoesPorCargo(): Promise<PermissoesPorCargo> {
-  const snap = await getAdminDb().doc(DOC_PERMISSOES_CARGO).get();
-  return (snap.data()?.cargos ?? {}) as PermissoesPorCargo;
+/** Padrões salvos em "Editar Permissões do Cargo": permissões e menus. */
+export async function lerPadroesDosCargos(): Promise<{ permissoes: PermissoesPorCargo; menus: MenusPorCargo }> {
+  const dados = (await getAdminDb().doc(DOC_PERMISSOES_CARGO).get()).data();
+  return {
+    permissoes: (dados?.cargos ?? {}) as PermissoesPorCargo,
+    menus: (dados?.menus ?? {}) as MenusPorCargo,
+  };
 }
 
 export function respostaDeErro(contexto: string, error: unknown) {
