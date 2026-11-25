@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Copy, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Copy, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { PRACAS_FILTRO_UI } from "@/lib/auth/roles";
+import { PRACAS_FILTRO_UI, codigoEtapa } from "@/lib/auth/roles";
 import { temPermissao } from "@/lib/auth/cargos";
+import { temMenu } from "@/lib/auth/menus";
+import { useOrganograma } from "@/lib/hooks/useOrganograma";
+import { ETAPAS_PADRAO } from "@/lib/organograma/padrao";
+import { BLOCOS, type EtapaOrganograma } from "@/lib/organograma/tipos";
 import { useRegrasAuditoria } from "@/lib/hooks/useRegrasAuditoria";
 import {
   alternarRegraAtiva,
@@ -30,6 +34,8 @@ export default function MotorDeRegrasPage() {
   const podeParametros = !!profile && temPermissao(profile, "editarParametros");
   const podeVer = podeRegras || podeParametros;
   const { regras, loading, erro } = useRegrasAuditoria(podeRegras);
+  // Os blocos são os do Organograma. Sem acesso a ele (ou enquanto carrega), vale a configuração padrão.
+  const organograma = useOrganograma(podeRegras && temMenu(profile, "organograma"));
   const [modalAberto, setModalAberto] = useState(false);
   // null com o modal aberto = criando uma regra nova; preenchido = editando esta regra.
   const [regraEditando, setRegraEditando] = useState<RegraAuditoria | null>(null);
@@ -103,9 +109,8 @@ export default function MotorDeRegrasPage() {
     await excluirRegraAuditoria(id);
   }
 
-  const regrasOrdenadas = [...regras].sort(compararRegras);
-  const ativas = regrasOrdenadas.filter((r) => r.ativo);
-  const inativas = regrasOrdenadas.filter((r) => !r.ativo);
+  // Dentro de cada etapa: ativas primeiro, depois a ordem de sempre.
+  const regrasOrdenadas = [...regras].sort((a, b) => Number(b.ativo) - Number(a.ativo) || compararRegras(a, b));
 
   return (
     <div className="flex flex-col gap-5">
@@ -137,6 +142,13 @@ export default function MotorDeRegrasPage() {
         </div>
       )}
 
+      {organograma.erro && (
+        <p className="text-sm text-ink-muted">
+          Não foi possível ler a configuração do Organograma ({organograma.erro}). Os blocos abaixo usam a configuração
+          padrão.
+        </p>
+      )}
+
       {loading ? (
         <p className="text-sm text-ink-muted">Carregando regras…</p>
       ) : regras.length === 0 ? (
@@ -144,26 +156,14 @@ export default function MotorDeRegrasPage() {
           Nenhuma regra cadastrada ainda. Clique em &quot;Criar Nova Regra&quot; para começar.
         </div>
       ) : (
-        <div className="flex flex-col gap-6">
-          <SecaoRegras
-            titulo={`Ativas (${ativas.length})`}
-            regras={ativas}
-            onAlternar={alternarRegraAtiva}
-            onEditar={abrirEdicao}
-            onDuplicar={duplicarRegra}
-            onExcluir={excluir}
-          />
-          {inativas.length > 0 && (
-            <SecaoRegras
-              titulo={`Inativas (${inativas.length})`}
-              regras={inativas}
-              onAlternar={alternarRegraAtiva}
-              onEditar={abrirEdicao}
-              onDuplicar={duplicarRegra}
-              onExcluir={excluir}
-            />
-          )}
-        </div>
+        <RegrasPorBloco
+          regras={regrasOrdenadas}
+          etapas={organograma.dados?.etapas ?? ETAPAS_PADRAO}
+          onAlternar={alternarRegraAtiva}
+          onEditar={abrirEdicao}
+          onDuplicar={duplicarRegra}
+          onExcluir={excluir}
+        />
       )}
 
       {modalAberto && (
@@ -178,38 +178,107 @@ export default function MotorDeRegrasPage() {
   );
 }
 
-function SecaoRegras({
-  titulo,
-  regras,
-  onAlternar,
-  onEditar,
-  onDuplicar,
-  onExcluir,
-}: {
-  titulo: string;
-  regras: RegraAuditoria[];
+interface AcoesRegra {
   onAlternar: (id: string, ativo: boolean) => Promise<void>;
   onEditar: (regra: RegraAuditoria) => void;
   onDuplicar: (regra: RegraAuditoria) => void;
   onExcluir: (id: string, nome: string) => Promise<void>;
-}) {
-  if (regras.length === 0) return null;
+}
+
+function GradeRegras({ regras, ...acoes }: { regras: RegraAuditoria[] } & AcoesRegra) {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{titulo}</h2>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {regras.map((r) => (
-          <CardRegra
-            key={r.id}
-            regra={r}
-            onAlternar={onAlternar}
-            onEditar={onEditar}
-            onDuplicar={onDuplicar}
-            onExcluir={onExcluir}
-          />
-        ))}
-      </div>
-    </section>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {regras.map((r) => (
+        <CardRegra key={r.id} regra={r} {...acoes} />
+      ))}
+    </div>
+  );
+}
+
+function GrupoEtapa({
+  codigo,
+  nome,
+  regras,
+  ...acoes
+}: { codigo: string | null; nome: string; regras: RegraAuditoria[] } & AcoesRegra) {
+  return (
+    <div data-etapa={codigo ?? "geral"} className="flex flex-col gap-2">
+      <h3 className="flex flex-wrap items-center gap-2 text-sm font-bold text-ink-primary dark:text-white">
+        {codigo && (
+          <span className="rounded-md bg-brand-primary px-2 py-0.5 font-display tabular-nums text-white">{codigo}</span>
+        )}
+        <span className="min-w-0 break-words">{nome}</span>
+        <span className="text-xs font-semibold text-ink-muted">
+          {regras.length} regra{regras.length === 1 ? "" : "s"}
+        </span>
+      </h3>
+      {regras.length > 0 && <GradeRegras regras={regras} {...acoes} />}
+    </div>
+  );
+}
+
+/**
+ * Regras distribuídas nos blocos do Organograma (mesmos nomes, ordem e etapas). O que não tem etapa,
+ * ou aponta para uma etapa fora dos blocos 1 a 8, vai para a seção final: nenhuma regra fica oculta.
+ */
+function RegrasPorBloco({
+  regras,
+  etapas,
+  ...acoes
+}: { regras: RegraAuditoria[]; etapas: EtapaOrganograma[] } & AcoesRegra) {
+  const porEtapa = new Map<string | null, RegraAuditoria[]>();
+  for (const r of regras) {
+    const codigo = etapaDaRegra(r);
+    porEtapa.set(codigo, [...(porEtapa.get(codigo) ?? []), r]);
+  }
+  const ordenadas = [...etapas].sort(
+    (a, b) => a.bloco - b.bloco || a.codigo.localeCompare(b.codigo, undefined, { numeric: true })
+  );
+  const blocos = Object.entries(BLOCOS)
+    .map(([n, nome]) => ({ n: Number(n), nome, etapas: ordenadas.filter((e) => e.bloco === Number(n)) }))
+    // O bloco 9 ("Outras etapas") faz parte da seção final.
+    .filter((b) => b.n !== 9 && b.etapas.length);
+  const nosBlocos = new Set(blocos.flatMap((b) => b.etapas.map((e) => e.codigo)));
+  const gerais = porEtapa.get(null) ?? [];
+  const outras = [...porEtapa.keys()]
+    .filter((c): c is string => c !== null && !nosBlocos.has(c))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const ativas = regras.filter((r) => r.ativo).length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+        Ativas ({ativas}) · Inativas ({regras.length - ativas})
+      </p>
+
+      {blocos.map((b, i) => (
+        <section key={b.n} data-bloco={b.n} className="flex flex-col gap-3">
+          {i > 0 && <ChevronDown aria-hidden size={22} className="mx-auto text-brand-primary" />}
+          <h2 className="text-base font-bold text-ink-primary dark:text-white">
+            Bloco {b.n} — {b.nome}
+          </h2>
+          {b.etapas.map((e) => (
+            <GrupoEtapa key={e.codigo} codigo={e.codigo} nome={e.nome} regras={porEtapa.get(e.codigo) ?? []} {...acoes} />
+          ))}
+        </section>
+      ))}
+
+      {(gerais.length > 0 || outras.length > 0) && (
+        <section data-bloco="gerais" className="mt-4 flex flex-col gap-3 border-t border-border pt-5 dark:border-white/10">
+          <h2 className="text-base font-bold text-ink-primary dark:text-white">Regras Gerais / Outras Etapas</h2>
+          {gerais.length > 0 && <GrupoEtapa codigo={null} nome="Sem etapa específica" regras={gerais} {...acoes} />}
+          {outras.map((codigo) => (
+            <GrupoEtapa
+              key={codigo}
+              codigo={codigo}
+              nome={etapas.find((e) => e.codigo === codigo)?.nome ?? "Etapa fora dos blocos"}
+              regras={porEtapa.get(codigo) ?? []}
+              {...acoes}
+            />
+          ))}
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -318,6 +387,14 @@ function CardRegra({
 }
 
 const PREFIXO_NUMERICO_NOME = /^(\d+\.\d+)/;
+
+/** Etapa em que a regra aparece na tela: a preenchida; sem ela, o número no começo do nome. Só
+ * organiza a exibição: não muda como o motor aplica a regra. */
+function etapaDaRegra(regra: RegraAuditoria): string | null {
+  const preenchida = regra.parametros.etapa?.trim();
+  if (preenchida) return codigoEtapa(preenchida);
+  return regra.nomeRegra.trim().match(PREFIXO_NUMERICO_NOME)?.[1] ?? null;
+}
 
 /** Etapa monitorada por uma regra de Volume e Gargalos, como o motor a aplica: a preenchida; sem ela,
  * o prefixo numérico do nome (só no agrupamento por etapa); sem nenhum dos dois, todas. */
