@@ -31,6 +31,7 @@ export function ComboboxClientes({
   onEscolher,
   onLimpar,
   onAbrir,
+  aviso,
 }: {
   clientes: ClienteDossie[];
   carregando: boolean;
@@ -41,6 +42,8 @@ export function ComboboxClientes({
   onLimpar: () => void;
   /** Chamado quando a lista abre (para recarregar depois de uma falha). */
   onAbrir?: () => void;
+  /** Linha no topo da lista (ex.: quando os filtros restringem os clientes). */
+  aviso?: string | null;
 }) {
   const [aberto, setAberto] = useState(false);
   const [ativo, setAtivo] = useState(-1);
@@ -120,7 +123,7 @@ export function ComboboxClientes({
         aria-label="Nome ou CPF/CNPJ"
         autoComplete="off"
         className="input-field pl-9 pr-20"
-        placeholder="Clique para escolher ou digite nome ou CPF/CNPJ"
+        placeholder="Escolha ou digite…"
         value={texto}
         onFocus={abrir}
         onClick={abrir}
@@ -170,6 +173,11 @@ export function ComboboxClientes({
 
       {aberto && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-[10px] border border-border bg-white shadow-lg dark:border-white/15 dark:bg-[#1B1E17]">
+          {aviso && (
+            <p className="border-b border-border bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-primary dark:border-white/10 dark:bg-white/5">
+              {aviso}
+            </p>
+          )}
           <ul ref={lista} id={`${id}-lista`} role="listbox" className="max-h-80 overflow-y-auto overscroll-contain">
             {opcoes.map((c, i) => (
               <li

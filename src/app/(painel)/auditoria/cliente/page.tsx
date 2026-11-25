@@ -1,21 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import type { FormEvent } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
   FileSpreadsheet,
   LogIn,
-  Search,
   User,
-  X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { temPermissao } from "@/lib/auth/cargos";
 import { podeVerDossieCliente, resolvePracaPorCidade } from "@/lib/auth/roles";
-import { useDossieCliente, useListaClientes } from "@/lib/hooks/useDossieCliente";
-import { ComboboxClientes } from "@/components/auditoria/ComboboxClientes";
+import { useBaseDossie, useDossieCliente } from "@/lib/hooks/useDossieCliente";
+import { SuperfiltrosDossie } from "@/components/auditoria/SuperfiltrosDossie";
 import { useMapeamentoPracas } from "@/lib/hooks/useMapeamentoPracas";
 import { Topbar } from "@/components/layout/Topbar";
 import { montarLinhaDoTempo } from "@/lib/utils/dossieTimeline";
@@ -39,10 +36,9 @@ function formatarDataEvento(data: string): string {
 export default function DossieClientePage() {
   const { profile } = useAuth();
   const podeVer = !!profile && podeVerDossieCliente(profile.role);
-  const { candidatos, dossie, loading, erro, buscar, abrir, limpar } = useDossieCliente();
-  const lista = useListaClientes(podeVer);
+  const { dossie, loading, erro, abrir, limpar } = useDossieCliente();
+  const base = useBaseDossie(podeVer);
   const { overrides: pracaOverrides } = useMapeamentoPracas();
-  const [termo, setTermo] = useState("");
 
   if (!profile) return null;
   if (!podeVer) {
@@ -52,12 +48,6 @@ export default function DossieClientePage() {
         <p className="text-sm text-ink-muted">Você não tem permissão para acessar esta página.</p>
       </div>
     );
-  }
-
-  function handleBuscar(e: FormEvent) {
-    e.preventDefault();
-    if (termo.trim().length < 3) return;
-    buscar(termo);
   }
 
   const eventos = dossie ? montarLinhaDoTempo(dossie.registro, dossie.tarefas) : [];
@@ -71,41 +61,15 @@ export default function DossieClientePage() {
         abertas pelo motor de regras e as ações humanas registradas em cada uma.
       </p>
 
-      <form onSubmit={handleBuscar} className="surface-card flex flex-wrap items-end gap-3 p-3 sm:gap-4 sm:p-4">
-        <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-auto sm:min-w-[320px] sm:flex-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Nome ou CPF/CNPJ</span>
-          <ComboboxClientes
-            clientes={lista.clientes}
-            carregando={lista.carregando}
-            erro={lista.erro}
-            texto={termo}
-            onTexto={setTermo}
-            onEscolher={(c) => abrir(c.numero)}
-            onLimpar={limpar}
-            onAbrir={() => {
-              if (lista.erro) lista.recarregar();
-            }}
-          />
-        </div>
-        <button type="submit" className="btn-primary flex items-center gap-2 px-5" disabled={loading}>
-          <Search size={16} />
-          Buscar
-        </button>
-        {(dossie || candidatos.length > 0) && (
-          <button
-            type="button"
-            onClick={() => {
-              limpar();
-              setTermo("");
-            }}
-            className="flex h-11 items-center gap-2 px-3 text-sm text-ink-muted transition-colors hover:text-ink-primary dark:hover:text-white"
-          >
-            <X size={16} />
-            Limpar
-          </button>
-        )}
-      </form>
-
+      <SuperfiltrosDossie
+        base={base}
+        podeExportar={temPermissao(profile, "exportarRelatorios")}
+        carregando={base.carregando}
+        erro={base.erro}
+        onRecarregar={base.recarregar}
+        onAbrir={abrir}
+        onFechar={limpar}
+      >
       {erro && (
         <div className="flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
@@ -114,35 +78,6 @@ export default function DossieClientePage() {
       )}
 
       {loading && <p className="text-sm text-ink-muted">Carregando…</p>}
-
-      {!loading && !dossie && candidatos.length > 0 && (
-        <div className="surface-card flex flex-col divide-y divide-border p-0 dark:divide-white/10">
-          {candidatos.map((c) => (
-            <button
-              key={c.numero}
-              type="button"
-              onClick={() => abrir(c.numero)}
-              className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-surface-soft dark:hover:bg-white/5"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink-primary dark:text-white">
-                  {c.clienteNome || `Pasta ${c.numero}`}
-                </p>
-                <p className="truncate text-xs text-ink-muted">
-                  Pasta {c.numero} · {c.cpfCnpj || "CPF não informado"}
-                </p>
-              </div>
-              <span className="shrink-0 text-xs text-ink-secondary dark:text-white/60">Etapa {c.etapa || "—"}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!loading && !dossie && candidatos.length === 0 && !erro && (
-        <div className="surface-card p-8 text-center text-sm text-ink-muted">
-          Escolha um cliente na lista ou busque por nome ou CPF/CNPJ para abrir o dossiê.
-        </div>
-      )}
 
       {dossie && (
         <div className="flex flex-col gap-5">
@@ -177,6 +112,7 @@ export default function DossieClientePage() {
           </div>
         </div>
       )}
+      </SuperfiltrosDossie>
     </div>
   );
 }

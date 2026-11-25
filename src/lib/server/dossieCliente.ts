@@ -1,70 +1,54 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { normalize } from "@/lib/auth/roles";
-import { agruparClientes, type ClienteDossie, type PastaResumo } from "@/lib/utils/buscaClientes";
-import type { Registro, Tarefa } from "@/lib/types";
+import { codigoEtapa } from "@/lib/auth/roles";
+import { extrairMovimentos, type PastaDossie } from "@/lib/utils/movimentacoes";
+import type { PastaResumo } from "@/lib/utils/buscaClientes";
+import type { EtapaHistorico, Registro, Tarefa } from "@/lib/types";
 
-// Mesmo teto de leitura do relatório de imobiliárias: uma única consulta, sem índice dedicado
-// para busca por nome/CPF (Firestore não faz "contains" nativo).
+// Mesmo teto de leitura do relatório de imobiliárias: uma única consulta; o filtro é feito na tela.
 export const LIMITE_BUSCA = 3000;
-const MAX_CANDIDATOS = 30;
 
-export interface CandidatoDossie {
-  numero: string;
-  clienteNome: string | null;
-  cpfCnpj: string;
-  cidade: string;
-  produto?: string;
-  etapa: string;
+export interface BaseDossie {
+  pastas: PastaDossie[];
+  /** Código da etapa -> descrição mais recente vista ("0.80" -> "0.80 - Pasta em tratamento"). */
+  etapas: Record<string, string>;
+  /** Datas da primeira e da última planilha presentes nos trajetos. */
+  primeiraPlanilha: string | null;
+  ultimaPlanilha: string | null;
 }
 
-function somenteDigitos(valor: string): string {
-  return valor.replace(/\D/g, "");
-}
-
-/** Busca por Nome (contém, sem acento) ou CPF/CNPJ (contém os dígitos informados). */
-export async function buscarCandidatosDossie(db: Firestore, termoBruto: string): Promise<CandidatoDossie[]> {
-  const termo = termoBruto.trim();
-  if (!termo) return [];
-
-  const digitos = somenteDigitos(termo);
-  // Só vale a pena comparar dígitos com um mínimo razoável — "1" bateria com quase tudo.
-  const podeBaterPorCpf = digitos.length >= 4;
-  const nomeAlvo = normalize(termo);
-
+/** Todas as pastas com as movimentações de etapa — alimenta o campo de cliente e os superfiltros. */
+export async function lerBaseDossie(db: Firestore): Promise<BaseDossie> {
   const snap = await db
     .collection("registros")
-    .select("numero", "clienteNome", "cpfCnpj", "cidade", "produto", "etapa")
+    .select("clienteNome", "cpfCnpj", "produto", "etapa", "arquivada", "atualizadoEm", "historicoEtapas")
     .limit(LIMITE_BUSCA)
     .get();
+  const docs = snap.docs.map((d) => ({
+    ...(d.data() as Omit<PastaResumo, "numero"> & { historicoEtapas?: EtapaHistorico[] }),
+    numero: d.id,
+  }));
 
-  const candidatos: CandidatoDossie[] = [];
-  for (const doc of snap.docs) {
-    const d = doc.data() as Omit<Registro, "numero">;
-    const bateCpf = podeBaterPorCpf && somenteDigitos(d.cpfCnpj ?? "").includes(digitos);
-    const bateNome = !!d.clienteNome && normalize(d.clienteNome).includes(nomeAlvo);
-    if (!bateCpf && !bateNome) continue;
-
-    candidatos.push({
-      numero: doc.id,
-      clienteNome: d.clienteNome ?? null,
-      cpfCnpj: d.cpfCnpj ?? "",
-      cidade: d.cidade ?? "",
-      produto: d.produto,
-      etapa: d.etapa ?? "",
-    });
-    if (candidatos.length >= MAX_CANDIDATOS) break;
+  const passos = docs.flatMap((d) => d.historicoEtapas ?? []).sort((a, b) => a.data.localeCompare(b.data));
+  const etapas: Record<string, string> = {};
+  for (const p of passos) {
+    const codigo = codigoEtapa(p.etapa ?? "");
+    if (codigo) etapas[codigo] = p.etapa.trim();
   }
-  return candidatos;
-}
+  for (const d of docs) {
+    const codigo = codigoEtapa(d.etapa ?? "");
+    if (codigo) etapas[codigo] ??= d.etapa!.trim();
+  }
+  const primeiraPlanilha = passos[0]?.data ?? null;
 
-/** Lista do campo pesquisável: um item por cliente, em ordem alfabética (mesmo teto da busca). */
-export async function listarClientesDossie(db: Firestore): Promise<ClienteDossie[]> {
-  const snap = await db
-    .collection("registros")
-    .select("clienteNome", "cpfCnpj", "produto", "etapa", "arquivada", "atualizadoEm")
-    .limit(LIMITE_BUSCA)
-    .get();
-  return agruparClientes(snap.docs.map((d) => ({ ...(d.data() as Omit<PastaResumo, "numero">), numero: d.id })));
+  return {
+    pastas: docs.map(({ historicoEtapas, ...pasta }) => ({
+      ...pasta,
+      movimentos: extrairMovimentos(historicoEtapas ?? [], primeiraPlanilha ?? ""),
+    })),
+    etapas,
+    primeiraPlanilha,
+    ultimaPlanilha: passos[passos.length - 1]?.data ?? null,
+  };
 }
 
 export interface DossieCompleto {
