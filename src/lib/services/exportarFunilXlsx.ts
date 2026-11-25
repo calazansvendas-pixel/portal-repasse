@@ -53,12 +53,16 @@ export async function montarPlanilhaFunil(funil: Funil, filtros: [string, string
   }
   resumo.addRow([]);
   linhaTabela(resumo, ["Origem", "Destino", "Qtd. de clientes", "%"], "cabecalho");
-  for (const g of funil.grupos) {
-    const row = linhaTabela(resumo, [g.origem, g.destino, g.clientes, g.percentual / 100], "dado");
+  for (const p of funil.pares) {
+    const row = linhaTabela(resumo, [p.origem, p.destino, p.clientes, p.percentual / 100], "dado");
     row.getCell(4).numFmt = "0.0%";
   }
   linhaTabela(resumo, ["Total de clientes no recorte", "", funil.totalClientes, ""], "total");
-  for (const nota of funil.notas) resumo.addRow([nota]).font = { italic: true, size: 9 };
+  const notas = [...funil.notas];
+  if (funil.pares.reduce((n, p) => n + p.clientes, 0) > funil.totalClientes && !notas.some((n) => n.includes("100%"))) {
+    notas.push("Há cliente com mais de uma pasta em fluxos diferentes, por isso a soma passa de 100%.");
+  }
+  for (const nota of notas) resumo.addRow([nota]).font = { italic: true, size: 9 };
 
   const lista = wb.addWorksheet("Clientes Filtrados", { views: [{ state: "frozen", ySplit: 1, showGridLines: false }] });
   lista.columns = [{ width: 40 }, { width: 20 }, { width: 28 }, { width: 38 }, { width: 38 }, { width: 13 }];

@@ -8,7 +8,18 @@ import { codigoEtapa } from "@/lib/auth/roles";
 import { agruparClientes, filtrarClientes, type ClienteDossie } from "@/lib/utils/buscaClientes";
 import { formatarCpfCnpj, somenteDigitos } from "@/lib/utils/cpf";
 import { formatDateBR, hojeISO } from "@/lib/utils/dates";
-import { chaveCliente, chaveDoGrupo, descreverFiltros, montarFunil, textoResumo } from "@/lib/utils/funilDestinos";
+import {
+  SEM_SELECAO,
+  chaveCliente,
+  descreverFiltros,
+  filtrarPorSelecao,
+  fraseSelecao,
+  montarFunil,
+  pontas,
+  textoResumo,
+  type Dimensao,
+  type Selecao,
+} from "@/lib/utils/funilDestinos";
 import {
   SEM_FILTROS,
   avaliarPasta,
@@ -63,8 +74,9 @@ export function SuperfiltrosDossie({
   const [filtros, setFiltros] = useState<FiltrosMovimentacao>(SEM_FILTROS);
   /** Resultado do último "Filtrar / Buscar", com os filtros usados; null = ainda não filtrou. */
   const [busca, setBusca] = useState<{ linhas: Linha[]; filtros: FiltrosMovimentacao; cliente: string } | null>(null);
-  /** Etapa de destino/origem escolhida no funil; "" = recorte completo. */
-  const [grupo, setGrupo] = useState("");
+  /** Origem e destino escolhidos no funil, e a visão dos blocos. */
+  const [selecao, setSelecao] = useState<Selecao>(SEM_SELECAO);
+  const [visao, setVisao] = useState<Dimensao>("destino");
   const [recolhido, setRecolhido] = useState(false);
   /** true = há um dossiê aberto (a lista, se existir, fica guardada para o "Voltar"). */
   const [aberto, setAberto] = useState(false);
@@ -99,41 +111,56 @@ export function SuperfiltrosDossie({
 
   const linhas = busca?.linhas ?? null;
   const funil = useMemo(
-    () => (busca?.linhas.length ? montarFunil(busca.linhas, busca.filtros, base.etapas) : null),
-    [busca, base.etapas]
+    () => (busca?.linhas.length ? montarFunil(busca.linhas, busca.filtros, base.etapas, visao, selecao) : null),
+    [busca, base.etapas, visao, selecao]
   );
   const visiveis = useMemo(
-    () => (busca && funil && grupo ? busca.linhas.filter((l) => chaveDoGrupo(l.movimento, funil.modo) === grupo) : (busca?.linhas ?? [])),
-    [busca, funil, grupo]
+    () => (busca ? filtrarPorSelecao(busca.linhas, busca.filtros, selecao) : []),
+    [busca, selecao]
   );
 
   function guardarBusca(nova: typeof busca) {
     setBusca(nova);
-    setGrupo("");
+    setSelecao(SEM_SELECAO);
+    setVisao("destino");
   }
 
   /** Filtros do último "Filtrar" (não o rascunho do formulário), para o texto e a planilha. */
   const filtrosDoRecorte = () => (busca ? descreverFiltros(busca.filtros, base.etapas, busca.cliente) : []);
+  /** Ranking do recorte inteiro, sem os seletores. */
+  const funilCompleto = () => (busca ? montarFunil(busca.linhas, busca.filtros, base.etapas, visao) : null);
 
   async function copiarResumo() {
-    if (funil) await navigator.clipboard.writeText(textoResumo(funil, filtrosDoRecorte()));
+    const completo = funilCompleto();
+    if (completo && funil) {
+      await navigator.clipboard.writeText(textoResumo(completo, filtrosDoRecorte(), fraseSelecao(funil, selecao)));
+    }
+  }
+
+  /** "depois → 5.03": no filtro só de entrada, o destino não aparece na movimentação listada. */
+  function movimentacao(l: Linha): string {
+    const texto = l.outras > 0 ? `${l.descricao} (+${l.outras})` : l.descricao;
+    if (!busca || !l.movimento) return texto;
+    const { destino } = pontas(l, busca.filtros);
+    return destino === l.movimento.para || busca.filtros.saiu ? texto : `${texto} · depois → ${destino}`;
   }
 
   async function exportarRecorte() {
-    if (!funil) return;
+    const completo = funilCompleto();
+    if (!completo || !funil) return;
     const filtrosUsados = filtrosDoRecorte();
-    const escolhido = funil.grupos.find((g) => g.chave === grupo);
-    if (escolhido) filtrosUsados.push([`Lista de clientes restrita à ${funil.modo === "destino" ? "etapa de destino" : "etapa de origem"}`, escolhido.nome]);
+    const frase = fraseSelecao(funil, selecao);
+    if (frase) filtrosUsados.push(["Lista de clientes restrita à seleção", frase]);
     const { exportarFunilXlsx } = await import("@/lib/services/exportarFunilXlsx");
     await exportarFunilXlsx(
-      funil,
+      completo,
       filtrosUsados,
       visiveis.map((l) => ({
         cliente: l.cliente.clienteNome,
         cpfCnpj: l.cliente.cpfCnpj ? formatarCpfCnpj(l.cliente.cpfCnpj) : "",
         empreendimento: l.cliente.produto || "",
         etapaAtual: l.cliente.etapa || "",
-        movimentacao: l.outras > 0 ? `${l.descricao} (+${l.outras})` : l.descricao,
+        movimentacao: movimentacao(l),
         data: l.data,
       })),
       `resumo-movimentacao-${hojeISO()}.xlsx`
@@ -319,8 +346,9 @@ export function SuperfiltrosDossie({
       {funil && (!aberto || !variasLinhas) && (
         <FunilDestinos
           funil={funil}
-          selecionado={grupo}
-          onSelecionar={setGrupo}
+          selecao={selecao}
+          onSelecionar={setSelecao}
+          onVisao={setVisao}
           recolhido={recolhido}
           onRecolher={() => setRecolhido((r) => !r)}
           onCopiar={copiarResumo}
@@ -360,10 +388,7 @@ export function SuperfiltrosDossie({
                   <Celula rotulo="CPF/CNPJ">{l.cliente.cpfCnpj ? formatarCpfCnpj(l.cliente.cpfCnpj) : "—"}</Celula>
                   <Celula rotulo="Empreendimento">{l.cliente.produto || "—"}</Celula>
                   <Celula rotulo="Etapa atual">{l.cliente.etapa || "—"}</Celula>
-                  <Celula rotulo="Movimentação">
-                    {l.descricao}
-                    {l.outras > 0 && <span className="text-ink-muted"> (+{l.outras})</span>}
-                  </Celula>
+                  <Celula rotulo="Movimentação">{movimentacao(l)}</Celula>
                   <Celula rotulo="Data">{l.data ? formatDateBR(l.data) : "—"}</Celula>
                 </button>
               </li>

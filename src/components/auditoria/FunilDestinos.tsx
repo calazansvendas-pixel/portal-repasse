@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, Copy, FileSpreadsheet } from "lucide-react";
-import { contagemClientes, formatarPercentual, type Funil, type GrupoFunil } from "@/lib/utils/funilDestinos";
+import {
+  SEM_SELECAO,
+  contagemClientes,
+  formatarPercentual,
+  fraseSelecao,
+  type Dimensao,
+  type Funil,
+  type Selecao,
+} from "@/lib/utils/funilDestinos";
 import { cn } from "@/lib/utils/cn";
 
 // Duas linhas de chips: 1 coluna no celular, 2 no tablet e 3 no computador.
@@ -13,31 +21,33 @@ function visibilidade(indice: number): string {
   return "hidden";
 }
 
-function frase(funil: Funil, g: GrupoFunil): string {
-  const base = `${g.clientes} de ${contagemClientes(funil.totalClientes)} (${formatarPercentual(g.percentual)})`;
-  const um = g.clientes === 1;
-  if (g.chave === "sem-mudanca") return `${base} ${um ? "não tem" : "não têm"} mudança de etapa registrada`;
-  if (funil.modo === "destino") return `${base} ${um ? "foi" : "foram"} para ${g.nome}`;
-  if (g.chave === "nova") return `${base} ${um ? "apareceu" : "apareceram"} na base já nesta etapa`;
-  return `${base} ${um ? "veio" : "vieram"} de ${g.nome}`;
-}
+const SELETORES: { dim: Dimensao; rotulo: string; todas: string }[] = [
+  { dim: "origem", rotulo: "Consultar origem específica", todas: "Todas as etapas de origem" },
+  { dim: "destino", rotulo: "Consultar destino específico", todas: "Todas as etapas de destino" },
+];
+
+const VISOES: { dim: Dimensao; rotulo: string }[] = [
+  { dim: "destino", rotulo: "Por Etapa de Destino" },
+  { dim: "origem", rotulo: "Por Etapa de Origem" },
+];
 
 const BOTAO = "btn-secondary !h-9 flex-1 !gap-1.5 whitespace-nowrap !px-3 !text-xs sm:flex-none";
 
-/** Card recolhível com a distribuição do recorte filtrado e o seletor de destino/origem. */
+/** Card recolhível com a distribuição do recorte filtrado e os seletores de origem e destino. */
 export function FunilDestinos({
   funil,
-  selecionado,
+  selecao,
   onSelecionar,
+  onVisao,
   recolhido,
   onRecolher,
   onCopiar,
   onExportar,
 }: {
   funil: Funil;
-  /** Chave do grupo escolhido; "" = recorte completo. */
-  selecionado: string;
-  onSelecionar: (chave: string) => void;
+  selecao: Selecao;
+  onSelecionar: (nova: Selecao) => void;
+  onVisao: (visao: Dimensao) => void;
   recolhido: boolean;
   onRecolher: () => void;
   onCopiar: () => Promise<void>;
@@ -49,9 +59,9 @@ export function FunilDestinos({
   const [exportando, setExportando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
 
-  const destino = funil.modo === "destino";
-  const escolhido = funil.grupos.find((g) => g.chave === selecionado);
-  const total = funil.grupos.length;
+  const { visao, chips } = funil;
+  const destaque = fraseSelecao(funil, selecao);
+  const total = chips.length;
 
   async function copiar() {
     setFalha(null);
@@ -105,10 +115,33 @@ export function FunilDestinos({
 
       {falha && <p className="text-xs text-status-danger">{falha}</p>}
 
-      {escolhido && (
+      {!recolhido && (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {SELETORES.map(({ dim, rotulo, todas }) => (
+            <label key={dim} className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{rotulo}</span>
+              <select
+                data-seletor={dim}
+                className="input-field !h-10 min-w-0"
+                value={selecao[dim]}
+                onChange={(e) => onSelecionar({ ...selecao, [dim]: e.target.value })}
+              >
+                <option value="">{todas}</option>
+                {funil.opcoes[dim].map((g) => (
+                  <option key={g.chave} value={g.chave}>
+                    {g.nome} ({g.clientes})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {destaque && (
         <div data-destaque className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-brand-primary/30 bg-brand-50 px-3 py-2 dark:bg-white/5">
-          <p className="min-w-0 break-words text-sm font-semibold text-brand-primary dark:text-white">{frase(funil, escolhido)}</p>
-          <button type="button" className="text-xs font-bold text-brand-primary underline underline-offset-2 dark:text-white" onClick={() => onSelecionar("")}>
+          <p className="min-w-0 break-words text-sm font-semibold text-brand-primary dark:text-white">{destaque}</p>
+          <button type="button" className="text-xs font-bold text-brand-primary underline underline-offset-2 dark:text-white" onClick={() => onSelecionar(SEM_SELECAO)}>
             Mostrar todos
           </button>
         </div>
@@ -116,29 +149,35 @@ export function FunilDestinos({
 
       {!recolhido && (
         <>
-          <label className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-            <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-              {destino ? "Consultar destino específico" : "Consultar origem específica"}
-            </span>
-            <select className="input-field !h-10 min-w-0 sm:max-w-md" value={selecionado} onChange={(e) => onSelecionar(e.target.value)}>
-              <option value="">{destino ? "Todas as etapas de destino" : "Todas as etapas de origem"}</option>
-              {funil.grupos.map((g) => (
-                <option key={g.chave} value={g.chave}>
-                  {g.nome} ({g.clientes})
-                </option>
-              ))}
-            </select>
-          </label>
+          <div role="group" aria-label="Visão dos blocos" className="flex w-full rounded-md border border-border p-0.5 sm:w-auto sm:self-start dark:border-white/15">
+            {VISOES.map(({ dim, rotulo }) => (
+              <button
+                key={dim}
+                type="button"
+                aria-pressed={visao === dim}
+                onClick={() => {
+                  setVerTodas(false);
+                  onVisao(dim);
+                }}
+                className={cn(
+                  "min-h-[32px] flex-1 rounded-[6px] px-3 text-xs font-semibold transition-colors sm:flex-none",
+                  visao === dim ? "bg-brand-primary text-white" : "text-ink-secondary hover:text-brand-primary dark:text-white/70"
+                )}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
 
           <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {funil.grupos.map((g, i) => {
-              const ligado = g.chave === selecionado;
+            {chips.map((g, i) => {
+              const ligado = g.chave === selecao[visao];
               return (
                 <li key={g.chave} className={cn("min-w-0", verTodas ? "flex" : visibilidade(i))}>
                   <button
                     type="button"
                     aria-pressed={ligado}
-                    onClick={() => onSelecionar(ligado ? "" : g.chave)}
+                    onClick={() => onSelecionar({ ...selecao, [visao]: ligado ? "" : g.chave })}
                     className={cn(
                       "relative flex w-full min-w-0 flex-col justify-between gap-1 overflow-hidden rounded-md border px-3 pb-2.5 pt-2 text-left transition-colors",
                       ligado ? "border-brand-primary bg-brand-50 ring-1 ring-brand-primary dark:bg-white/10" : "border-border hover:border-brand-primary dark:border-white/15"
